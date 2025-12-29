@@ -1,7 +1,7 @@
 % =============================
 % 文件名：GRU_prepare_dataset.m
-% 版本号：V1.5（扩展特征：17维→23维，增强 slip 可分性）
-% 最后修改时间：2025-11-22
+% 版本号：V1.6（可观测特征：19维，移除上帝视角）
+% 最后修改时间：2025-12-24
 % 作者：LPV-MPC Project
 % 功能描述：
 %   GRU训练数据预处理脚本
@@ -12,10 +12,10 @@
 %   5. 数据归一化（z-score，仅用训练集统计）
 %   6. 保存处理后的数据集
 %
-% V1.5 更新（2025-11-22）：
-%   - 扩展特征维度从 17 维到 23 维，增强 slip 可分性
-%   - 新增特征：v_true, v_err, v_err_norm, tire_util_max, tire_util_diff, theta_ground
-%   - 同步更新在线推理脚本 GRU_state_classifier.m
+% V1.6 更新（2025-12-24）：
+%   - 特征维度 19，可观测：accel_per_current, pitch_angle_est，去除地速/轮胎利用率/坡度真值
+%   - 离线特征与在线 GRU_state_classifier 对齐
+%   - 保留必要使用说明，其余历史版本说明移除
 
 root = project_root();
 data_gru_dir = fullfile(root, 'data', 'gru');
@@ -30,22 +30,6 @@ if ~isfield(cfg, 'output_file');  cfg.output_file = fullfile(data_gru_dir, 'GRU_
 if ~isfield(cfg, 'scaler_file');  cfg.scaler_file = fullfile(data_gru_dir, 'GRU_scaler.mat');               end
 if ~isfield(cfg, 'verbose');      cfg.verbose     = true;                                                    end
 
-%
-% V1.4 更新（2025-11-21）：
-%   - 增强统计输出：场景分布、slip/stall时间窗口与强度、速度/角速度范围
-%   - 新增类别不平衡指标与样本持续时间统计
-%   - 帮助用户诊断数据质量与训练策略
-%
-% V1.2 更新（2025-11-01）：
-%   - 数据分割改为按回合分组（A2优化）
-%   - 先分组回合（train/val/test），再对每组回合进行滑窗切片
-%   - 防止同一回合的相邻窗口被分到不同集合，避免数据泄漏
-%
-% V1.1 更新（2025-10-30）：
-%   - dv_hat_dt 改为滤波差分（tau_diff=0.3s），抑制噪声并与在线对齐
-%   - 增加 I_diff_signed 特征，保留电流差方向信息
-%   - 特征维度：16 → 17
-%   - 滤波参数（tau_accel_lp, tau_diff）写入 meta 和 scaler，便于在线同步
 %
 % 使用方法：
 %   直接运行此脚本：run('GRU_prepare_dataset.m') 或 GRU_prepare_dataset
@@ -196,35 +180,24 @@ for k = 1:length(data.runs)
     % kappa ≈ (tan(delta_lf) - tan(delta_rr)) / W
     kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
     
-    % V1.5: 新增特征（增强 slip 可分性）
+    % 新增特征：使用可观测量替代“上帝视角”参数
+    % 7) accel_per_current: 驱动-加速度比值（电流归一化加速度）
+    current_floor = 0.1;  % 防止小电流除零
+    accel_per_current = accel_x_lp ./ max(I_sum, current_floor);
+
+    % 8) pitch_angle_est: 基于 IMU 的坡度估计（衰减积分抑制漂移）
+    tau_pitch = 2.0;                     % 衰减时间常数 [s]
+    lambda_pitch = exp(-Ts / tau_pitch); % 衰减系数
+    pitch_angle_est = zeros(N, 1);
+    for i = 2:N
+        pitch_angle_est(i) = lambda_pitch * pitch_angle_est(i-1) + gyro_y(i) * Ts;
+    end
     
-    % 7) v_true: 车辆真实纵向速度
-    v_true = y_raw(:, 4);  % y4: v [m/s]
-    
-    % 8) v_err: 轮速-地速偏差（打滑核心特征）
-    v_err = v_hat - v_true;
-    
-    % 9) v_err_norm: 归一化轮速-地速偏差
-    v_eps = 0.01;  % 避免除零
-    v_err_norm = v_err ./ max(abs(v_true), v_eps);
-    
-    % 10) tire_util_max: 轮胎最大摩擦利用率
-    tire_util_lf = y_raw(:, 22);  % y22: tire_utilization_lf
-    tire_util_rr = y_raw(:, 23);  % y23: tire_utilization_rr
-    tire_util_max = max(tire_util_lf, tire_util_rr);
-    
-    % 11) tire_util_diff: 左右轮摩擦利用率差异
-    tire_util_diff = tire_util_lf - tire_util_rr;
-    
-    % 12) theta_ground: 真实坡度角（帮助模型直接看到坡度）
-    theta_ground = y_raw(:, 16);  % y16: theta_ground [rad]
-    
-    % 组合特征矩阵 [N × feat_dim]（V1.5: 17维→23维）
+    % 组合特征矩阵 [N × feat_dim]（19维）
     features = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
                 delta_lf, delta_rr, gyro_y, ...
                 v_hat, dv_hat_dt, ws_imbalance, I_sum, I_diff_signed, I_diff_abs, ...
-                accel_x_lp, kappa_proxy, ...
-                v_true, v_err, v_err_norm, tire_util_max, tire_util_diff, theta_ground];  % V1.5: +6维
+                accel_x_lp, kappa_proxy, accel_per_current, pitch_angle_est];
     
     % 累积到全局（V1.2: 同时记录run_id）
     all_features = [all_features; features];
@@ -234,7 +207,7 @@ for k = 1:length(data.runs)
     all_run_id = [all_run_id; k * ones(N, 1)];  % V1.2: 记录回合编号
 end
 
-% 定义特征名称（用于文档和调试）（V1.5: 17→23维）
+% 定义特征名称（用于文档和调试）（V1.6: 17→19维）
 feat_names = {
     'accel_x',          ... % 1
     'gyro_z',           ... % 2
@@ -253,12 +226,8 @@ feat_names = {
     'I_diff_abs',       ... % 15 (V1.1: 原 I_diff 改名)
     'accel_x_lp',       ... % 16
     'kappa_proxy',      ... % 17
-    'v_true',           ... % 18 (V1.5: 新增)
-    'v_err',            ... % 19 (V1.5: 新增)
-    'v_err_norm',       ... % 20 (V1.5: 新增)
-    'tire_util_max',    ... % 21 (V1.5: 新增)
-    'tire_util_diff',   ... % 22 (V1.5: 新增)
-    'theta_ground'      ... % 23 (V1.5: 新增)
+    'accel_per_current',... % 18 (V1.6: 新增，可观测)
+    'pitch_angle_est'   ... % 19 (V1.6: 新增，可观测)
 };
 
 if cfg.verbose

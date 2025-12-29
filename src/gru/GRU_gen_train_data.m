@@ -1,16 +1,15 @@
 % =============================
 % 文件名：GRU_gen_train_data.m
-% 版本号：V4.8（强化 slip 可分性：新增轮速-地速失配判据 + 摩擦利用率）
-% 最后修改时间：2025-11-22
+% 版本号：V4.9（全可观测标注：去除上帝视角）
+% 最后修改时间：2025-12-24
 % 作者：LPV-MPC Project
 % 功能描述：
 %   通过调用 Simulink 模型 GRU_DataGen.slx 生成 GRU 训练数据
-%   支持路径参数随机化、打滑/堵转注入（通过InjectionWrapper）、自动标注
-%   V4.2 新增：转弯场景轻度打滑、物理一致启发式(k_torque拟合)、阈值网格搜索
+%   支持路径参数随机化、打滑/堵转注入（InjectionWrapper）、自动标注
+%   V4.9：Slip 标注仅用可观测量（I_sum、accel_x_lp、accel_per_current），移除地速/轮胎利用率
 %
 % 使用方法：
-%   直接运行此脚本：run('GRU_gen_train_data.m') 或在命令行输入 GRU_gen_train_data
-%   修改下方"配置区域"来调整参数
+%   直接运行或调用函数，按需修改下方配置
 %
 % 输出：
 %   - data: 结构体，保存至 cfg.output_file（默认 GRU_train_data_full.mat）
@@ -28,12 +27,8 @@
 %   - GRU_DataGen.slx (Simulink 模型)
 %
 % 备注：
-%   - 通过 Simulink 模型生成高保真数据，最大化还原仿真环境
-%   - 打滑/堵转通过 InjectionWrapper 实现（不改 Plant/parameters.m）
-%   - V4.2: 转弯场景可注入轻度打滑（低概率/低强度），提升泛化覆盖
-%   - 标签采用事后计算（基于 y_raw 和注入窗口，优先级：stall→slip→slope→flat）
-%   - 打滑启发式采用物理一致模型：accel_expected ≈ (k_torque·I_sum)/mass
-%   - 阈值/驻留时间支持小网格搜索，最终值写入 data.meta
+%   - 标签优先级：stall→slip→slope→flat；slip 基于动力-加速度失配与电流归一化加速度
+%   - 支持噪声混合、转弯轻度打滑注入、阈值/驻留时间网格搜索
 % =============================
 
 %% ==================== 配置区域（用户可修改） ====================
@@ -85,8 +80,7 @@ cfg.slip_in_turn.gamma_range = [0.65, 0.85];  % 轻度打滑（接近正常）
 % 新版 slip 标注配置（V4.8新增：强化可分性）
 cfg.slip_label.I_slip_high_ratio = 0.35;       % slip 高电流判据：I_sum > ratio × I_high_thresh（放宽至≈4A）
 cfg.slip_label.accel_slip_small = 0.05;        % slip 加速度上限 [m/s²]（大于stall但明显小于正常）
-cfg.slip_label.v_err_thresh = 0.15;            % 轮速-地速偏差阈值 [m/s]（放宽，允许轻度失配）
-cfg.slip_label.tire_util_thresh = 0.55;        % 轮胎利用率阈值
+cfg.slip_label.accel_per_current_thresh = 0.08; % 加速度-电流比下限 [m/(s²·A)]（低于此视为驱动失配）
 cfg.slip_label.slip_min_dwell = 0.3;           % slip 最小持续时间 [s]（略放宽，提高召回）
 cfg.slip_label.exclude_stall_margin = 0.2;     % 排除 stall 附近的边界 [s]
 
@@ -269,8 +263,7 @@ else
     % V4.8: 新增 slip 标注阈值（从配置读取）
     best_thresholds.I_slip_high_ratio = opts.slip_label.I_slip_high_ratio;
     best_thresholds.accel_slip_small = opts.slip_label.accel_slip_small;
-    best_thresholds.v_err_thresh = opts.slip_label.v_err_thresh;
-    best_thresholds.tire_util_thresh = opts.slip_label.tire_util_thresh;
+    best_thresholds.accel_per_current_thresh = opts.slip_label.accel_per_current_thresh;
     best_thresholds.slip_min_dwell = opts.slip_label.slip_min_dwell;
     best_thresholds.exclude_stall_margin = opts.slip_label.exclude_stall_margin;
 end
@@ -667,28 +660,18 @@ for i = 1:N
 end
 
 % 2) Slip 标注（次高优先级）
-% V4.8: 新增强约束 slip 判定（宁少勿滥）
+% V4.9: 全可观测判据（移除地速/轮胎利用率）
 %
 % 核心思路：
 %   1. 注入窗口作为候选区间（初步筛选）
-%   2. 轮速-地速失配（v_hat - v_true > thresh）
-%   3. 高驱动但低加速度（I_sum 高 + accel_x_lp 低）
-%   4. 轮胎利用率接近饱和（tire_util > thresh）
-%   5. 排除 stall 边界，避免与 stall 混淆
-%   6. 最小持续时间筛选，过滤短促噪声
+%   2. 高驱动但低加速度（I_sum 高 + accel_x_lp 低）
+%   3. 驱动-加速度比过低（accel_per_current 低）
+%   4. 排除 stall 边界，避免与 stall 混淆
+%   5. 最小持续时间筛选，过滤短促噪声
 %
-% 目标：让 slip 类样本在特征空间中明显偏离 flat/slope
+% 目标：用可观测量刻画打滑，不依赖“上帝视角”
 
 % 提取 slip 判定所需的额外通道
-v_true = y_raw(:, 4);                % y4: 车辆真实纵向速度 [m/s]
-r = 0.075;                           % 轮半径 [m]（从 parameters.m 读取）
-v_hat = r * (abs(omega_wheel_lf) + abs(omega_wheel_rr)) / 2;
-v_err = v_hat - v_true;              % 轮速-地速偏差
-
-tire_util_lf = y_raw(:, 22);         % y22: 左前轮摩擦利用率
-tire_util_rr = y_raw(:, 23);         % y23: 右后轮摩擦利用率
-tire_util_max = max(tire_util_lf, tire_util_rr);
-
 % 计算 accel_x_lp（平滑加速度，与特征提取一致）
 alpha_lp = Ts / (0.4 + Ts);
 accel_x_lp = zeros(N, 1);
@@ -697,11 +680,14 @@ for i = 2:N
     accel_x_lp(i) = alpha_lp * accel_x(i) + (1 - alpha_lp) * accel_x_lp(i-1);
 end
 
+% 电流归一化加速度（可观测替代特征）
+current_floor = 0.1;  % 防止低电流除零
+accel_per_current = accel_x_lp ./ max(I_sum, current_floor);
+
 % slip 判据阈值（从 thresholds 获取）
 I_slip_high = thresholds.I_slip_high_ratio * I_high_thresh;  % 例如 0.6 × 12A = 7.2A
 accel_slip_small = thresholds.accel_slip_small;              % 0.05 m/s²
-v_err_thresh = thresholds.v_err_thresh;                      % 0.3 m/s
-tire_util_thresh = thresholds.tire_util_thresh;              % 0.75
+accel_per_current_thresh = thresholds.accel_per_current_thresh; % 驱动-加速度比阈值
 slip_min_dwell_steps = max(1, round(thresholds.slip_min_dwell / Ts));
 exclude_margin_steps = max(1, round(thresholds.exclude_stall_margin / Ts));
 
@@ -725,23 +711,18 @@ for i = 1:N
         continue;  % 跳过非候选点
     end
     
-    % 2a) 轮速-地速失配（打滑核心特征）
-    v_mismatch = (v_err(i) > v_err_thresh);
-    
-    % 2b) 高驱动但低加速度（动力-加速度失配）
+    % 2a) 高驱动但低加速度（动力-加速度失配）
     power_mismatch = (I_sum(i) > I_slip_high) && (abs(accel_x_lp(i)) < accel_slip_small);
     
-    % 2c) 轮胎利用率接近饱和（摩擦力接近极限）
-    tire_saturated = (tire_util_max(i) > tire_util_thresh);
+    % 2b) 电流归一化加速度过低（可观测替代）
+    accel_current_mismatch = accel_per_current(i) < accel_per_current_thresh;
     
-    % 2d) 非堵转条件（轮速不能太低）
+    % 2c) 非堵转条件（轮速不能太低）
     not_stalled = (abs(omega_wheel_lf(i)) > omega_wheel_stall_thresh) && ...
                   (abs(omega_wheel_rr(i)) > omega_wheel_stall_thresh);
     
-    % 综合判定：至少满足 v_mismatch + (power_mismatch OR tire_saturated) + not_stalled
-    if v_mismatch && (power_mismatch || tire_saturated) && not_stalled
-        % 继续保持候选
-    else
+    % 综合判定：动力失配 + 比值失配 + 非堵转
+    if ~(power_mismatch && accel_current_mismatch && not_stalled)
         slip_candidate(i) = false;  % 不满足物理特征，排除
     end
 end

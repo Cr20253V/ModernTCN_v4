@@ -1,32 +1,16 @@
 % =============================
 % 文件名：GRU_state_classifier.m
-% 版本号：V1.4（扩展特征：17维→23维，增强 slip 可分性）
-% 最后修改时间：2025-11-22
+% 版本号：V1.6（可观测特征：19维，移除上帝视角）
+% 最后修改时间：2025-12-24
 % 作者：LPV-MPC Project
 % 功能描述：
 %   GRU工况识别在线推理封装
 %   提供序列缓冲、最小驻留时间、低通滤波等功能
 %
-% V1.4 更新（2025-11-22）：
-%   - 扩展特征维度从 17 维到 23 维，与 GRU_prepare_dataset.m V1.5 对齐
-%   - 新增特征：v_true, v_err, v_err_norm, tire_util_max, tire_util_diff, theta_ground
-%   - 更新特征索引映射
-%
-% V1.3 更新（2025-11-17）：
-%   - 新增坡度死区处理机制
-%   - 当 |theta_hat| < theta_deadzone 时，强制置0且主分类置为flat
-%   - 默认死区阈值：0.023 rad（≈1.3°）硬区 + 0.031 rad（≈1.8°）软区
-%
-% V1.2 更新（2025-11-04）：
-%   - 恢复驻留时间至0.4s（撤销V1.5的0.3s，平衡响应与稳定性）
-%
-% V1.1 更新（2025-11-01）：
-%   - 特征计算与离线对齐（A1优化）
-%   - dv_hat_dt 改为滤波差分（tau_diff=0.3s）
-%   - accel_x_lp 实现低通滤波（tau_accel_lp=0.4s）
-%   - 增加 I_diff_signed 特征，保留方向信息
-%   - 特征维度：16 → 17
-%   - 从 scaler 读取滤波参数
+% V1.6 更新（2025-12-24）：
+%   - 特征维度 19，全部可观测：accel_per_current，pitch_angle_est（IMU 衰减积分）
+%   - 移除 v_true/v_err/tire_util/theta_ground 等不可观测量
+%   - 离线/在线特征顺序完全对齐
 %
 % 使用方法：
 %   1. 初始化：
@@ -178,8 +162,13 @@ function state = initClassifier(params, model)
     state.v_hat_prev = 0;           % 上一步的v_hat
     state.dv_hat_dt_prev = 0;       % 上一步的dv_hat_dt（滤波后）
     state.accel_x_lp_prev = 0;      % 上一步的accel_x_lp（滤波后）
+
+    % 坡度估计滤波参数（IMU衰减积分）
+    state.tau_pitch = 2.0;
+    state.lambda_pitch = exp(-state.Ts / state.tau_pitch);
+    state.pitch_angle_est_prev = 0;  % 上一步的坡度估计
     
-    % 特征名称映射（与 GRU_prepare_dataset.m V1.5 一致）
+    % 特征名称映射（与 GRU_prepare_dataset.m V1.6 一致）
     state.feat_indices = struct();
     state.feat_indices.accel_x = 9;
     state.feat_indices.gyro_z = 11;
@@ -190,12 +179,6 @@ function state = initClassifier(params, model)
     state.feat_indices.delta_lf = 6;
     state.feat_indices.delta_rr = 7;
     state.feat_indices.gyro_y = 10;
-    
-    % V1.4: 新增索引
-    state.feat_indices.v_true = 4;            % y4: v
-    state.feat_indices.tire_util_lf = 22;     % y22: tire_utilization_lf
-    state.feat_indices.tire_util_rr = 23;     % y23: tire_utilization_rr
-    state.feat_indices.theta_ground = 16;     % y16: theta_ground
     
     % 数值稳健性
     state.eps = 1e-8;
@@ -372,34 +355,20 @@ function [features, state] = extractFeatures(y_raw, state)
     % 6) kappa_proxy: 曲率近似
     kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
     
-    % V1.4: 新增特征（增强 slip 可分性）
+    % 新增特征（仅用可观测量）
+    % 7) accel_per_current: 驱动-加速度比值
+    current_floor = 0.1;  % 防止低电流数值发散
+    accel_per_current = accel_x_lp / max(I_sum, current_floor);
     
-    % 7) v_true: 车辆真实纵向速度
-    v_true = y_raw(state.feat_indices.v_true);
+    % 8) pitch_angle_est: IMU 衰减积分的坡度估计
+    pitch_angle_est = state.lambda_pitch * state.pitch_angle_est_prev + gyro_y * Ts;
+    state.pitch_angle_est_prev = pitch_angle_est;
     
-    % 8) v_err: 轮速-地速偏差（打滑核心特征）
-    v_err = v_hat - v_true;
-    
-    % 9) v_err_norm: 归一化轮速-地速偏差
-    v_eps = 0.01;  % 避免除零
-    v_err_norm = v_err / max(abs(v_true), v_eps);
-    
-    % 10) tire_util_max: 轮胎最大摩擦利用率
-    tire_util_lf = y_raw(state.feat_indices.tire_util_lf);
-    tire_util_rr = y_raw(state.feat_indices.tire_util_rr);
-    tire_util_max = max(tire_util_lf, tire_util_rr);
-    
-    % 11) tire_util_diff: 左右轮摩擦利用率差异
-    tire_util_diff = tire_util_lf - tire_util_rr;
-    
-    % 12) theta_ground: 真实坡度角
-    theta_ground = y_raw(state.feat_indices.theta_ground);
-    
-    % 组合特征（顺序与 GRU_prepare_dataset.m V1.5 完全一致，23维）
+    % 组合特征（与 GRU_prepare_dataset.m V1.6 一致，19维）
     features = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
                 delta_lf, delta_rr, gyro_y, ...
                 v_hat, dv_hat_dt, ws_imbalance, I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-                v_true, v_err, v_err_norm, tire_util_max, tire_util_diff, theta_ground];  % V1.4: 17→23维
+                accel_per_current, pitch_angle_est];
 end
 
 function out = constructOutput(state)

@@ -1,5 +1,23 @@
 # 变更记录
 
+## 2025-12-24 – GRU 特征去“上帝视角”与可观测标注
+
+### Subject
+chore(gru): 统一移除地速/轮胎利用率/真实坡度等不可观测特征，改用 IMU+电流可观测量，更新标注与头部说明。
+
+### Changes
+- GRU 离线特征改为 19 维，全可观测：新增 `accel_per_current`、衰减积分 `pitch_angle_est`，移除 `v_true/v_err/tire_util/theta_ground`，特征名同步 [src/gru/GRU_prepare_dataset.m](src/gru/GRU_prepare_dataset.m#L195-L252)。
+- 在线推理特征与离线对齐：删除不可观测索引，加入衰减积分坡度状态，19 维输入 [src/gru/GRU_state_classifier.m](src/gru/GRU_state_classifier.m#L341-L384)。
+- Slip 标注改为全可观测判据：使用高驱动低加速度 + 电流归一化加速度偏低 + 非堵转，阈值配置改为 `accel_per_current_thresh` [src/gru/GRU_gen_train_data.m](src/gru/GRU_gen_train_data.m#L670-L737)。
+- 三个脚本头部更新至当前版本与日期，移除冗余历史说明。
+
+### Impact
+- 训练与推理由可观测量驱动，避免使用仿真内部真值；特征维度一致，便于重训与部署。
+- Slip 标签依赖可观测物理失配，减少“上帝视角”泄漏风险。
+
+### Next
+- 重新运行完整流程：`GRU_gen_train_data.m → GRU_prepare_dataset.m → GRU_train.m`，并更新导出的模型与 scaler。
+
 ## 2025-12-22 – GRU 训练数据噪声混合策略 & LPV 依赖说明
 
 ### Subject
