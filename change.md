@@ -1,5 +1,295 @@
 # 变更记录
 
+## 2025-12-31 – GRU_train.m 修复 4 类到 3 类遗留问题
+
+### Subject
+fix(gru): 修复 GRU_train.m 中混淆矩阵和评估指标仍使用 4 类的问题
+
+### Context
+- 运行 GRU_train.m 时报错：索引超过数组元素的数量（3）
+- 混淆矩阵显示 4×4（包含 slip），但新系统只有 3 类
+
+### Changes
+- **L622**: `class_names = {'flat', 'slip', 'stall', 'slope'}` → `{'flat', 'stall', 'slope'}`
+
+### Files
+- [GRU_train.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_train.m)
+
+---
+
+## 2025-12-31 – GRU 打滑/堵转注入优化 (V5.1)
+
+### Subject
+feat(gru): 优化打滑/堵转注入时间窗口，支持堵转重复注入
+
+### Context
+- 原方案时间窗口过于集中，导致 stall 样本不足
+- 用户要求：打滑 5-8s，堵转 11-17s，堵转可重复注入
+
+### Changes
+1. **打滑配置**：
+   - 概率：0.40 → **0.70**
+   - 开始时间：[5,12] → **[5,8]**
+   - 持续时间：[2,4] → **[1.5,3]**
+   - 转弯打滑概率：0.15 → **0.25**
+
+2. **堵转配置**：
+   - 概率：0.80 → **0.85**
+   - 开始时间：[12,17] → **[11,17]**
+   - 持续时间：[1.5,3] → **[2,3]**
+   - **新增 `repeat_inject = true`**：允许在 11-17s 内重复注入堵转
+
+3. **多窗口支持**：
+   - `inject_info.stall_windows`：Nx2 数组，存储多个堵转窗口
+   - `inject_info.stall_loads`：Nx1 数组，存储对应负载
+   - 窗口间隔：0.5s
+
+### Files
+- [GRU_gen_train_data.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_gen_train_data.m)
+
+---
+
+## 2025-12-30 – GRU 场景配置更新
+
+### Subject
+fix(gru): 更新场景列表以匹配 data/paths/ 目录下的实际路径文件
+
+### Context
+- 原场景列表包含已删除的路径类型：`turn_left`, `turn_right`, `straight_turn`
+- 这些路径已被 `straight_left_turn` 和 `straight_right_turn` 替代
+
+### Changes
+1. **cfg.scenes** 更新为：
+   - `{'straight', 'straight_left_turn', 'straight_right_turn', 'slope', 'bumpy'}`
+2. **cfg.slip_heuristic.fit_scenes** 更新为与新场景列表一致
+3. **switch-case** 更新为处理 `straight_left_turn` 和 `straight_right_turn`
+4. **移除场景映射逻辑**：场景名直接传递给 `gen_agv_ref_path`
+
+### Files
+- [GRU_gen_train_data.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_gen_train_data.m)
+
+---
+
+## 2025-12-30 – AGV 转向几何 BUG 修复同步到 train_data 脚本
+
+### Subject
+fix(core): 将 12-29 转向几何修复同步到 GRU 训练数据生成脚本
+
+### Context
+- `output_eq_ref_train_data.m` 和 `state_eq_ref_train_data.m` 仍使用旧的 `atan2` 公式
+- 右转时（`omega_cmd < 0`）会导致转向角符号错误
+
+### Changes
+1. **output_eq_ref_train_data.m**：
+   - 使用 `sign(denom) * max(abs(denom), 1e-6)` 替代直接除法
+   - 使用 `atan()` 替代 `atan2()`
+   - 移除 `delta_rr_target` 的负号前缀（与原版对齐）
+
+2. **state_eq_ref_train_data.m**：
+   - 同上修改
+
+### Files
+- [output_eq_ref_train_data.m](file:///e:/Matlab/Simulink/S-Function_14/src/core/output_eq_ref_train_data.m)
+- [state_eq_ref_train_data.m](file:///e:/Matlab/Simulink/S-Function_14/src/core/state_eq_ref_train_data.m)
+
+---
+
+## 2025-12-30 – GRU 主分类简化：移除 slip 状态
+
+### Subject
+feat(gru): 将主分类从 4 类简化为 3 类，移除 slip 状态
+
+### Context
+- slip 状态与 flat 状态在传感器特征上难以区分，导致频繁误分类
+- stall 和 slope 状态有明确的物理特征，易于识别
+- 打滑注入机制保留以增加训练数据多样性，但不再单独标注为 slip
+
+### 标签映射变更
+
+| 原标签 | 原编号 | 新标签 | 新编号 |
+|--------|--------|--------|--------|
+| flat | 1 | flat | 1 |
+| slip | 2 | *(合并到 flat)* | - |
+| stall | 3 | stall | **2** |
+| slope | 4 | slope | **3** |
+
+### Changes
+1. **GRU_gen_train_data.m** (V4.9→V5.0)：
+   - 移除 `cfg.slip_label` 配置
+   - 降低打滑注入概率 0.80→0.40
+   - 重写 `generate_labels` 函数，移除 slip 标注逻辑
+   - stall 标签改为 2，slope 标签改为 3
+
+2. **GRU_prepare_dataset.m** (V1.6→V1.7)：
+   - 更新 `mask_theta_all` 计算：slope 编号 4→3
+   - 更新所有 `print_label_dist` 调用的标签名称
+   - 简化重采样逻辑（仅过采样 stall）
+
+3. **GRU_train.m** (V1.6→V1.7)：
+   - `class_labels = (1:3)'`
+   - 主分类输出层维度 4→3
+   - 更新 `class_weights` 为 3 维
+   - 更新 `model.class_labels_main` 为 3 类
+
+4. **GRU_infer.m** (V1.0→V1.1)：
+   - 更新注释中的标签范围和置信度维度
+
+5. **GRU_state_classifier.m** (V1.6→V1.7)：
+   - 更新注释中的标签范围和置信度维度
+   - 更新 `constructOutput` 默认置信度为 3 维
+
+### Files
+- [GRU_gen_train_data.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_gen_train_data.m)
+- [GRU_prepare_dataset.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_prepare_dataset.m)
+- [GRU_train.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_train.m)
+- [GRU_infer.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_infer.m)
+- [GRU_state_classifier.m](file:///e:/Matlab/Simulink/S-Function_14/src/gru/GRU_state_classifier.m)
+
+> [!WARNING]
+> 此修改需要**重新训练模型**。现有的 `GRU_model.mat` 与新的 3 类分类器不兼容。
+
+---
+
+## 2025-12-30 – 贝叶斯优化场景配置最终确定
+
+### Subject
+fix(bo): 确定最终场景配置，移除 multi_turn 系列和 turn 路径
+
+### Context
+- `multi_turn_left/right` 场景因 MPC 求解 infeasible 问题被移除
+- `turn` 路径类型已在 `gen_agv_ref_path.m` 中删除
+- LPV 网格恢复到原始配置 5×5×5（omega: [-0.2, 0.2]）
+
+### 最终场景配置（共 5 个场景）
+
+| 场景 | 权重 | 路径文件 |
+|------|------|----------|
+| `straight_left_turn` | 0.25 | path_straight_left_turn.mat |
+| `straight_right_turn` | 0.25 | path_straight_right_turn.mat |
+| `slope` | 0.15 | path_slope.mat |
+| `bumpy` | 0.20 | path_bumpy.mat |
+| `straight` | 0.15 | path_straight.mat |
+
+### Changes
+1. **Cost_Function.m**：更新场景列表和默认权重
+2. **Bayesian_Optimization.m**：同步更新场景配置
+3. **test_lpvmpc_workflow.m**：恢复 W_grid 到 `linspace(-0.2, 0.2, 5)`
+
+### Files
+- [Cost_Function.m](file:///e:/Matlab/Simulink/S-Function_14/src/mpc/Cost_Function.m)
+- [Bayesian_Optimization.m](file:///e:/Matlab/Simulink/S-Function_14/src/bo/Bayesian_Optimization.m)
+- [test_lpvmpc_workflow.m](file:///e:/Matlab/Simulink/S-Function_14/src/lpv/test_lpvmpc_workflow.m)
+
+---
+
+## 2025-12-29 – 贝叶斯优化脚本更新与文档创建
+
+### Subject
+feat(bo): 更新场景列表（删除 turn，添加 multi_turn_left），创建 README_BAYESIAN.md
+
+### Changes
+1. **Cost_Function.m**（V2.4→V2.5）：
+   - 场景列表：`turn` → `multi_turn_left`
+   - 默认权重：`multi_turn_left=0.35, straight_turn=0.20, bumpy=0.25, slope=0.10, straight=0.10`
+2. **Bayesian_Optimization.m**（V2.10→V2.11）：
+   - 同步更新默认场景权重
+   - 更新打印输出字段名
+3. **新增** `docs/README_BAYESIAN.md`：
+   - 贝叶斯优化完整使用说明
+   - 优化变量范围、场景权重配置、代价函数组成
+   - 两阶段优化流程图、关键配置参数、常见问题解答
+
+### Files
+- [Cost_Function.m](file:///e:/Matlab/Simulink/S-Function_14/src/mpc/Cost_Function.m)
+- [Bayesian_Optimization.m](file:///e:/Matlab/Simulink/S-Function_14/src/bo/Bayesian_Optimization.m)
+- [README_BAYESIAN.md](file:///e:/Matlab/Simulink/S-Function_14/docs/README_BAYESIAN.md)
+
+---
+
+## 2025-12-29 – 路径生成脚本重构（V1.3→V1.4）
+
+### Subject
+feat(paths): 所有路径添加 0-3s 直行段，删除 turn，新增变半径转弯路径
+
+### Changes
+1. **所有路径**：前 3 秒匀速直行（v=1m/s），之后按原参数生成
+2. **删除** `turn` 路径类型（原本从 0s 开始转弯）
+3. **新增** `multi_turn_left` 和 `multi_turn_right`：
+   - 0-3s: 匀速直行
+   - 3-10s: R=6.67m 转弯（omega≈0.15 rad/s，在LPV网格范围内）
+   - 10-15s: R=10m 转弯（0.5s S曲线平滑过渡）
+   - 15-20s: R=20m 转弯（0.5s S曲线平滑过渡）
+4. **修改** `gen_straight_turn`：直行段从 10m 改为 3s（约 3m）
+5. **修改** `gen_slope`/`gen_bumpy`：坡度/颠簸从 3s 后开始
+
+### File
+- [gen_agv_ref_path.m](file:///e:/Matlab/Simulink/S-Function_14/src/paths/gen_agv_ref_path.m)
+
+---
+
+## 2025-12-29 – AGV转向几何公式符号BUG修复
+
+### Subject
+fix(core): 修复 `omega_cmd < 0`（右转）时转向角符号丢失的问题
+
+### Context
+- **问题现象**：设置 `omega_ref = -0.1`（右转指令），AGV沿直线行驶，未能右转
+- **根因分析**：`state_eq_ref.m` 和 `output_eq_ref.m` 中转向几何公式使用 `max(y_c - W/2, 1e-6)` 作为分母，当右转时 `y_c < 0`（ICR在车辆右侧），分母被错误截断为正值 `1e-6`，导致转向角符号反转
+
+### Changes
+
+#### 迭代1：尝试使用 `atan2`（未完全解决）
+- 将 `atan() + max()` 改为 `atan2()`
+- **问题**：`atan2(1, -10.4)` 返回约 +2.95 rad（第二象限），而非期望的小负值
+- **现象**：`delta_lf` 变为 +1.3 rad（接近 π/2），转向方向仍错误
+
+#### 迭代2：最终方案 – 符号安全的 `atan`
+1. **state_eq_ref.m**（第93-100行）
+2. **output_eq_ref.m**（第102-110行）
+
+```diff
+- delta_lf_geom = atan( (L/2 - x_c) / max(y_c - W/2, 1e-6) );
+- delta_rr_geom = atan( (x_c + L/2) / max(y_c + W/2, 1e-6) );
++ denom_lf = y_c - W/2;
++ denom_rr = y_c + W/2;
++ safe_denom_lf = sign(denom_lf) * max(abs(denom_lf), 1e-6);
++ safe_denom_rr = sign(denom_rr) * max(abs(denom_rr), 1e-6);
++ delta_lf_geom = atan((L/2 - x_c) / safe_denom_lf);
++ delta_rr_geom = atan((x_c + L/2) / safe_denom_rr);
+```
+
+**核心思路**：`sign(denom) * max(abs(denom), eps)` 在防止除零的同时保留分母符号。
+
+### Impact
+- ✅ 修复右转失效问题：`omega_cmd < 0` 时 `delta_lf/delta_rr` 正确为负值
+- ✅ `atan()` 返回 `(-π/2, π/2)` 范围，符合实际转向角物理限制
+- ⚠️ 仿真中观察到轻微振荡，属于控制参数匹配问题（`K_omega_p`/`C_damping`），与本次符号修复无关
+
+### Verification
+- 输入：`F_cmd=100N`, `omega_cmd=-0.1rad/s`, `theta_ground=0`
+- 修复前：Y持续增长（左转），delta_lf ≈ +1.3 rad
+- 修复后：Y最终下降（右转），delta_lf ≈ -0.05 rad，psi持续下降
+
+---
+
+
+## 2025-12-29 – 项目结构优化与文档同步
+
+### Subject
+refactor(docs): 修正文档中的路径引用，增强 .gitignore，规范化输出路径
+
+### Changes
+1. **func.md**：更新 16 处脚本路径引用（从"根目录"改为实际 `src/` 子目录）
+2. **Cost_Function.m**：报告保存路径从当前目录改为 `results/bo_reports/`（使用 `results_dir()`）
+3. **.gitignore**：新增 `**/slprj/`、`*.slxc`、`*.autosave`、`*.asv`、`*.mex*` 忽略规则
+4. **脚本审查**：确认 `*_train_data.m` 变体为 GRU 训练数据生成专用，无需清理
+
+### Impact
+- 文档与文件系统保持一致，减少新成员混淆
+- 版本库更干净，不再跟踪 Simulink 生成文件
+
+---
+
 ## 2025-12-24 – GRU 特征去“上帝视角”与可观测标注
 
 ### Subject

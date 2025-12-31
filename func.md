@@ -229,14 +229,14 @@
 
 ## 模块：bo - 贝叶斯优化
 
-### 1. **Cost_Function.m** - 多工况评估函数（根目录）
-- **路径**：`Cost_Function.m`
+### 1. **Cost_Function.m** - 多工况评估函数
+- **路径**：`src/mpc/Cost_Function.m`
 - **职责**：复现 Adaptive MPC 闭环，结合 turn / straight_turn / slope / straight / bumpy 场景计算加权代价；支持从 `cfg.ctrl` 传入已创建控制器，避免重复创建；内部使用 `evalc` 静默调用 `mpcmoveAdaptive` 抑制控制台输出。
 - **接口**：`[J, report] = Cost_Function(params, db, cfg, scenes)`（支持默认参数、内部生成 LPV 数据库、配置权重/罚值/滤波/ctrl/maps）。
 - **输出**：`J`（失败或异常返回 1e6）、`report`（含场景 RMSE、Δu、约束违反、平均/最大求解时间、失败次数；可选保存到根目录）。
 
-### 2. **Bayesian_Optimization.m** - 贝叶斯优化驱动（根目录）
-- **路径**：`Bayesian_Optimization.m`
+### 2. **Bayesian_Optimization.m** - 贝叶斯优化驱动
+- **路径**：`src/bo/Bayesian_Optimization.m`
 - **职责**：调度 `bayesopt` 优化 Q/R/dR、alpha/beta 形状、约束缩放、tau；每次评估仅创建一次控制器并通过 `cfg.ctrl` 传入 `Cost_Function`；生成 `maps_best.mat`（根目录）。
 - **接口**：`[best, boResults] = Bayesian_Optimization(params, db, options)`（默认场景权重 {turn:0.35, slope:0.30, straight_turn:0.20, bumpy:0.10, straight:0.05}；评估次数可通过 `options.MaxObjectiveEvaluations` 指定）。
 - **变量范围（当前实现）**：
@@ -250,8 +250,8 @@
   - `maps_best.mat`（根目录）：保存 Q/R/dR 基准与范围、alpha/beta、scale_*、rho_min/max、timestamp、version。
   - 可选 `bo_history_<timestamp>.mat`（根目录），由 `options.save_history=true` 触发。
 
-### 3. **start_bayesian.m** - 启动与汇报脚本（根目录）
-- **路径**：`start_bayesian.m`
+### 3. **start_bayesian.m** - 启动与汇报脚本
+- **路径**：`src/bo/start_bayesian.m`
 - **职责**：装载 `params` 与 `lin_agv_db.mat`、配置评估次数与是否保存历史、调用 `Bayesian_Optimization` 并打印总耗时/最优点/各场景性能与历史统计。
 - **要点**：总耗时采用 `tic/toc` 实测；控制台仅显示一次权重设置（避免重复创建控制器）。
 
@@ -452,10 +452,10 @@
 
 ---
 
-## 模块：贝叶斯优化（根目录）
+## 模块：贝叶斯优化
 
 ### 1. **Cost_Function.m** - MPC闭环评估函数
-- **路径**：Cost_Function.m（根目录）
+- **路径**：`src/mpc/Cost_Function.m`
 - **职责**：在MATLAB环境中复现Adaptive MPC闭环，输出加权代价J和详细报告
 - **关键接口**：`[J, report] = Cost_Function(params, db, cfg, scenes)`
   - **输入**：
@@ -487,7 +487,7 @@
 - **版本**：V2.1（修复 mpcmoveAdaptive 调用方式与成功判定 Info.QPCode）
 
 ### 2. **Bayesian_Optimization.m** - 贝叶斯优化驱动
-- **路径**：Bayesian_Optimization.m（根目录）
+- **路径**：`src/bo/Bayesian_Optimization.m`
 - **职责**：使用bayesopt调度Cost_Function，获得最优参数并生成maps_best.mat
 - **关键接口**：`[best, boResults] = Bayesian_Optimization(params, db, options)`
   - **输入**：
@@ -521,10 +521,10 @@
 
 ---
 
-## 模块：AI工况识别（根目录，GRU）
+## 模块：AI工况识别（GRU）
 
 ### 1. **GRU_gen_train_data.m** - 训练数据生成（脚本版 + Simulink集成 + 物理一致启发式）
-- **路径**：GRU_gen_train_data.m（根目录）
+- **路径**：`src/gru/GRU_gen_train_data.m`
 - **职责**：通过Simulink模型 GRU_DataGen.slx 生成GRU训练数据，最大化还原仿真环境
 - **使用方式**：**直接运行脚本**
   - 命令行：`run('GRU_gen_train_data.m')` 或 `GRU_gen_train_data`
@@ -573,7 +573,7 @@
 - **版本**：V1.0
 
 ### 3. **GRU_prepare_dataset.m** - 数据预处理（已实现）
-- **路径**：GRU_prepare_dataset.m（根目录）
+- **路径**：`src/gru/GRU_prepare_dataset.m`
 - **职责**：GRU训练数据预处理（特征提取、序列化、归一化、分割）
 - **使用方式**：**直接运行脚本**
   - 命令行：`run('GRU_prepare_dataset.m')` 或 `GRU_prepare_dataset`
@@ -619,7 +619,7 @@
   - 滤波参数写入meta/scaler（便于在线推理同步）
 
 ### 4. **GRU_train.m** - GRU模型训练（已实现）
-- **路径**：GRU_train.m（根目录）
+- **路径**：`src/gru/GRU_train.m`
 - **职责**：GRU多任务学习训练脚本（主分类+转弯分类+坡度回归）
 - **使用方式**：直接运行脚本（配置在脚本开头的cfg结构体）
 - **关键接口**：`run('GRU_train.m')` 或 `GRU_train`
@@ -655,7 +655,7 @@
   - **特别优化**：针对少数类样本量<500或召回率<0.6的情况，自动给出改进方案
 
 ### 5. **GRU_infer.m** - GRU推理接口（已实现）
-- **路径**：GRU_infer.m（根目录）
+- **路径**：`src/gru/GRU_infer.m`
 - **职责**：GRU单步推理接口
 - **关键接口**：`[label_main, label_turn, theta_hat, conf] = GRU_infer(x_seq, model)`
 - **输入**：
@@ -673,7 +673,7 @@
 - **版本**：V1.0
 
 ### 6. **GRU_state_classifier.m** - 在线推理封装（已实现）
-- **路径**：GRU_state_classifier.m（根目录）
+- **路径**：`src/gru/GRU_state_classifier.m`
 - **职责**：GRU工况识别在线推理封装（序列缓冲、最小驻留时间、低通滤波）
 - **关键接口**：
   - 初始化：`state = GRU_state_classifier('init', params, model)`
@@ -705,7 +705,7 @@
 - **版本**：V1.0
 
 ### 7. **test_GRU_workflow.m** - GRU工作流测试脚本（已实现）
-- **路径**：test_GRU_workflow.m（根目录）
+- **路径**：`src/tests/test_GRU_workflow.m`
 - **职责**：测试GRU工况识别完整工作流（训练验证、单步推理、在线推理、可视化）
 - **关键接口**：`run('test_GRU_workflow.m')`
 - **功能**：
@@ -724,7 +724,7 @@
 - **版本**：V1.0
 
 ### 8. **test_gru_performance.m** - GRU性能评估脚本
-- **路径**：test_gru_performance.m（根目录）
+- **路径**：`src/tests/test_gru_performance.m`
 - **职责**：统一执行离线（Train/Val/Test切分）与在线run级别评估，输出主分类/转弯/坡度MAE/延迟等核心指标。
 - **使用方式**：`test_gru_performance()` 或 `cfg = struct('runs_per_mode',10,'enable_plots',false); test_gru_performance(cfg);`
 - **主要特性**：
@@ -792,7 +792,7 @@
 - **版本**：V1.0（2025-11-05）
 
 ### 3. **test_lpvmpc_with_gru_workflow.m** - GRU+MPC集成测试脚本（已实现）
-- **路径**：test_lpvmpc_with_gru_workflow.m（根目录）
+- **路径**：`src/lpv/test_lpvmpc_workflow.m`
 - **职责**：验证GRU与LPV-MPC的协同工作（离线仿真+性能分析）
 - **关键接口**：`run('test_lpvmpc_with_gru_workflow.m')`
 - **功能**：
@@ -815,7 +815,7 @@
 - **版本**：V1.0（2025-11-05）
 
 ### 4. **test_closed_loop_performance.m** - LPVMPC闭环批量评估
-- **路径**：test_closed_loop_performance.m（根目录）
+- **路径**：`src/tests/test_closed_loop_performance.m`
 - **职责**：批量运行 `LPVMPC_AGV_simulink`，针对多行驶模式统计速度/姿态误差、坡度延迟与执行器饱和，便于GRU与控制器联合验证。
 - **使用方式**：`test_closed_loop_performance()` 或通过 `cfg.scenarios`/`cfg.mode_sample_count` 覆写场景列表与抽样数。
 - **主要特性**：

@@ -104,18 +104,18 @@ vars = [
 ];
 
 %% 场景权重配置
-% 默认权重：turn=0.35, slope=0.10, straight_turn=0.10, bumpy=0.35, straight=0.10
-% 可通过 options.scenes 覆盖，例如：
-%   options.scenes = struct('turn', 0.40, 'slope', 0.35, ...);
+% 默认权重（共 5 个场景）
+% 可通过 options.scenes 覆盖
 if ~isfield(options,'scenes')
-    scenes = struct('turn',0.35,'slope',0.10,'straight_turn',0.10,'bumpy',0.35,'straight',0.10);
+    scenes = struct('straight_left_turn',0.25,'straight_right_turn',0.25,...
+                    'slope',0.15,'bumpy',0.20,'straight',0.15);
     fprintf('[Bayesian_Optimization] 使用默认场景权重。\n');
 else
     scenes = options.scenes;
     fprintf('[Bayesian_Optimization] 使用自定义场景权重。\n');
 end
-fprintf('[Bayesian_Optimization]   turn=%.2f, slope=%.2f, straight_turn=%.2f, bumpy=%.2f, straight=%.2f\n', ...
-    scenes.turn, scenes.slope, scenes.straight_turn, scenes.bumpy, scenes.straight);
+fprintf('[Bayesian_Optimization]   straight_left/right=%.2f/%.2f, slope=%.2f, bumpy=%.2f, straight=%.2f\n', ...
+    scenes.straight_left_turn, scenes.straight_right_turn, scenes.slope, scenes.bumpy, scenes.straight);
 
 % 目标函数封装
 obj = @(X) objective_wrapper(X, params, db, scenes);

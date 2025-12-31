@@ -1,7 +1,7 @@
 % =============================
 % 文件名：GRU_train.m
-% 版本号：V1.6
-% 最后修改时间：2025-11-04
+% 版本号：V1.7（简化主分类：3类，移除 slip）
+% 最后修改时间：2025-12-30
 % 作者：LPV-MPC Project
 % 功能描述：
 %   GRU多任务学习训练脚本（主分类+转弯分类+坡度回归）
@@ -163,9 +163,9 @@ if cfg.verbose
     fprintf('\n[步骤2/6] 计算类别权重（主分类）...\n');
 end
 
-% 统计主分类标签分布（固定4类顺序，防止缺少类别时代码崩溃）
+% 统计主分类标签分布（V1.7: 3类，移除 slip）
 y_main_train = dataset.y_main_train;
-class_labels = (1:4)';  % 保持 [flat, slip, stall, slope] 顺序
+class_labels = (1:3)';  % V1.7: [flat, stall, slope]
 n_classes_main = length(class_labels);
 class_counts = zeros(n_classes_main, 1);
 
@@ -197,21 +197,12 @@ if cfg.use_class_weights
             class_weights = class_weights / mean(class_weights);
             fprintf('    权重策略: inverse with cap (max=%.1f)\n', max_weight);
         case 'custom'
-            % 手动设置权重（V1.6温和修正：撤销V1.5过激权重，保护主类）
-            % 问题诊断（V1.5失败）：69.95%准确率，flat→slip误判498次（33.1%）
-            % 根因分析：
-            %   - flat权重0.25太低，有效权重仅15%（被严重忽略）
-            %   - slip权重3.50太高，有效权重23%（超过flat！）
-            %   - 权重比例14:1过于极端，导致损失函数严重倾斜
-            % V1.6策略：温和平衡，恢复主类主导地位，避免过度预测
-            class_weights = [0.60;   % flat（从0.25大幅提升至0.60，+140%）
-                             2.00;   % slip（从3.50降至2.00，-43%）
-                             1.80;   % stall（恢复V1.4水平，效果良好）
-                             0.80];  % slope（略提升）
-            % 有效权重（样本比例×权重）：flat 36%, slip 13.2%, stall 8.6%, slope 18.2%
-            % 权重比例：slip/flat = 3.3:1（V1.5为14:1，过于极端）
+            % 手动设置权重（V1.7: 3类，移除 slip）
+            class_weights = [0.60;   % flat
+                             1.80;   % stall
+                             0.80];  % slope
             class_weights = class_weights / mean(class_weights);
-            fprintf('    权重策略: custom (moderate balanced v1.6)\n');
+            fprintf('    权重策略: custom (3-class v1.7)\n');
         otherwise
             error('未知的类别权重计算方法: %s', cfg.class_weight_method);
     end
@@ -306,9 +297,9 @@ layers = [
 net_feature = dlnetwork(layers);
 
 % 创建三个输出头的参数
-% 主分类头: hidden_size → 4
-fc_main_weights = dlarray(randn(4, cfg.hidden_size) * 0.01);
-fc_main_bias = dlarray(zeros(4, 1));
+% 主分类头: hidden_size → 3
+fc_main_weights = dlarray(randn(3, cfg.hidden_size) * 0.01);  % V1.7: 4→3
+fc_main_bias = dlarray(zeros(3, 1));
 
 % 转弯分类头: hidden_size → 3
 fc_turn_weights = dlarray(randn(3, cfg.hidden_size) * 0.01);
@@ -334,7 +325,7 @@ if cfg.verbose
     fprintf('    输入维度: [%d, %d] (feat_dim, seq_len)\n', input_size, seq_len);
     fprintf('    GRU隐藏层: %d 单元 × %d 层\n', cfg.hidden_size, cfg.num_layers);
     fprintf('    输出头:\n');
-    fprintf('      - 主分类: 4类 (flat/slip/stall/slope)\n');
+    fprintf('      - 主分类: 3类 (flat/stall/slope)\n');  % V1.7
     fprintf('      - 转弯分类: 3类 (right/straight/left)\n');
     fprintf('      - 坡度回归: 1维 (theta [rad])\n');
 end
@@ -628,7 +619,8 @@ if cfg.verbose
     fprintf('----------------------------------------\n');
     
     % 计算混淆矩阵（显式指定类别顺序，防止少数类缺失导致矩阵降阶）
-    class_names = {'flat', 'slip', 'stall', 'slope'};
+    % V1.7: 更新为 3 类（flat, stall, slope），移除 slip
+    class_names = {'flat', 'stall', 'slope'};
     class_order = 1:length(class_names);
     CM_main = confusionmat(y_main_test, pred_main_test, 'Order', class_order);
     
@@ -748,7 +740,7 @@ model.scaler = dataset.scaler;
 model.feat_names = dataset.feat_names;
 model.seq_len = seq_len;  % 序列长度（便于推理时使用）
 model.feat_dim = input_size;  % 特征维度
-model.class_labels_main = {'flat', 'slip', 'stall', 'slope'};
+model.class_labels_main = {'flat', 'stall', 'slope'};  % V1.7: 3类
 model.class_labels_turn = {'right', 'straight', 'left'};  % [-1, 0, +1]
 model.class_weights = class_weights;
 model.cfg = cfg;

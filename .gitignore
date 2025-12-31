@@ -1,2 +1,15 @@
+# 大型训练数据（避免上传至仓库）
 GRU_train_data_full.mat
 GRU_dataset_processed.mat
+
+# Simulink 生成文件
+**/slprj/
+*.slxc
+*.autosave
+
+# MATLAB 临时文件
+*.asv
+*.mex*
+
+# 输出结果目录（可选忽略）
+# results/

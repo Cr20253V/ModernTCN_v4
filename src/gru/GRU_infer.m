@@ -1,7 +1,7 @@
 % =============================
 % 文件名：GRU_infer.m
-% 版本号：V1.0
-% 最后修改时间：2025-10-31
+% 版本号：V1.1（简化主分类：3类，移除 slip）
+% 最后修改时间：2025-12-30
 % 作者：LPV-MPC Project
 % 功能描述：
 %   GRU单步推理接口
@@ -12,11 +12,11 @@
 %   - model: 模型结构体（从 GRU_model.mat 加载）
 %
 % 输出参数：
-%   - label_main: 主分类标签 ∈ {1,2,3,4} (flat/slip/stall/slope)
+%   - label_main: 主分类标签 ∈ {1,2,3} (flat/stall/slope)
 %   - label_turn: 转弯状态标签 ∈ {-1,0,+1} (right/straight/left)
 %   - theta_hat: 坡度角估计 [rad]
 %   - conf: 置信度结构体
-%     .conf_main: 主分类置信度 [4×1]
+%     .conf_main: 主分类置信度 [3×1]
 %     .conf_turn: 转弯分类置信度 [3×1]
 %     .label_main_name: 主分类标签名称
 %     .label_turn_name: 转弯状态标签名称
@@ -81,9 +81,9 @@ function [label_main, label_turn, theta_hat, conf] = GRU_infer(x_seq, model)
     features = stripdims(features);
     
     % 2) 主分类头
-    logits_main = model.fc_main_weights * features + model.fc_main_bias;  % [4, 1]
+    logits_main = model.fc_main_weights * features + model.fc_main_bias;  % [3, 1]
     probs_main = softmax(logits_main, 'DataFormat', 'CB');
-    probs_main = extractdata(gather(probs_main));  % [4, 1]
+    probs_main = extractdata(gather(probs_main));  % [3, 1]
     [conf_main_max, label_main] = max(probs_main);
     
     % 3) 转弯分类头
@@ -102,7 +102,7 @@ function [label_main, label_turn, theta_hat, conf] = GRU_infer(x_seq, model)
     %% 构建输出
     % 置信度结构体
     conf = struct();
-    conf.conf_main = probs_main;  % [4×1]
+    conf.conf_main = probs_main;  % [3×1]
     conf.conf_turn = probs_turn;  % [3×1]
     conf.conf_main_max = conf_main_max;
     conf.conf_turn_max = conf_turn_max;

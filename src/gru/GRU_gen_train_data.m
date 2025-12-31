@@ -1,12 +1,13 @@
 % =============================
 % 文件名：GRU_gen_train_data.m
-% 版本号：V4.9（全可观测标注：去除上帝视角）
-% 最后修改时间：2025-12-24
+% 版本号：V5.0（移除 slip 分类，简化为 3 类）
+% 最后修改时间：2025-12-30
 % 作者：LPV-MPC Project
 % 功能描述：
 %   通过调用 Simulink 模型 GRU_DataGen.slx 生成 GRU 训练数据
 %   支持路径参数随机化、打滑/堵转注入（InjectionWrapper）、自动标注
-%   V4.9：Slip 标注仅用可观测量（I_sum、accel_x_lp、accel_per_current），移除地速/轮胎利用率
+%   V5.0：移除 slip 分类，主分类简化为 3 类（flat/stall/slope）
+%         打滑注入保留以增加数据多样性，但标注为 flat
 %
 % 使用方法：
 %   直接运行或调用函数，按需修改下方配置
@@ -18,7 +19,7 @@
 %           .t           : 时间向量 [Nx1] [s]
 %           .u           : 控制输入 [Nx2]=[F_cmd, omega_cmd] [N, rad/s]
 %           .y_raw       : 原始输出 [Nx31]（来自 Simulink）
-%           .label_main  : 主分类标签 [Nx1]∈{1,2,3,4} (flat/slip/stall/slope)
+%           .label_main  : 主分类标签 [Nx1]∈{1,2,3} (flat/stall/slope)
 %           .label_turn  : 转弯状态标签 [Nx1]∈{-1,0,+1} (right/straight/left)
 %
 % 依赖：
@@ -27,8 +28,8 @@
 %   - GRU_DataGen.slx (Simulink 模型)
 %
 % 备注：
-%   - 标签优先级：stall→slip→slope→flat；slip 基于动力-加速度失配与电流归一化加速度
-%   - 支持噪声混合、转弯轻度打滑注入、阈值/驻留时间网格搜索
+%   - 标签优先级：stall→slope→flat（V5.0：移除 slip）
+%   - 打滑注入保留以增加数据多样性，但不单独标注
 % =============================
 
 %% ==================== 配置区域（用户可修改） ====================
@@ -36,13 +37,12 @@
 root = project_root();
 data_gru_dir = fullfile(root, 'data', 'gru');
 
-% 场景列表
-cfg.scenes = {'straight', 'turn_left', 'turn_right', 'straight_turn', 'slope', 'bumpy'};  % 完整数据集（含左右转）
-% cfg.scenes = {'straight', 'turn', 'straight_turn', 'slope', 'bumpy'};  % 旧版本：仅左转
+% 场景列表（与 data/paths/ 目录下的路径文件对应）
+cfg.scenes = {'straight', 'straight_left_turn', 'straight_right_turn', 'slope', 'bumpy'};  % 完整数据集
 % cfg.scenes = {'straight'};  % 快速测试：仅straight场景
 
 % 全局配置
-cfg.num_runs = 500;          % 完整数据集：每场景150次【V4.3改进：从100增至150以增加slip/stall样本】
+cfg.num_runs = 100;          % 完整数据集：每场景150次【V4.3改进：从100增至150以增加slip/stall样本】
 % cfg.num_runs = 1;          % 快速测试：每场景1次
 cfg.T_end = 20;              % 每回合仿真时长 [s]
 cfg.Ts = 0.05;               % 采样周期 [s]（通常使用 parameters.m 中的值）
@@ -67,34 +67,31 @@ cfg.path_rand.bumpy_amp_range = [deg2rad(3), deg2rad(7)];  % 颠簸振幅范围 
 cfg.path_rand.turn_trans_range = [0.3, 0.6];     % 转弯过渡时间范围 [s]
 
 % 打滑注入配置（通过InjectionWrapper，降低牵引效率）
-% V4.8a: 略微提高打滑注入概率，以增加 slip 训练样本
-cfg.slip_cfg.prob = 0.80;                % 打滑概率【从0.70提高到0.80，增强slip覆盖】
-cfg.slip_cfg.t_start_range = [5, 12];   % 开始时间范围 [s]【V4.7避开GRU前5s缓冲区】
-cfg.slip_cfg.duration_range = [2, 4];   % 持续时间范围 [s]
-cfg.slip_cfg.gamma_range = [0.3, 0.7];  % 牵引系数范围（1=正常，<1=打滑）
+% V5.1: 打滑窗口 5-8s，最大持续 3s，高概率但短窗口
+cfg.slip_cfg.prob = 0.70;                % 打滑概率【V5.1：恢复较高概率】
+cfg.slip_cfg.t_start_range = [5, 8];     % 开始时间范围 [s]【V5.1：缩窄到 5-8s】
+cfg.slip_cfg.duration_range = [1.5, 3];  % 持续时间范围 [s]【V5.1：最大 3s】
+cfg.slip_cfg.gamma_range = [0.3, 0.7];   % 牵引系数范围（1=正常，<1=打滑）
 
-% 转弯场景轻度打滑配置（V4.2新增）
-cfg.slip_in_turn.prob = 0.25;           % 转弯场景打滑概率【V4.3改进：从0.15提高到0.25】
+% 转弯场景轻度打滑配置
+cfg.slip_in_turn.prob = 0.25;            % 转弯场景打滑概率【V5.1：恢复为0.25】
 cfg.slip_in_turn.gamma_range = [0.65, 0.85];  % 轻度打滑（接近正常）
 
-% 新版 slip 标注配置（V4.8新增：强化可分性）
-cfg.slip_label.I_slip_high_ratio = 0.35;       % slip 高电流判据：I_sum > ratio × I_high_thresh（放宽至≈4A）
-cfg.slip_label.accel_slip_small = 0.05;        % slip 加速度上限 [m/s²]（大于stall但明显小于正常）
-cfg.slip_label.accel_per_current_thresh = 0.08; % 加速度-电流比下限 [m/(s²·A)]（低于此视为驱动失配）
-cfg.slip_label.slip_min_dwell = 0.3;           % slip 最小持续时间 [s]（略放宽，提高召回）
-cfg.slip_label.exclude_stall_margin = 0.2;     % 排除 stall 附近的边界 [s]
+% V5.0：移除 slip 标注配置（打滑仍注入但标注为 flat）
 
 
 % 堵转注入配置（通过InjectionWrapper，施加外部负载）
-cfg.stall_cfg.prob = 0.80;                 % 堵转概率【V4.3改进：从0.2提高到0.4，以后进一步提高到0.8增强stall覆盖】
-cfg.stall_cfg.t_start_range = [12, 17];   % 开始时间范围 [s]【V4.7后移1s，减少与slip窗口重叠】
-cfg.stall_cfg.duration_range = [1.5, 3];  % 持续时间范围 [s]
-cfg.stall_cfg.load_range = [200, 300];    % 外部负载范围 [N]
+% V5.1: 堵转窗口 11-17s，最大持续 3s，支持重复注入
+cfg.stall_cfg.prob = 0.85;                 % 堵转概率【V5.1：提高到 0.85】
+cfg.stall_cfg.t_start_range = [11, 17];    % 开始时间范围 [s]【V5.1：11-17s】
+cfg.stall_cfg.duration_range = [2, 3];     % 持续时间范围 [s]【V5.1：2-3s】
+cfg.stall_cfg.load_range = [200, 300];     % 外部负载范围 [N]
+cfg.stall_cfg.repeat_inject = true;        % 【V5.1新增】允许重复注入堵转
 
 % 打滑启发式配置（V4.2新增）
 cfg.slip_heuristic.k_torque = [];  % 电机扭矩常数 [N/(A·kg)]，空=自动拟合
 % V4.5d: 多场景统一拟合（全局最优）
-cfg.slip_heuristic.fit_scenes = {'straight_turn', 'slope', 'bumpy'};  % 拟合场景列表
+cfg.slip_heuristic.fit_scenes = {'straight_left_turn', 'straight_right_turn', 'slope', 'bumpy'};  % 拟合场景列表
 cfg.slip_heuristic.fit_runs_per_scene = 2;  % 每个场景回合数（总共2×3=6回合）
 
 % 阈值网格搜索配置（V4.2新增，空=使用默认值）
@@ -127,12 +124,7 @@ opts.verbose = cfg.verbose;
 opts.model_name = cfg.model_name;
 opts.noise_profile = cfg.noise_profile;
 
-% V4.8a: 为向后兼容增加 slip_label 默认配置
-if isfield(cfg, 'slip_label')
-    opts.slip_label = cfg.slip_label;
-else
-    opts.slip_label = struct();
-end
+% V5.0：移除 slip_label 配置（不再需要）
 
 %% 参数处理与默认值（保留原有逻辑）
 
@@ -171,15 +163,16 @@ slip_in_turn_gamma_range = getFieldOrDefault(slip_in_turn, 'gamma_range', [0.65,
 % 堵转注入配置
 stall_cfg = getFieldOrDefault(opts, 'stall_cfg', struct());
 stall_prob = getFieldOrDefault(stall_cfg, 'prob', 0.2);
-stall_t_start_range = getFieldOrDefault(stall_cfg, 't_start_range', [12, 17]);  % 后移减少窗口重叠【V4.7】
-stall_duration_range = getFieldOrDefault(stall_cfg, 'duration_range', [1.5, 3]);
+stall_t_start_range = getFieldOrDefault(stall_cfg, 't_start_range', [11, 17]);
+stall_duration_range = getFieldOrDefault(stall_cfg, 'duration_range', [2, 3]);
 stall_load_range = getFieldOrDefault(stall_cfg, 'load_range', [200, 300]);  % N
+stall_repeat_inject = getFieldOrDefault(stall_cfg, 'repeat_inject', false);  % V5.1: 允许重复注入
 
 % 打滑启发式配置（V4.2）
 slip_heuristic = getFieldOrDefault(opts, 'slip_heuristic', struct());
 k_torque = getFieldOrDefault(slip_heuristic, 'k_torque', []);  % 空=自动拟合
 % V4.5d: 支持多场景拟合
-fit_scenes = getFieldOrDefault(slip_heuristic, 'fit_scenes', {'straight_turn', 'slope', 'bumpy'});
+fit_scenes = getFieldOrDefault(slip_heuristic, 'fit_scenes', {'straight_left_turn', 'straight_right_turn', 'slope', 'bumpy'});
 fit_runs_per_scene = getFieldOrDefault(slip_heuristic, 'fit_runs_per_scene', 2);
 
 % 阈值网格搜索配置（V4.2）
@@ -259,13 +252,7 @@ else
     best_thresholds.I_high_thresh = 12.0;
     best_thresholds.accel_stall_thresh = 0.02;
     best_thresholds.stall_dwell = 1.0;
-    
-    % V4.8: 新增 slip 标注阈值（从配置读取）
-    best_thresholds.I_slip_high_ratio = opts.slip_label.I_slip_high_ratio;
-    best_thresholds.accel_slip_small = opts.slip_label.accel_slip_small;
-    best_thresholds.accel_per_current_thresh = opts.slip_label.accel_per_current_thresh;
-    best_thresholds.slip_min_dwell = opts.slip_label.slip_min_dwell;
-    best_thresholds.exclude_stall_margin = opts.slip_label.exclude_stall_margin;
+    % V5.0：移除 slip 标注阈值
 end
 
 %% 批量生成数据
@@ -293,7 +280,8 @@ for s_idx = 1:N_scenes
                 v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
                 slip_prob, slip_t_start_range, slip_duration_range, slip_gamma_range, ...
                 slip_in_turn_prob, slip_in_turn_gamma_range, ...  % V4.2
-                stall_prob, stall_t_start_range, stall_duration_range, stall_load_range);
+                stall_prob, stall_t_start_range, stall_duration_range, stall_load_range, ...
+                stall_repeat_inject);  % V5.1: 添加重复注入参数
             
             % 2. 配置 Simulink 模型
             [enable_noise_run, noise_std_scale, noise_variant] = resolveNoiseProfile( ...
@@ -392,8 +380,8 @@ for s_idx = 1:N_scenes
             data.runs(run_idx).meta.seed = seed + run_idx;  % 每回合独立种子
             
             if verbose
-                fprintf('✓ (N=%d, 主类别分布: flat=%d, slip=%d, stall=%d, slope=%d)\n', ...
-                    N, sum(label_main==1), sum(label_main==2), sum(label_main==3), sum(label_main==4));
+                fprintf('✓ (N=%d, 主类别分布: flat=%d, stall=%d, slope=%d)\n', ...
+                    N, sum(label_main==1), sum(label_main==2), sum(label_main==3));
             end
             
         catch ME
@@ -448,7 +436,8 @@ function [ref_path, inj_signal, inject_info] = generate_reference_path(...
     v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
     slip_prob, slip_t_start_range, slip_duration_range, slip_gamma_range, ...
     slip_in_turn_prob, slip_in_turn_gamma_range, ...  % V4.2
-    stall_prob, stall_t_start_range, stall_duration_range, stall_load_range)
+    stall_prob, stall_t_start_range, stall_duration_range, stall_load_range, ...
+    stall_repeat_inject)  % V5.1: 添加重复注入参数
 % 生成参考路径和注入信号（不改theta_ref）
 %
 % 输出:
@@ -490,14 +479,14 @@ switch lower(scene)
         slope_sign_counter = -slope_sign_counter;
     case 'bumpy'
         opts.bumpy_amp = bumpy_amp_range(1) + (bumpy_amp_range(2) - bumpy_amp_range(1)) * rand();
-    case {'turn_left', 'turn'}
-        % 左转（逆时针）：omega_ref > 0（默认行为）
-        opts.turn_direction = 'left';  % 标记为左转（可选）
-    case 'turn_right'
-        % 右转（顺时针）：需要传递给 gen_agv_ref_path
-        opts.turn_direction = 'right';  % 标记为右转
+    case 'straight_left_turn'
+        % 先直行后左转（使用 gen_agv_ref_path 中的 straight_left_turn 场景）
+        opts.turn_direction = 'left';
+    case 'straight_right_turn'
+        % 先直行后右转（使用 gen_agv_ref_path 中的 straight_right_turn 场景）
+        opts.turn_direction = 'right';
     otherwise
-        % straight, straight_turn: 使用默认值
+        % straight: 使用默认值
 end
 
 %% 打滑/堵转注入决策
@@ -506,7 +495,7 @@ inject_info.slip_injected = false;
 inject_info.stall_injected = false;
 
 % 判断是否为转弯场景
-is_turn_scene = strcmpi(scene, 'turn') || contains(lower(scene), 'turn');
+is_turn_scene = contains(lower(scene), 'turn');
 
 % 打滑注入（V4.2: 转弯场景使用轻度打滑，非转弯场景使用常规打滑）
 if is_turn_scene
@@ -530,30 +519,60 @@ else
     end
 end
 
-% 堵转注入（所有场景均可）
+% 堵转注入（所有场景均可，V5.1: 支持重复注入）
 if rand() < stall_prob
     inject_info.stall_injected = true;
+    inject_info.stall_windows = [];  % V5.1: 改为数组，支持多个窗口
+    inject_info.stall_loads = [];    % V5.1: 对应的负载数组
+    
+    % 第一次堵转注入
     t_start = stall_t_start_range(1) + (stall_t_start_range(2) - stall_t_start_range(1)) * rand();
     duration = stall_duration_range(1) + (stall_duration_range(2) - stall_duration_range(1)) * rand();
-    inject_info.stall_window = [t_start, min(t_start + duration, T_end - 1)];
-    inject_info.stall_load = stall_load_range(1) + (stall_load_range(2) - stall_load_range(1)) * rand();
+    t_end = min(t_start + duration, T_end - 0.5);
+    inject_info.stall_windows = [inject_info.stall_windows; t_start, t_end];
+    inject_info.stall_loads = [inject_info.stall_loads; stall_load_range(1) + (stall_load_range(2) - stall_load_range(1)) * rand()];
     
-    % 如果堵转和打滑时间窗口冲突，取消打滑
-    if inject_info.slip_injected
-        if ~(inject_info.slip_window(2) < inject_info.stall_window(1) || ...
-             inject_info.slip_window(1) > inject_info.stall_window(2))
-            inject_info.slip_injected = false;  % 冲突，取消打滑
-        end
+    % V5.1: 如果允许重复注入，在不重叠的情况下继续添加窗口
+    if stall_repeat_inject
+        max_attempts = 5;  % 最多尝试次数
+        for attempt = 1:max_attempts
+            % 下一个窗口从上一个结束后开始
+            prev_end = inject_info.stall_windows(end, 2);
+            if prev_end >= stall_t_start_range(2)
+                break;  % 超出允许范围，停止
+            end
+            % 新窗口开始时间：上一个结束 + 0.5s 间隔
+            next_start = prev_end + 0.5;
+            if next_start > stall_t_start_range(2)
+                break;
+            end
+            duration_next = stall_duration_range(1) + (stall_duration_range(2) - stall_duration_range(1)) * rand();
+            next_end = min(next_start + duration_next, T_end - 0.5);
+            if next_end <= next_start + 0.5
+                break;  % 窗口太短，停止
+            end
+            inject_info.stall_windows = [inject_info.stall_windows; next_start, next_end];
+            inject_info.stall_loads = [inject_info.stall_loads; stall_load_range(1) + (stall_load_range(2) - stall_load_range(1)) * rand()];
         end
     end
     
-%% 生成基础路径（不修改theta_ref）
-% 将 turn_left/turn_right 映射为 turn（gen_agv_ref_path统一处理turn场景）
-scene_for_path = scene;
-if strcmpi(scene, 'turn_left') || strcmpi(scene, 'turn_right')
-    scene_for_path = 'turn';
+    % 向后兼容：保留单个窗口引用（第一个窗口）
+    inject_info.stall_window = inject_info.stall_windows(1, :);
+    inject_info.stall_load = inject_info.stall_loads(1);
+    
+    % 如果堵转和打滑时间窗口冲突，取消打滑
+    if inject_info.slip_injected
+        first_stall = inject_info.stall_windows(1, :);
+        if ~(inject_info.slip_window(2) < first_stall(1) || ...
+             inject_info.slip_window(1) > first_stall(2))
+            inject_info.slip_injected = false;  % 冲突，取消打滑
+        end
+    end
 end
-ref_path = gen_agv_ref_path(scene_for_path, params, opts);
+    
+%% 生成基础路径（场景名直接对应 gen_agv_ref_path 中的场景）
+% 注意：straight_left_turn 和 straight_right_turn 直接传递给 gen_agv_ref_path
+ref_path = gen_agv_ref_path(scene, params, opts);
 
 %% 生成注入信号时序
 t = ref_path.t;
@@ -572,11 +591,16 @@ if inject_info.slip_injected
     end
 end
 
-% 堵转注入：在窗口内施加外部负载
+% 堵转注入：在所有窗口内施加外部负载（V5.1: 支持多窗口）
 if inject_info.stall_injected
-    for i = 1:N
-        if t(i) >= inject_info.stall_window(1) && t(i) <= inject_info.stall_window(2)
-            stall_load_vec(i) = inject_info.stall_load;
+    num_windows = size(inject_info.stall_windows, 1);
+    for w = 1:num_windows
+        win = inject_info.stall_windows(w, :);
+        load_val = inject_info.stall_loads(w);
+        for i = 1:N
+            if t(i) >= win(1) && t(i) <= win(2)
+                stall_load_vec(i) = load_val;
+            end
         end
     end
 end
@@ -591,8 +615,8 @@ end
 
 function [label_main, label_turn] = generate_labels(...
     t, y_raw, theta, omega_ref, inject_info, Ts, ...
-    k_torque, mass, thresholds)  % V4.2
-% 事后生成标签
+    k_torque, mass, thresholds)
+% V5.0: 事后生成标签（简化版，移除 slip）
 %
 % 输入:
 %   - t: 时间向量 [Nx1]
@@ -601,29 +625,28 @@ function [label_main, label_turn] = generate_labels(...
 %   - omega_ref: 参考角速度 [Nx1]
 %   - inject_info: 注入信息
 %   - Ts: 采样周期
-%   - k_torque: 电机扭矩常数 [N/(A·kg)] (V4.2)
-%   - mass: 车辆质量 [kg] (V4.2)
-%   - thresholds: 阈值结构体 (V4.2)
+%   - k_torque: 电机扭矩常数 [N/(A·kg)]
+%   - mass: 车辆质量 [kg]
+%   - thresholds: 阈值结构体
 %
 % 输出:
-%   - label_main: 主分类标签 [Nx1]∈{1,2,3,4}
-%       1: flat, 2: slip, 3: stall, 4: slope
+%   - label_main: 主分类标签 [Nx1]∈{1,2,3}
+%       1: flat, 2: stall, 3: slope
 %   - label_turn: 转弯状态标签 [Nx1]∈{-1,0,+1}
 %       -1: right, 0: straight, +1: left
 
 N = length(t);
 
-%% 主分类标注（优先级递减：stall → slip → slope → flat）
-label_main = ones(N, 1);  % 默认 flat
+%% 主分类标注（优先级递减：stall → slope → flat）
+% V5.0: 移除 slip，简化为 3 类
+label_main = ones(N, 1);  % 默认 flat (1)
 
-% 阈值定义（V4.2: 从 thresholds 结构体获取）
+% 阈值定义
 theta_slope_thresh = deg2rad(2);     % 坡度阈值 2°
 I_high_thresh = thresholds.I_high_thresh;        % 高电流阈值 [A]
 omega_wheel_stall_thresh = 0.1;      % 堵转轮速阈值 [rad/s]
 accel_stall_thresh = thresholds.accel_stall_thresh;  % 堵转加速度阈值 [m/s²]
 stall_duration_thresh = thresholds.stall_dwell;  % 堵转最小持续时间 [s]
-dwell_time = 0.5;                    % 最小驻留时间 [s]
-dwell_steps = max(1, round(dwell_time / Ts));
 stall_dwell_steps = max(1, round(stall_duration_thresh / Ts));
 
 % 提取关键通道
@@ -634,14 +657,14 @@ omega_wheel_lf = y_raw(:, 17); % y17: omega_wheel_lf
 omega_wheel_rr = y_raw(:, 18); % y18: omega_wheel_rr
 accel_x = y_raw(:, 9);        % y9: accel_x_meas
 
-% 1) Stall 标注（最高优先级）
+% 1) Stall 标注（最高优先级，标签=2）
 % 方法1: 基于注入窗口
 if inject_info.stall_injected
     t_start = inject_info.stall_window(1);
     t_end = inject_info.stall_window(2);
     for i = 1:N
         if t(i) >= t_start && t(i) <= t_end
-            label_main(i) = 3;  % stall
+            label_main(i) = 2;  % stall
         end
     end
 end
@@ -651,115 +674,21 @@ stall_heuristic = (I_sum > I_high_thresh) & ...
                   (abs(omega_wheel_lf) < omega_wheel_stall_thresh) & ...
                   (abs(omega_wheel_rr) < omega_wheel_stall_thresh) & ...
                   (abs(accel_x) < accel_stall_thresh);
-% 使用更长的驻留时间（1.0s）避免瞬态误判
 stall_heuristic = apply_dwell_time(stall_heuristic, stall_dwell_steps);
 for i = 1:N
     if stall_heuristic(i) && label_main(i) == 1
-        label_main(i) = 3;  % stall
+        label_main(i) = 2;  % stall
     end
 end
 
-% 2) Slip 标注（次高优先级）
-% V4.9: 全可观测判据（移除地速/轮胎利用率）
-%
-% 核心思路：
-%   1. 注入窗口作为候选区间（初步筛选）
-%   2. 高驱动但低加速度（I_sum 高 + accel_x_lp 低）
-%   3. 驱动-加速度比过低（accel_per_current 低）
-%   4. 排除 stall 边界，避免与 stall 混淆
-%   5. 最小持续时间筛选，过滤短促噪声
-%
-% 目标：用可观测量刻画打滑，不依赖“上帝视角”
-
-% 提取 slip 判定所需的额外通道
-% 计算 accel_x_lp（平滑加速度，与特征提取一致）
-alpha_lp = Ts / (0.4 + Ts);
-accel_x_lp = zeros(N, 1);
-accel_x_lp(1) = accel_x(1);
-for i = 2:N
-    accel_x_lp(i) = alpha_lp * accel_x(i) + (1 - alpha_lp) * accel_x_lp(i-1);
-end
-
-% 电流归一化加速度（可观测替代特征）
-current_floor = 0.1;  % 防止低电流除零
-accel_per_current = accel_x_lp ./ max(I_sum, current_floor);
-
-% slip 判据阈值（从 thresholds 获取）
-I_slip_high = thresholds.I_slip_high_ratio * I_high_thresh;  % 例如 0.6 × 12A = 7.2A
-accel_slip_small = thresholds.accel_slip_small;              % 0.05 m/s²
-accel_per_current_thresh = thresholds.accel_per_current_thresh; % 驱动-加速度比阈值
-slip_min_dwell_steps = max(1, round(thresholds.slip_min_dwell / Ts));
-exclude_margin_steps = max(1, round(thresholds.exclude_stall_margin / Ts));
-
-% 构建 slip 候选掩码（多条件联合）
-slip_candidate = false(N, 1);
-
-% 条件1：在注入窗口内（粗筛）
-if inject_info.slip_injected
-    t_start = inject_info.slip_window(1);
-    t_end = inject_info.slip_window(2);
-    for i = 1:N
-        if t(i) >= t_start && t(i) <= t_end
-            slip_candidate(i) = true;
-        end
-    end
-end
-
-% 条件2：在候选区间内进一步检查物理特征
-for i = 1:N
-    if ~slip_candidate(i)
-        continue;  % 跳过非候选点
-    end
-    
-    % 2a) 高驱动但低加速度（动力-加速度失配）
-    power_mismatch = (I_sum(i) > I_slip_high) && (abs(accel_x_lp(i)) < accel_slip_small);
-    
-    % 2b) 电流归一化加速度过低（可观测替代）
-    accel_current_mismatch = accel_per_current(i) < accel_per_current_thresh;
-    
-    % 2c) 非堵转条件（轮速不能太低）
-    not_stalled = (abs(omega_wheel_lf(i)) > omega_wheel_stall_thresh) && ...
-                  (abs(omega_wheel_rr(i)) > omega_wheel_stall_thresh);
-    
-    % 综合判定：动力失配 + 比值失配 + 非堵转
-    if ~(power_mismatch && accel_current_mismatch && not_stalled)
-        slip_candidate(i) = false;  % 不满足物理特征，排除
-    end
-end
-
-% 条件3：排除 stall 边界附近（避免混淆）
-if inject_info.stall_injected
-    stall_start_idx = find(t >= inject_info.stall_window(1), 1);
-    stall_end_idx = find(t <= inject_info.stall_window(2), 1, 'last');
-    if ~isempty(stall_start_idx) && ~isempty(stall_end_idx)
-        exclude_range = max(1, stall_start_idx - exclude_margin_steps) : ...
-                        min(N, stall_end_idx + exclude_margin_steps);
-        slip_candidate(exclude_range) = false;
-    end
-end
-
-% 条件4：应用最小驻留时间（过滤短促噪声）
-slip_candidate = apply_dwell_time(slip_candidate, slip_min_dwell_steps);
-
-% Fallback: 若已注入但无样本通过物理判据，则退化为窗口内全标注
-if inject_info.slip_injected && ~any(slip_candidate)
-    in_window = (t >= inject_info.slip_window(1)) & (t <= inject_info.slip_window(2));
-    slip_candidate(in_window) = true;
-end
-
-% 最终标注：只标记满足所有条件且当前为 flat 的样本
-for i = 1:N
-    if slip_candidate(i) && label_main(i) == 1
-        label_main(i) = 2;  % slip
-    end
-end
-
-% 3) Slope 标注（第三优先级，不会覆盖stall/slip）
+% 2) Slope 标注（次高优先级，标签=3，不会覆盖 stall）
 for i = 1:N
     if abs(theta(i)) >= theta_slope_thresh && label_main(i) == 1
-        label_main(i) = 4;  % slope
+        label_main(i) = 3;  % slope
     end
 end
+
+% V5.0: 移除 slip 标注（打滑注入的样本保持为 flat）
 
 %% 转弯状态标注
 label_turn = zeros(N, 1);  % 默认 straight

@@ -1,7 +1,7 @@
 % =============================
 % 文件名：GRU_prepare_dataset.m
-% 版本号：V1.6（可观测特征：19维，移除上帝视角）
-% 最后修改时间：2025-12-24
+% 版本号：V1.7（简化主分类：3类，移除 slip）
+% 最后修改时间：2025-12-30
 % 作者：LPV-MPC Project
 % 功能描述：
 %   GRU训练数据预处理脚本
@@ -12,10 +12,9 @@
 %   5. 数据归一化（z-score，仅用训练集统计）
 %   6. 保存处理后的数据集
 %
-% V1.6 更新（2025-12-24）：
-%   - 特征维度 19，可观测：accel_per_current, pitch_angle_est，去除地速/轮胎利用率/坡度真值
-%   - 离线特征与在线 GRU_state_classifier 对齐
-%   - 保留必要使用说明，其余历史版本说明移除
+% V1.7 更新（2025-12-30）：
+%   - 主分类简化为 3 类：flat/stall/slope（移除 slip）
+%   - 更新标签编号：stall=2, slope=3
 
 root = project_root();
 data_gru_dir = fullfile(root, 'data', 'gru');
@@ -38,7 +37,7 @@ if ~isfield(cfg, 'verbose');      cfg.verbose     = true;                       
 % 输出：
 %   - dataset: 处理后的数据集，保存至 cfg.output_file
 %       .X_train/val/test: [N, seq_len, feat_dim]
-%       .y_main_train/val/test: [N,1]∈{1,2,3,4}
+%       .y_main_train/val/test: [N,1]∈{1,2,3}
 %       .y_turn_train/val/test: [N,1]∈{-1,0,+1}
 %       .y_theta_train/val/test: [N,1] [rad]
 %       .mask_theta_train/val/test: [N,1] (slope样本=1)
@@ -272,7 +271,7 @@ for i = 1:N_slices
 end
 
 % 生成 mask_theta（仅 slope 样本为1）
-mask_theta_all = double(y_main_all == 4);  % slope 的类别编号为 4
+mask_theta_all = double(y_main_all == 3);  % V1.7: slope 的类别编号为 3
 
 if cfg.verbose
     fprintf('  ✓ 切片完成！\n');
@@ -391,11 +390,11 @@ if cfg.verbose
     % 主分类标签分布
     fprintf('\n[主分类标签分布]\n');
     fprintf('  训练集:\n');
-    print_label_dist(y_main_train, {'flat', 'slip', 'stall', 'slope'});
+    print_label_dist(y_main_train, {'flat', 'stall', 'slope'});
     fprintf('  验证集:\n');
-    print_label_dist(y_main_val, {'flat', 'slip', 'stall', 'slope'});
+    print_label_dist(y_main_val, {'flat', 'stall', 'slope'});
     fprintf('  测试集:\n');
-    print_label_dist(y_main_test, {'flat', 'slip', 'stall', 'slope'});
+    print_label_dist(y_main_test, {'flat', 'stall', 'slope'});
     
     % 转弯标签分布
     fprintf('\n[转弯状态标签分布]\n');
@@ -453,31 +452,30 @@ if cfg.verbose
     
     % V1.4: 新增统计 - 类别不平衡指标
     fprintf('\n[类别不平衡指标（训练集）]\n');
-    print_imbalance_metrics(y_main_train, {'flat', 'slip', 'stall', 'slope'});
+    print_imbalance_metrics(y_main_train, {'flat', 'stall', 'slope'});
     
     % V1.4: 新增统计 - 样本持续时间
     fprintf('\n[样本持续时间统计（训练集）]\n');
     print_duration_stats(y_main_train, Ts, cfg.stride);
 end
 
-%% [附加步骤] 训练集类别重采样（温和版）
-% 目标：温和提升 slip/stall 占比，限制 flat 过度主导
+%% [附加步骤] 训练集类别重采样（简化版）
+% V1.7: 移除 slip，仅过采样 stall
 
-resample_cfg.target_multiplier = struct('slip', 2.0, 'stall', 2.5);  % 倍数可按需调整
+resample_cfg.target_multiplier = struct('stall', 2.5);  % 仅过采样 stall
 resample_cfg.flat_max_ratio = 3.0;  % flat 至少比最少的少数类多不过 3 倍
 
 if cfg.verbose
-    fprintf('\n[附加步骤] 训练集类别重采样（slip/stall 过采样 + flat 欠采样）...\n');
+    fprintf('\n[附加步骤] 训练集类别重采样（stall 过采样 + flat 欠采样）...\n');
 end
 
 % 打印重采样前分布
 if cfg.verbose
-    print_label_dist(y_main_train, {'flat', 'slip', 'stall', 'slope'});
+    print_label_dist(y_main_train, {'flat', 'stall', 'slope'});
 end
 
-% ===== 过采样 slip 与 stall =====
-oversample_plan = [2, resample_cfg.target_multiplier.slip; ...
-                   3, resample_cfg.target_multiplier.stall];
+% ===== 过采样 stall =====
+oversample_plan = [2, resample_cfg.target_multiplier.stall];  % stall 的标签为 2
 
 for iPlan = 1:size(oversample_plan,1)
     class_label = oversample_plan(iPlan,1);
@@ -506,7 +504,7 @@ for iPlan = 1:size(oversample_plan,1)
     mask_theta_train = cat(1, mask_theta_train, mask_theta_train(sel,:));
     
     if cfg.verbose
-        class_name = {'flat','slip','stall','slope'};
+        class_name = {'flat','stall','slope'};
         fprintf('  %s 过采样: 原始=%d, 目标≈%d, 实际=%d\n', ...
             class_name{class_label}, n_class, target, sum(y_main_train==class_label));
         fprintf('    放回采样情况: 去重后样本=%d, 被重复采样=%d, 最大重复次数=%d\n', ...
@@ -515,8 +513,8 @@ for iPlan = 1:size(oversample_plan,1)
 end
 
 % ===== flat 欠采样（限制为 3× 少数类） =====
-counts_after = arrayfun(@(lbl) sum(y_main_train == lbl), 1:4);
-minor_counts = counts_after([2,3,4]);
+counts_after = arrayfun(@(lbl) sum(y_main_train == lbl), 1:3);  % V1.7: 3 类
+minor_counts = counts_after([2,3]);  % stall, slope
 minor_counts = minor_counts(minor_counts > 0);
 if ~isempty(minor_counts)
     min_minor = min(minor_counts);
@@ -554,7 +552,7 @@ n_train = size(X_train_norm, 1);
 
 if cfg.verbose
     fprintf('  重采样后训练集分布:\n');
-    print_label_dist(y_main_train, {'flat', 'slip', 'stall', 'slope'});
+    print_label_dist(y_main_train, {'flat', 'stall', 'slope'});
 end
 
 %% 7. 保存处理后的数据集
@@ -643,7 +641,7 @@ if cfg.verbose
     fprintf('  - %s (归一化参数)\n', cfg.scaler_file);
     fprintf('\n可用于训练的数据:\n');
     fprintf('  - X_train: [%d, %d, %d]\n', size(X_train_norm));
-    fprintf('  - y_main_train: [%d, 1] ∈ {1,2,3,4}\n', length(y_main_train));
+    fprintf('  - y_main_train: [%d, 1] ∈ {1,2,3}\n', length(y_main_train));
     fprintf('  - y_turn_train: [%d, 1] ∈ {-1,0,+1}\n', length(y_turn_train));
     fprintf('  - y_theta_train: [%d, 1] [rad]\n', length(y_theta_train));
 end
@@ -874,10 +872,11 @@ end
 
 function print_duration_stats(labels, Ts, stride)
 % 统计各标签类别的平均持续样本数（基于连续相同标签计数）
-    label_names = {'flat', 'slip', 'stall', 'slope'};
+% V1.7: 更新为 3 类（flat, stall, slope）
+    label_names = {'flat', 'stall', 'slope'};
     fprintf('  各类别平均连续持续时长（基于滑窗切片）:\n');
     
-    for lbl = 1:4
+    for lbl = 1:3
         % 查找该标签的所有位置
         idx_lbl = find(labels == lbl);
         if isempty(idx_lbl)

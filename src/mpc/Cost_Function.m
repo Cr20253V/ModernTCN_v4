@@ -28,7 +28,9 @@ function [J, report] = Cost_Function(params, db, cfg, scenes)
 
 %% 默认配置
 if nargin < 4 || isempty(scenes)
-    scenes = struct('turn',0.35,'slope',0.10,'straight_turn',0.10,'bumpy',0.35,'straight',0.10);
+    % 默认场景权重（共 5 个场景）
+    scenes = struct('straight_left_turn',0.25,'straight_right_turn',0.25,...
+                    'slope',0.15,'bumpy',0.20,'straight',0.15);
 end
 if nargin < 3 || isempty(cfg)
     cfg = struct();
@@ -89,8 +91,8 @@ end
 rho_min = [db.grid.V(1); db.grid.W(1); db.grid.T(1)];
 rho_max = [db.grid.V(end); db.grid.W(end); db.grid.T(end)];
 
-%% 场景列表
-scene_order = {'turn','slope','straight_turn','bumpy','straight'};
+%% 场景列表（共 5 个场景）
+scene_order = {'straight_left_turn','straight_right_turn','slope','bumpy','straight'};
 
 J_total = 0;
 report = struct();
@@ -291,9 +293,10 @@ J = J_total;
 report.failed = report.fail_count > 0;
 report.timestamp = datestr(now,'yyyy-mm-dd HH:MM:SS');
 
-% 可选落盘（根目录）
+% 可选落盘（使用 results_dir 统一输出路径）
 if isfield(cfg,'save_report') && cfg.save_report
-    save(sprintf('bo_report_%s.mat',datestr(now,'yyyymmdd_HHMMSS')),'J','report');
+    report_dir = results_dir('bo_reports');
+    save(fullfile(report_dir, sprintf('bo_report_%s.mat',datestr(now,'yyyymmdd_HHMMSS'))),'J','report');
 end
 
 end

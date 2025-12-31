@@ -1,16 +1,15 @@
 % =============================
 % 文件名：GRU_state_classifier.m
-% 版本号：V1.6（可观测特征：19维，移除上帝视角）
-% 最后修改时间：2025-12-24
+% 版本号：V1.7（简化主分类：3类，移除 slip）
+% 最后修改时间：2025-12-30
 % 作者：LPV-MPC Project
 % 功能描述：
 %   GRU工况识别在线推理封装
 %   提供序列缓冲、最小驻留时间、低通滤波等功能
 %
-% V1.6 更新（2025-12-24）：
-%   - 特征维度 19，全部可观测：accel_per_current，pitch_angle_est（IMU 衰减积分）
-%   - 移除 v_true/v_err/tire_util/theta_ground 等不可观测量
-%   - 离线/在线特征顺序完全对齐
+% V1.7 更新（2025-12-30）：
+%   - 主分类简化为 3 类：flat/stall/slope（移除 slip）
+%   - 更新标签编号：stall=2, slope=3
 %
 % 使用方法：
 %   1. 初始化：
@@ -28,10 +27,10 @@
 % 输出参数：
 %   - state: 更新后的状态结构体
 %   - out: 推理输出结构体
-%     .label_main: 主分类 ∈ {1,2,3,4} (flat/slip/stall/slope)
+%     .label_main: 主分类 ∈ {1,2,3} (flat/stall/slope)
 %     .label_turn: 转弯状态 ∈ {-1,0,+1} (right/straight/left)
 %     .theta_hat: 坡度角估计 [rad]
-%     .conf_main: 主分类置信度 [4×1]
+%     .conf_main: 主分类置信度 [3×1]
 %     .conf_turn: 转弯分类置信度 [3×1]
 %     .label_main_name: 主分类标签名称
 %     .label_turn_name: 转弯状态标签名称
@@ -378,7 +377,7 @@ function out = constructOutput(state)
     out.label_main = state.label_main_current;
     out.label_turn = state.label_turn_current;
     out.theta_hat = state.theta_hat_current;
-    out.conf_main = [1; 0; 0; 0];  % 默认flat
+    out.conf_main = [1; 0; 0];  % 默认flat（V1.7: 3维）
     out.conf_turn = [0; 1; 0];     % 默认straight
     
     % 标签名称
