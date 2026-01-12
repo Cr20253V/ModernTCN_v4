@@ -99,14 +99,13 @@ else
         R_cmd = (v / max(abs(w_icr),1e-6)) * sign(w_icr);
     end
     x_c = 0.0; y_c = R_cmd;
-    % 使用符号安全的 atan，确保转向角在 (-pi/2, pi/2) 范围内
-    % sign(denom)*max(abs(denom),eps) 保留分母符号，避免除零
+    % 使用带符号保护的分母，保持右转时角度符号正确且避免象限翻转
     denom_lf = y_c - W/2;
     denom_rr = y_c + W/2;
     safe_denom_lf = sign(denom_lf) * max(abs(denom_lf), 1e-6);
     safe_denom_rr = sign(denom_rr) * max(abs(denom_rr), 1e-6);
     delta_lf_target = atan((L/2 - x_c) / safe_denom_lf);
-    delta_rr_target = atan((x_c + L/2) / safe_denom_rr);
+    delta_rr_target = -atan((x_c + L/2) / safe_denom_rr);
 end
 
 % NOTE(open-loop test): 观测侧不更新/不预测转角，仅读取状态中的

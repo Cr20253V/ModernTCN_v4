@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 700">
+  <!-- Definitions -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+    </marker>
+    <marker id="arrowhead_adapt" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#ef6c00" />
+    </marker>
+    <linearGradient id="neuralGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e0f7fa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#b2ebf2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="mpcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff8e1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ffecb3;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="plantGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f3e5f5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e1bee7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Zones -->
+  <!-- Adaptation Zone (Top) -->
+  <rect x="20" y="30" width="960" height="200" rx="15" fill="#f5f5f5" stroke="#ccc" stroke-dasharray="5,5" />
+  <text x="40" y="60" font-family="Arial" font-size="14" fill="#666" font-weight="bold">Perception &amp; Adaptation Layer</text>
+
+  <!-- Control Zone (Bottom) -->
+  <rect x="20" y="250" width="960" height="420" rx="15" fill="#fafafa" stroke="#ccc" stroke-dasharray="5,5" />
+  <text x="40" y="280" font-family="Arial" font-size="14" fill="#666" font-weight="bold">Control &amp; Plant Layer</text>
+
+  <!-- ==================== TOP LAYER BLOCKS ==================== -->
+
+  <!-- 1. LPV GRID (Top Left) x=50, width=500 -->
+  <g transform="translate(50, 80)">
+    <rect x="0" y="0" width="500" height="120" rx="10" fill="#fff9c4" stroke="#fbc02d" stroke-width="2" />
+    <text x="250" y="30" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle" fill="#f57f17">LPV Grid &amp; Adaptation</text>
+    
+    <!-- Output Ports - Centered at specific X relative to Global -->
+    <!-- MPC blocks will be at x=30, 190, 350 relative to MPC container -->
+    <!-- MPC container is at x=50 global -->
+    <!-- Sub-blocks centers relative to MPC: 30+60=90, 190+60=250, 350+60=410 -->
+    <!-- Sub-blocks centers relative to LPV (which is also at x=50): 90, 250, 410 -->
+    <!-- Use exact widths to align ports perfectly -->
+
+    <rect x="60" y="110" width="60" height="20" fill="#ef6c00" />
+    <text x="90" y="123" font-family="Arial" font-size="11" text-anchor="middle" fill="white">Q, R</text>
+    
+    <rect x="220" y="110" width="60" height="20" fill="#ef6c00" />
+    <text x="250" y="123" font-family="Arial" font-size="11" text-anchor="middle" fill="white">A, B, E</text>
+    
+    <rect x="380" y="110" width="60" height="20" fill="#ef6c00" />
+    <text x="410" y="123" font-family="Arial" font-size="11" text-anchor="middle" fill="white">u_lim</text>
+  </g>
+
+  <!-- 2. GRU NETWORK (Top Right) x=650 -> align with AGV center -->
+  <g transform="translate(650, 80)">
+    <rect x="0" y="0" width="200" height="120" rx="10" fill="url(#neuralGrad)" stroke="#00bcd4" stroke-width="2" />
+    <text x="100" y="30" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle" fill="#006064">GRU Network</text>
+    <rect x="35" y="50" width="130" height="40" rx="5" fill="white" stroke="#00acc1" />
+    <text x="100" y="75" font-family="Arial" font-size="12" text-anchor="middle" fill="#00838f">State Estimation</text>
+    
+    <!-- Input Port (Bottom Center) -->
+    <circle cx="100" cy="120" r="5" fill="#00acc1" />
+  </g>
+
+  <!-- ==================== BOTTOM LAYER BLOCKS ==================== -->
+
+  <!-- 3. MPC CONTROLLER (Bottom Left) x=50, width=500 -->
+  <g transform="translate(50, 300)">
+    <rect x="0" y="0" width="500" height="300" rx="10" fill="url(#mpcGrad)" stroke="#ff9800" stroke-width="2" />
+    <text x="250" y="30" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="#e65100">Adaptive LPV-MPC</text>
+
+    <!-- Sub-block: Objective (Left) - Center x=90 -->
+    <g transform="translate(30, 70)">
+      <rect x="0" y="0" width="120" height="60" rx="5" fill="white" stroke="#ffb74d" stroke-width="2" />
+      <text x="60" y="25" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#e65100">Objective</text>
+      <text x="60" y="45" font-family="Arial" font-size="10" text-anchor="middle" fill="#555">J(Q, R)</text>
+      <!-- Adaptation In -->
+      <circle cx="60" cy="0" r="4" fill="#ef6c00" />
+    </g>
+
+    <!-- Sub-block: Prediction (Center) - Center x=250 -->
+    <g transform="translate(190, 70)">
+      <rect x="0" y="0" width="120" height="60" rx="5" fill="white" stroke="#ffb74d" stroke-width="2" />
+      <text x="60" y="25" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#e65100">Prediction</text>
+      <text x="60" y="45" font-family="Arial" font-size="10" text-anchor="middle" fill="#555">Model(A,B,E)</text>
+      <circle cx="60" cy="0" r="4" fill="#ef6c00" />
+    </g>
+
+    <!-- Sub-block: Constraints (Right) - Center x=410 -->
+    <g transform="translate(350, 70)">
+      <rect x="0" y="0" width="120" height="60" rx="5" fill="white" stroke="#ffb74d" stroke-width="2" />
+      <text x="60" y="25" font-family="Arial" font-size="12" font-weight="bold" text-anchor="middle" fill="#e65100">Constraints</text>
+      <text x="60" y="45" font-family="Arial" font-size="10" text-anchor="middle" fill="#555">Limits(u_lim)</text>
+      <circle cx="60" cy="0" r="4" fill="#ef6c00" />
+    </g>
+
+    <!-- Sub-block: QP Solver (Bottom) -->
+    <g transform="translate(110, 180)">
+      <rect x="0" y="0" width="280" height="90" rx="10" fill="#fff3e0" stroke="#e65100" stroke-width="3" />
+      <text x="140" y="50" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle" fill="#e65100">QP Solver</text>
+    </g>
+
+    <!-- Internal Wiring -->
+    <!-- Obj -> QP (Left) x=90 to 140? No, QP starts at 110. QP center 250. -->
+    <!-- Path: Down, Right, Down -->
+    <path d="M 90,130 L 90,160 L 160,160 L 160,180" fill="none" stroke="#ff9800" stroke-width="1.5" marker-end="url(#arrowhead)" />
+    <!-- Pred -> QP (Center) x=250 Direct -->
+    <path d="M 250,130 L 250,180" fill="none" stroke="#ff9800" stroke-width="1.5" marker-end="url(#arrowhead)" />
+    <!-- Constr -> QP (Right) x=410 to 340 -->
+    <path d="M 410,130 L 410,160 L 340,160 L 340,180" fill="none" stroke="#ff9800" stroke-width="1.5" marker-end="url(#arrowhead)" />
+  </g>
+
+  <!-- 4. AGV PLANT (Bottom Right) x=680 center aligned with GRU center -->
+  <g transform="translate(680, 380)">
+    <rect x="0" y="0" width="140" height="140" rx="10" fill="url(#plantGrad)" stroke="#8e24aa" stroke-width="2" />
+    <text x="70" y="30" font-family="Arial" font-size="16" font-weight="bold" text-anchor="middle" fill="#4a148c">AGV System</text>
+    <text x="70" y="50" font-family="Arial" font-size="12" text-anchor="middle" fill="#4a148c">(Nonlinear)</text>
+    
+    <circle cx="40" cy="90" r="15" fill="none" stroke="#6a1b9a" stroke-width="2" />
+    <circle cx="100" cy="90" r="15" fill="none" stroke="#6a1b9a" stroke-width="2" />
+    <line x1="55" y1="90" x2="85" y2="90" stroke="#6a1b9a" stroke-width="2" />
+    
+    <!-- Ports -->
+    <circle cx="70" cy="0" r="5" fill="#888" /> <!-- Top -> GRU -->
+    <circle cx="70" cy="140" r="5" fill="#8e24aa" /> <!-- Bottom -> Feedback -->
+  </g>
+
+  <!-- ==================== EXTERNAL WIRING (STRICT MANHATTAN) ==================== -->
+
+  <!-- 1. GRU -> LPV (Horizontal Left) -->
+  <!-- GRU center y=140. LPV center y=140? No, LPV Output ports at y=110 of block. -->
+  <!-- Block tops are aligned at y=80. -->
+  <!-- Let's connect GRU Left Face (x=650, y=140) to LPV Right Face (x=550, y=140) -->
+  <path d="M 650,140 L 550,140" fill="none" stroke="#00acc1" stroke-width="3" stroke-dasharray="5,2" marker-end="url(#arrowhead)" />
+  <text x="600" y="130" font-family="Arial" font-size="12" text-anchor="middle" fill="#006064">θ, Class</text>
+
+  <!-- 2. LPV -> MPC (Perfect Vertical Drops) -->
+  <!-- Port centers relative to GLOBAL: 50+90=140, 50+250=300, 50+410=460 -->
+  <!-- MPC Subblock centers relative to GLOBAL: 50+90=140, 50+250=300, 50+410=460 -->
+  <!-- PERFECT ALIGNMENT -->
+  
+  <!-- Q,R (x=140) -->
+  <path d="M 140,210 L 140,370" fill="none" stroke="#ef6c00" stroke-width="2" stroke-dasharray="2,2" marker-end="url(#arrowhead_adapt)" />
+  <!-- A,B,E (x=300) -->
+  <path d="M 300,210 L 300,370" fill="none" stroke="#ef6c00" stroke-width="2" stroke-dasharray="2,2" marker-end="url(#arrowhead_adapt)" />
+  <!-- u_lim (x=460) -->
+  <path d="M 460,210 L 460,370" fill="none" stroke="#ef6c00" stroke-width="2" stroke-dasharray="2,2" marker-end="url(#arrowhead_adapt)" />
+
+  <!-- 3. AGV -> GRU (Straight Vertical Up) -->
+  <!-- AGV Top center: x=680+70=750, y=380 -->
+  <!-- GRU Bottom center: x=650+100=750, y=80+120=200 -->
+  <!-- PERFECT ALIGNMENT x=750 -->
+  <path d="M 750,380 L 750,200" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="4,4" marker-end="url(#arrowhead)" />
+  <text x="765" y="290" font-family="Arial" font-size="11" fill="#666" transform="rotate(90 765,290)">Measurements History</text>
+
+  <!-- 4. MPC -> AGV (Horizontal Right) -->
+  <!-- MPC Output (QP Solver Bottom): x=50+250=300, y=300+270=570? No QP Solver is at y=180 inside MPC(300+180=480) -->
+  <!-- QP Solver box height=90. 180+90=270. MPC box height=300. -->
+  <!-- QP Solver Output: Right Face? center x=160+280=440? No QP width 280. Center x=110+140=250. -->
+  <!-- Let's take output from Right Face of QP Solver: x=50+110+280=440, y=300+180+45=525. -->
+  <!-- AGV Input: Left Face: x=680, y=380+70=450. -->
+  <!-- Not aligned vertically. -->
+  <!-- Let's adjust wiring: QP Solver Bottom Center -> Right -> Up -> AGV Left -->
+  <!-- QP Bottom Center: x=300, y=570. -->
+  <!-- Path: Down to 600, Right to 620, Up to 450, Right to 680 -->
+  <!-- Correct Control variable is u (F, omega) -->
+  <path d="M 300,570 L 300,590 L 620,590 L 620,450 L 680,450" fill="none" stroke="#e65100" stroke-width="3" marker-end="url(#arrowhead)" />
+  <text x="460" y="580" font-family="Arial" font-size="14" font-weight="bold" fill="#e65100">u (F, ω)</text>
+
+  <!-- 5. State Feedback (AGV -> MPC) -->
+  <!-- AGV Bottom Center: x=750, y=380+140=520 -->
+  <!-- MPC Input (Left Edge): x=50, y=420? -->
+  <!-- Path: Down to 640 (Below Control line), Left to 30, Up to 450, Right into MPC -->
+  <path d="M 750,520 L 750,640 L 30,640 L 30,450 L 50,450" fill="none" stroke="#8e24aa" stroke-width="2" marker-end="url(#arrowhead)" />
+  <text x="390" y="630" font-family="Arial" font-size="12" fill="#8e24aa" text-anchor="middle">State Feedback x(k)</text>
+
+  <!-- 6. Reference (Simple Horizontal) -->
+  <!-- Enters MPC from left, above feedback -->
+  <!-- x=0 to x=50, y=350 -->
+  <path d="M 10,350 L 50,350" fill="none" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)" />
+  <text x="30" y="340" font-family="Arial" font-size="12" font-weight="bold" fill="#333" text-anchor="middle">Ref</text>
+
+</svg>

@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="600"
+   height="450"
+   viewBox="-100 0 675 450"
+   version="1.1"
+   id="svg23"
+   sodipodi:docname="AGV_Model_Diagram.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview23"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.9539718"
+     inkscape:cx="279.17496"
+     inkscape:cy="185.51957"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg23" />
+  <defs
+     id="defs2">
+    <marker
+       style="overflow:visible"
+       id="Triangle"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       inkscape:stockid="Triangle arrow"
+       markerWidth="4"
+       markerHeight="1.8"
+       viewBox="0 0 1 1"
+       inkscape:isstock="true"
+       inkscape:collect="always"
+       preserveAspectRatio="none">
+      <path
+         transform="scale(0.5)"
+         style="fill:context-stroke;fill-rule:evenodd;stroke:context-stroke;stroke-width:1pt"
+         d="M 5.77,0 -2.88,5 V -5 Z"
+         id="path135" />
+    </marker>
+    <!-- Standard Arrow (Points End/Forward) -->
+    <marker
+       id="arrow"
+       markerWidth="9"
+       markerHeight="6"
+       refX="9"
+       refY="3"
+       orient="auto"
+       markerUnits="strokeWidth"
+       viewBox="0 0 9 6"
+       preserveAspectRatio="xMidYMid">
+      <path
+         d="M 0,0 V 6 L 9,3 Z"
+         fill="#000000"
+         id="path1" />
+    </marker>
+    <!-- Start Arrow (Points Start/Backward) -->
+    <marker
+       id="arrow_start"
+       markerWidth="10"
+       markerHeight="6"
+       refX="0"
+       refY="3"
+       orient="auto"
+       markerUnits="strokeWidth"
+       viewBox="0 0 10 6"
+       preserveAspectRatio="xMidYMid">
+      <path
+         d="M 10,0 V 6 L 0,3 Z"
+         fill="#000000"
+         id="path2" />
+    </marker>
+  </defs>
+  <rect
+     x="-100"
+     y="0"
+     width="900"
+     height="600"
+     fill="#ffffff"
+     id="rect2" />
+  <g
+     transform="matrix(-0.49513403,0.06958655,-0.06958655,-0.49513403,260.47178,41.69653)"
+     id="g8-9">
+    <polyline
+       points="20,0 20,-20 0,-20"
+       fill="none"
+       stroke="#000000"
+       stroke-width="1"
+       id="polyline8-4"
+       transform="rotate(90,10.438849,-11.593732)" />
+  </g>
+  <!-- Global Coordinate System -->
+  <g
+     transform="translate(-51.75,430.75)"
+     id="g4">
+    <line
+       x1="0"
+       y1="0"
+       x2="100"
+       y2="0"
+       stroke="#000000"
+       stroke-width="2"
+       marker-end="url(#arrow)"
+       id="line2" />
+    <text
+       x="90"
+       y="25"
+       font-family="Arial"
+       font-size="20px"
+       id="text2">X</text>
+    <line
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="-100"
+       stroke="#000000"
+       stroke-width="2"
+       marker-end="url(#arrow)"
+       id="line3" />
+    <text
+       x="10"
+       y="-90"
+       font-family="Arial"
+       font-size="20px"
+       id="text3">Y</text>
+    <text
+       x="-15"
+       y="15"
+       font-family="Arial"
+       font-size="20px"
+       font-style="italic"
+       id="text4">O</text>
+  </g>
+  <!-- Vehicle Setup -->
+  <rect
+     x="261"
+     y="47"
+     width="180"
+     height="290"
+     fill="none"
+     stroke="#000000"
+     stroke-width="3"
+     id="rect4" />
+  <!-- Centerlines -->
+  <line
+     x1="351"
+     y1="22.105291"
+     x2="351"
+     y2="360.5"
+     stroke="#000000"
+     stroke-dasharray="9.19775, 4.59887"
+     id="line4"
+     style="stroke-width:0.919775" />
+  <line
+     x1="236.0517"
+     y1="192"
+     x2="469.25"
+     y2="192"
+     stroke="#000000"
+     stroke-dasharray="8.28177, 4.14089"
+     id="line5"
+     style="stroke-width:0.828177" />
+  <!-- CG Point -->
+  <circle
+     cx="351"
+     cy="192"
+     r="4"
+     fill="#000000"
+     id="circle5" />
+  <text
+     x="372.75"
+     y="180"
+     font-family="Arial"
+     font-size="18px"
+     id="text5">ω</text>
+  <!-- ICR Schematic (Beta ~8 deg) -->
+  <circle
+     cx="1"
+     cy="242"
+     r="4"
+     fill="#000000"
+     id="circle6" />
+  <text
+     x="-39"
+     y="232"
+     font-family="Arial"
+     font-size="18px"
+     id="text6">ICR</text>
+  <line
+     x1="351"
+     y1="192"
+     x2="1"
+     y2="242"
+     stroke="#000000"
+     stroke-dasharray="5, 5"
+     id="line6" />
+  <text
+     x="201"
+     y="232"
+     font-family="Arial"
+     font-size="16px"
+     id="text7">R</text>
+  <!-- Velocity Vector -->
+  <line
+     x1="351"
+     y1="192"
+     x2="337"
+     y2="94"
+     stroke="#000000"
+     stroke-width="2"
+     marker-end="url(#arrow)"
+     id="line7" />
+  <text
+     x="336.5"
+     y="91"
+     font-family="Arial"
+     font-size="18px"
+     font-style="italic"
+     id="text8">v</text>
+  <!-- Perpendicular Marker at CG -->
+  <g
+     transform="matrix(-0.49513403,0.06958655,-0.06958655,-0.49513403,348.58285,181.69905)"
+     id="g8"
+     style="stroke-width:1.125;stroke-dasharray:none">
+    <polyline
+       points="20,0 20,-20 0,-20"
+       fill="none"
+       stroke="#000000"
+       stroke-width="1"
+       id="polyline8"
+       transform="rotate(90,10.438849,-11.593732)"
+       style="stroke-width:1.125;stroke-dasharray:none" />
+  </g>
+  <!-- Sideslip Angle Beta -->
+  <line
+     x1="351"
+     y1="192"
+     x2="351"
+     y2="112"
+     stroke="#000000"
+     stroke-dasharray="2, 2"
+     id="line8" />
+  <path
+     d="m 350.98398,147.73828 a 45.51342,61.418106 0 0 0 -6.82701,1.02364"
+     fill="none"
+     stroke="#000000"
+     id="path8"
+     style="stroke-width:0.881184" />
+  <text
+     x="333.75"
+     y="156.25"
+     font-family="Arial"
+     font-size="16px"
+     id="text9">β</text>
+  <!-- Heading Psi (Local Frame) -->
+  <line
+     x1="351"
+     y1="192"
+     x2="431"
+     y2="192"
+     stroke="#000000"
+     stroke-dasharray="2, 2"
+     id="line9" />
+  <path
+     d="M 411,192 A 60,60 0 0 0 351,132"
+     fill="none"
+     stroke="#000000"
+     marker-end="url(#arrow)"
+     id="path9" />
+  <text
+     x="397.75"
+     y="152"
+     font-family="Arial"
+     font-size="18px"
+     id="text10">ψ</text>
+  <!-- WHEEL SETUP -->
+  <!-- LEFT FRONT (LF) - Single Arrow (Standard) -->
+  <g
+     transform="translate(261,47)"
+     id="g12">
+    <g
+       transform="rotate(-37)"
+       id="g11">
+      <rect
+         x="-15"
+         y="-30"
+         width="30"
+         height="60"
+         fill="#ffffff"
+         stroke="#000000"
+         stroke-width="2"
+         id="rect10" />
+      <line
+         x1="0"
+         y1="-50"
+         x2="0"
+         y2="50"
+         stroke="#000000"
+         stroke-width="1"
+         stroke-dasharray="4, 2"
+         id="line10" />
+    </g>
+  </g>
+  <line
+     x1="261"
+     y1="47"
+     x2="1"
+     y2="242"
+     stroke="#000000"
+     stroke-dasharray="2, 2"
+     id="line12" />
+  <!-- LF Annotation -->
+  <g
+     transform="translate(261,47)"
+     id="g13">
+    <line
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="-60"
+       stroke="#000000"
+       stroke-dasharray="2, 2"
+       id="line13" />
+    <path
+       d="m 0,-45 a 45,45 0 0 0 -26,9"
+       fill="none"
+       stroke="#000000"
+       marker-end="url(#arrow)"
+       id="path13" />
+    <text
+       x="-40"
+       y="-55"
+       font-family="Arial"
+       font-size="16px"
+       id="text13">δ_lf</text>
+  </g>
+  <!-- RIGHT REAR (RR) - Double Arrow (Requested Style) -->
+  <g
+     transform="translate(441,337)"
+     id="g15">
+    <g
+       transform="rotate(12)"
+       id="g14">
+      <rect
+         x="-15"
+         y="-30"
+         width="30"
+         height="60"
+         fill="#ffffff"
+         stroke="#000000"
+         stroke-width="2"
+         id="rect13" />
+      <!-- Extended Dashed Wheel Axis for Annotation -->
+      <line
+         x1="0"
+         y1="-50"
+         x2="0"
+         y2="90"
+         stroke="#000000"
+         stroke-width="1"
+         stroke-dasharray="4, 2"
+         id="line14" />
+    </g>
+  </g>
+  <line
+     x1="441"
+     y1="337"
+     x2="1"
+     y2="242"
+     stroke="#000000"
+     stroke-dasharray="2, 2"
+     id="line15" />
+  <!-- RR Annotation -->
+  <line
+     x1="441"
+     y1="337"
+     x2="441"
+     y2="427"
+     stroke="#000000"
+     stroke-dasharray="2, 2"
+     id="line16" />
+  <text
+     x="454.25"
+     y="298.25"
+     font-family="Arial"
+     font-size="16px"
+     id="text16">δ_rr</text>
+  <!-- Passive Wheels -->
+  <g
+     transform="translate(441,47)"
+     id="g17">
+    <rect
+       x="-15"
+       y="-30"
+       width="30"
+       height="60"
+       fill="#ffffff"
+       stroke="#000000"
+       stroke-width="1"
+       stroke-dasharray="4, 2"
+       id="rect16" />
+  </g>
+  <g
+     transform="translate(261,337)"
+     id="g18">
+    <rect
+       x="-15"
+       y="-30"
+       width="30"
+       height="60"
+       fill="#ffffff"
+       stroke="#000000"
+       stroke-width="1"
+       stroke-dasharray="4, 2"
+       id="rect17" />
+  </g>
+  <!-- Dimensions -->
+  <line
+     x1="471"
+     y1="47"
+     x2="511"
+     y2="47"
+     stroke="#000000"
+     stroke-width="1"
+     id="line18" />
+  <line
+     x1="471"
+     y1="337"
+     x2="511"
+     y2="337"
+     stroke="#000000"
+     stroke-width="1"
+     id="line19" />
+  <line
+     x1="491"
+     y1="47"
+     x2="491"
+     y2="337"
+     stroke="#000000"
+     stroke-width="1"
+     marker-start="url(#arrow)"
+     marker-end="url(#arrow)"
+     id="line20"
+     style="stroke-width:1.00013;stroke-dasharray:none;marker-start:url(#arrow_start)" />
+  <text
+     x="501"
+     y="192"
+     font-family="Arial"
+     font-size="18px"
+     id="text20">L</text>
+  <line
+     x1="261"
+     y1="367"
+     x2="261"
+     y2="407"
+     stroke="#000000"
+     stroke-width="1"
+     id="line21" />
+  <line
+     x1="441"
+     y1="367"
+     x2="441"
+     y2="407"
+     stroke="#000000"
+     stroke-width="1"
+     id="line22" />
+  <line
+     x1="261"
+     y1="387"
+     x2="441"
+     y2="387"
+     stroke="#000000"
+     stroke-width="1"
+     marker-start="url(#arrow)"
+     marker-end="url(#arrow)"
+     id="line23"
+     style="marker-start:url(#arrow_start)" />
+  <text
+     x="341"
+     y="407"
+     font-family="Arial"
+     font-size="18px"
+     id="text23">W</text>
+  <path
+     style="fill:#333333;fill-opacity:0;stroke:#000000;stroke-width:1.00013;stroke-dasharray:none"
+     d="m 441.52232,294.80511 c 5.32569,-0.43181 7.91657,1.29545 7.91657,1.29545"
+     id="path23" />
+  <g
+     transform="matrix(-0.2427051,0.17633558,-0.17633558,-0.2427051,257.10706,42.21787)"
+     id="g8-8">
+    <polyline
+       points="20,0 20,-20 0,-20"
+       fill="none"
+       stroke="#000000"
+       stroke-width="1"
+       id="polyline8-2"
+       transform="rotate(90,10.438849,-11.593732)"
+       style="stroke-width:1.875;stroke-dasharray:none" />
+  </g>
+  <g
+     transform="matrix(-0.29231102,-0.0674853,0.0674853,-0.29231102,442.05946,331.08982)"
+     id="g8-8-5"
+     style="stroke-width:1.875;stroke-dasharray:none">
+    <polyline
+       points="20,0 20,-20 0,-20"
+       fill="none"
+       stroke="#000000"
+       stroke-width="1"
+       id="polyline8-2-5"
+       transform="rotate(90,10.438849,-11.593732)"
+       style="stroke-width:1.875;stroke-dasharray:none" />
+  </g>
+  <path
+     style="fill:#333333;fill-opacity:0;stroke:#000000;stroke-width:0.5625;marker-start:url(#Triangle)"
+     id="path3"
+     sodipodi:type="arc"
+     sodipodi:cx="112.24204"
+     sodipodi:cy="384.11588"
+     sodipodi:rx="22.5"
+     sodipodi:ry="22.5"
+     sodipodi:start="0"
+     sodipodi:end="4.712389"
+     sodipodi:arc-type="arc"
+     d="M 134.74204,384.11588 A 22.5,22.5 0 0 1 120.85242,404.90316 22.5,22.5 0 0 1 96.33214,400.02578 22.5,22.5 0 0 1 91.454753,375.5055 22.5,22.5 0 0 1 112.24204,361.61588"
+     sodipodi:open="true"
+     transform="rotate(-45)" />
+</svg>

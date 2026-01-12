@@ -41,9 +41,24 @@ data_gru_dir = fullfile(root, 'data', 'gru');
 cfg.scenes = {'straight', 'straight_left_turn', 'straight_right_turn', 'slope', 'bumpy'};  % 完整数据集
 % cfg.scenes = {'straight'};  % 快速测试：仅straight场景
 
+% Step0：可控开启/关闭颠簸场景（仅控制是否生成 bumpy 路径）
+%  - 若需快速做“去掉颠簸”消融，设 cfg.enable_bumpy = false；默认保留颠簸样本
+if ~isfield(cfg, 'enable_bumpy'); cfg.enable_bumpy = true; end
+if ~cfg.enable_bumpy
+    cfg.scenes = cfg.scenes(~strcmp(cfg.scenes, 'bumpy'));
+end
+
 % 全局配置
-cfg.num_runs = 100;          % 完整数据集：每场景150次【V4.3改进：从100增至150以增加slip/stall样本】
+cfg.num_runs = 200;          % 默认每个场景的回合数（可被 num_runs_per_scene 覆盖）
 % cfg.num_runs = 1;          % 快速测试：每场景1次
+% 为每种行驶方式单独配置回合数（未配置的场景回落到 cfg.num_runs）
+cfg.num_runs_per_scene = struct( ...
+    'straight', 200, ...
+    'straight_left_turn', 200, ...
+    'straight_right_turn', 200, ...
+    'slope', 800, ...
+    'bumpy', 200 ...
+);
 cfg.T_end = 20;              % 每回合仿真时长 [s]
 cfg.Ts = 0.05;               % 采样周期 [s]（通常使用 parameters.m 中的值）
 cfg.seed = 42;               % 全局随机种子
@@ -62,7 +77,12 @@ cfg.noise_profile.noisy_probs = [0.6, 0.4];   % 对应概率，可留空=均匀
 % 路径参数随机化配置
 cfg.path_rand.v0_range = [0.8, 1.2];              % 初速度范围 [m/s]
 cfg.path_rand.R_range = [8, 12];                  % 转弯半径范围 [m]
-cfg.path_rand.theta_slope_range = [3, 7];        % 坡度角范围 [deg]（符号通过交替机制控制）【V4.7对齐目标路径±5°】
+% Step1：坡度采样改为离散集合，覆盖 LPV 网格内侧，避免逼近 T_grid=±0.2 rad 临界
+% 坡度角改为连续采样：在 [theta_slope_range] 内分桶均衡 + 正负交替
+cfg.path_rand.theta_slope_set = [];                          % 置空：不再按离散角集合采样
+cfg.path_rand.theta_slope_range = [3, 10];                   % 连续采样范围 [deg]
+cfg.path_rand.theta_slope_bins = 8;                          % 均衡桶数量，分桶内均匀随机
+cfg.path_rand.theta_slope_hold_time = 12;                    % 坡度保持时间 [s]（除初始3s直行外的持续时间）
 cfg.path_rand.bumpy_amp_range = [deg2rad(3), deg2rad(7)];  % 颠簸振幅范围 [rad]（≈3°~7°）【V4.7对齐目标路径±5°】
 cfg.path_rand.turn_trans_range = [0.3, 0.6];     % 转弯过渡时间范围 [s]
 
@@ -109,6 +129,7 @@ params = parameters();
 scenes = cfg.scenes;
 opts = struct();
 opts.num_runs = cfg.num_runs;
+opts.num_runs_per_scene = cfg.num_runs_per_scene;
 opts.T_end = cfg.T_end;
 opts.Ts = cfg.Ts;
 opts.seed = cfg.seed;
@@ -130,6 +151,7 @@ opts.noise_profile = cfg.noise_profile;
 
 % 全局配置
 num_runs = getFieldOrDefault(opts, 'num_runs', 10);
+num_runs_per_scene = getFieldOrDefault(opts, 'num_runs_per_scene', struct());
 T_end = getFieldOrDefault(opts, 'T_end', 20.0);
 Ts = getFieldOrDefault(opts, 'Ts', 0.05);
 seed = getFieldOrDefault(opts, 'seed', 42);
@@ -144,7 +166,11 @@ noise_profile_mode = getFieldOrDefault(noise_profile_cfg, 'mode', 'match');
 path_rand = getFieldOrDefault(opts, 'path_rand', struct());
 v0_range = getFieldOrDefault(path_rand, 'v0_range', [0.8, 1.2]);
 R_range = getFieldOrDefault(path_rand, 'R_range', [8, 12]);
-theta_slope_range = getFieldOrDefault(path_rand, 'theta_slope_range', [3, 7]);  % deg（幅值范围，符号由交替机制控制）【V4.7】
+theta_slope_range = getFieldOrDefault(path_rand, 'theta_slope_range', [3, 10]);  % deg（连续范围，符号由交替机制控制）
+theta_slope_set = getFieldOrDefault(path_rand, 'theta_slope_set', []);           % 置空=不用离散集合
+theta_slope_bins = getFieldOrDefault(path_rand, 'theta_slope_bins', 8);           % 均衡桶数量
+builtin_slope_hold_time = 12;  % 默认坡度保持时间 [s]
+slope_hold_time = getFieldOrDefault(path_rand, 'theta_slope_hold_time', builtin_slope_hold_time);
 bumpy_amp_range = getFieldOrDefault(path_rand, 'bumpy_amp_range', [deg2rad(3), deg2rad(7)]);  % rad（≈3°~7°）【V4.7】
 turn_trans_range = getFieldOrDefault(path_rand, 'turn_trans_range', [0.3, 0.6]);
 
@@ -185,7 +211,11 @@ stall_dwell_grid = getFieldOrDefault(label_search, 'stall_dwell_grid', [0.8, 1.0
 %% 初始化
 rng(seed);  % 固定随机种子
 N_scenes = length(scenes);
-N_total = N_scenes * num_runs;
+scene_runs = zeros(1, N_scenes);
+for s_idx = 1:N_scenes
+    scene_runs(s_idx) = get_scene_runs(scenes{s_idx}, num_runs, num_runs_per_scene);
+end
+N_total = sum(scene_runs);
 
 % 预分配
 data.runs = struct('scene', {}, 't', {}, 'u', {}, 'y_raw', {}, ...
@@ -236,7 +266,7 @@ if search_enabled
     best_thresholds = search_optimal_thresholds(...
         I_high_grid, accel_stall_grid, stall_dwell_grid, ...
         scenes, num_runs, params, T_end, Ts, ...
-        v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
+        v0_range, R_range, theta_slope_range, theta_slope_set, bumpy_amp_range, turn_trans_range, slope_hold_time, ...
         slip_prob, slip_t_start_range, slip_duration_range, slip_gamma_range, ...
         slip_in_turn_prob, slip_in_turn_gamma_range, ...
         stall_prob, stall_t_start_range, stall_duration_range, stall_load_range, ...
@@ -259,6 +289,7 @@ end
 run_idx = 0;
 for s_idx = 1:N_scenes
     scene = scenes{s_idx};
+    runs_this_scene = scene_runs(s_idx);
     
     if verbose
         fprintf('\n========================================\n');
@@ -266,7 +297,7 @@ for s_idx = 1:N_scenes
         fprintf('========================================\n');
     end
     
-    for run = 1:num_runs
+    for run = 1:runs_this_scene
         run_idx = run_idx + 1;
         
         if verbose
@@ -275,9 +306,9 @@ for s_idx = 1:N_scenes
         
         try
             % 1. 生成参考路径和注入信号（不改theta_ref）
-            [ref_path, inj_signal, inject_info] = generate_reference_path(...
+            [ref_path, inj_signal, inject_info, T_end_run] = generate_reference_path(...
                 scene, params, T_end, Ts, ...
-                v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
+                v0_range, R_range, theta_slope_range, theta_slope_set, theta_slope_bins, bumpy_amp_range, turn_trans_range, slope_hold_time, ...
                 slip_prob, slip_t_start_range, slip_duration_range, slip_gamma_range, ...
                 slip_in_turn_prob, slip_in_turn_gamma_range, ...  % V4.2
                 stall_prob, stall_t_start_range, stall_duration_range, stall_load_range, ...
@@ -299,7 +330,7 @@ for s_idx = 1:N_scenes
             end
             
             % 设置仿真参数
-            set_param(model_name, 'StopTime', num2str(T_end));
+            set_param(model_name, 'StopTime', num2str(T_end_run));
             set_param(model_name, 'FixedStep', num2str(Ts));
             
             % 将参数、路径和注入信号加载到 base workspace
@@ -401,7 +432,7 @@ data.meta.version = 'V4.2';
 data.meta.author = 'LPV-MPC Project';
 data.meta.model_name = model_name;
 data.meta.scenes = scenes;
-data.meta.num_runs_per_scene = num_runs;
+data.meta.num_runs_per_scene = scene_runs;  % 与 scenes 对应的回合数
 data.meta.T_end = T_end;
 data.meta.Ts = Ts;
 data.meta.seed = seed;
@@ -431,9 +462,9 @@ end
 
 %% ========== 子函数（内部使用） ==========
 
-function [ref_path, inj_signal, inject_info] = generate_reference_path(...
+function [ref_path, inj_signal, inject_info, T_end_scene] = generate_reference_path(...
     scene, params, T_end, Ts, ...
-    v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
+    v0_range, R_range, theta_slope_range, theta_slope_set, theta_slope_bins, bumpy_amp_range, turn_trans_range, slope_hold_time, ...
     slip_prob, slip_t_start_range, slip_duration_range, slip_gamma_range, ...
     slip_in_turn_prob, slip_in_turn_gamma_range, ...  % V4.2
     stall_prob, stall_t_start_range, stall_duration_range, stall_load_range, ...
@@ -459,9 +490,23 @@ if isempty(slope_sign_counter)
     slope_sign_counter = 1;  % 初始化：1=正坡，-1=负坡
 end
 
-%% 路径参数随机化
+% 路径参数随机化
 opts = struct();
-opts.T_end = T_end;
+
+% 为坡度场景强制最少持续时间（t_straight_init=3s + slope_hold_time）
+t_straight_init = 3.0;  % 与 gen_agv_ref_path 内部保持一致
+T_end_scene = T_end;
+
+switch lower(scene)
+    case 'slope'
+        if slope_hold_time > 0
+            T_end_scene = max(T_end, t_straight_init + slope_hold_time);
+        end
+    otherwise
+        % 其他场景沿用全局 T_end
+end
+
+opts.T_end = T_end_scene;
 opts.v0 = v0_range(1) + (v0_range(2) - v0_range(1)) * rand();
 opts.R = R_range(1) + (R_range(2) - R_range(1)) * rand();
 opts.turn_transition = turn_trans_range(1) + (turn_trans_range(2) - turn_trans_range(1)) * rand();
@@ -469,9 +514,27 @@ opts.turn_transition = turn_trans_range(1) + (turn_trans_range(2) - turn_trans_r
 % 根据场景设置特定参数
 switch lower(scene)
     case 'slope'
-        % V4.7: 强制正负坡度交替，范围调整为 [3,7]° 对齐目标路径 ±5°
-        % 坡度范围确保绝对值 >= 3° (高于slope标注阈值2°)
-        theta_abs = theta_slope_range(1) + (theta_slope_range(2) - theta_slope_range(1)) * rand();  % [3, 7]°
+        % 连续采样 + 分桶均衡 + 正负交替
+        if exist('theta_slope_set','var') && ~isempty(theta_slope_set)
+            % 兼容旧配置：若仍提供离散集合则均匀抽取
+            theta_abs = theta_slope_set(randi(numel(theta_slope_set)));
+        else
+            % 分桶均衡：在 [theta_slope_range] 内划分 theta_slope_bins 个桶，轮转选择桶并在桶内均匀采样
+            theta_min = min(theta_slope_range);
+            theta_max = max(theta_slope_range);
+            bins = max(1, round(theta_slope_bins));
+            edges = linspace(theta_min, theta_max, bins + 1);
+            persistent slope_bin_counter;
+            if isempty(slope_bin_counter)
+                slope_bin_counter = 1;
+            end
+            bin_idx = slope_bin_counter;
+            slope_bin_counter = slope_bin_counter + 1;
+            if slope_bin_counter > bins
+                slope_bin_counter = 1;
+            end
+            theta_abs = edges(bin_idx) + (edges(bin_idx+1) - edges(bin_idx)) * rand();
+        end
         theta_sign = slope_sign_counter;  % 使用计数器决定符号，不再随机
         theta_deg = theta_sign * theta_abs;
         opts.theta_slope = deg2rad(theta_deg);
@@ -504,7 +567,7 @@ if is_turn_scene
         inject_info.slip_injected = true;
         t_start = slip_t_start_range(1) + (slip_t_start_range(2) - slip_t_start_range(1)) * rand();
         duration = slip_duration_range(1) + (slip_duration_range(2) - slip_duration_range(1)) * rand();
-        inject_info.slip_window = [t_start, min(t_start + duration, T_end - 1)];
+        inject_info.slip_window = [t_start, min(t_start + duration, T_end_scene - 1)];
         inject_info.slip_gamma = slip_in_turn_gamma_range(1) + ...
             (slip_in_turn_gamma_range(2) - slip_in_turn_gamma_range(1)) * rand();
     end
@@ -514,7 +577,7 @@ else
         inject_info.slip_injected = true;
         t_start = slip_t_start_range(1) + (slip_t_start_range(2) - slip_t_start_range(1)) * rand();
         duration = slip_duration_range(1) + (slip_duration_range(2) - slip_duration_range(1)) * rand();
-        inject_info.slip_window = [t_start, min(t_start + duration, T_end - 1)];
+        inject_info.slip_window = [t_start, min(t_start + duration, T_end_scene - 1)];
         inject_info.slip_gamma = slip_gamma_range(1) + (slip_gamma_range(2) - slip_gamma_range(1)) * rand();
     end
 end
@@ -528,7 +591,7 @@ if rand() < stall_prob
     % 第一次堵转注入
     t_start = stall_t_start_range(1) + (stall_t_start_range(2) - stall_t_start_range(1)) * rand();
     duration = stall_duration_range(1) + (stall_duration_range(2) - stall_duration_range(1)) * rand();
-    t_end = min(t_start + duration, T_end - 0.5);
+    t_end = min(t_start + duration, T_end_scene - 0.5);
     inject_info.stall_windows = [inject_info.stall_windows; t_start, t_end];
     inject_info.stall_loads = [inject_info.stall_loads; stall_load_range(1) + (stall_load_range(2) - stall_load_range(1)) * rand()];
     
@@ -547,7 +610,7 @@ if rand() < stall_prob
                 break;
             end
             duration_next = stall_duration_range(1) + (stall_duration_range(2) - stall_duration_range(1)) * rand();
-            next_end = min(next_start + duration_next, T_end - 0.5);
+            next_end = min(next_start + duration_next, T_end_scene - 0.5);
             if next_end <= next_start + 0.5
                 break;  % 窗口太短，停止
             end
@@ -839,9 +902,18 @@ else
 end
 end
 
+function runs = get_scene_runs(scene_name, default_runs, runs_struct)
+% 根据场景名称获取回合数；未配置则回落到默认值
+if isstruct(runs_struct) && isfield(runs_struct, scene_name)
+    runs = runs_struct.(scene_name);
+else
+    runs = default_runs;
+end
+end
+
 
 function k_torque = fit_k_torque_from_sim(scenes, runs_per_scene, params, T_end, Ts, ...
-    v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
+    v0_range, R_range, theta_slope_range, theta_slope_set, bumpy_amp_range, turn_trans_range, slope_hold_time, ...
     model_name, verbose)
 % V4.5d: 通过多场景仿真数据拟合 k_torque（电机扭矩常数）
 %
@@ -869,9 +941,9 @@ for scene_idx = 1:length(scenes)
     % 每个场景生成 runs_per_scene 回合
     for run = 1:runs_per_scene
         % 生成无注入路径
-        [ref_path, inj_signal, ~] = generate_reference_path(...
+        [ref_path, inj_signal, ~, T_end_run] = generate_reference_path(...
             scene, params, T_end, Ts, ...
-        v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
+        v0_range, R_range, theta_slope_range, theta_slope_set, bumpy_amp_range, turn_trans_range, slope_hold_time, ...
         0, [0,0], [0,0], [1,1], ...  % 无打滑注入 (slip_prob, t_start, duration, gamma)
         0, [1,1], ...                % 无轻度打滑 (slip_in_turn_prob, gamma_range)
         0, [0,0], [0,0], [0,0]);     % 无堵转注入 (stall_prob, t_start, duration, load)
@@ -880,7 +952,7 @@ for scene_idx = 1:length(scenes)
     params_sim = params;
     params_sim.enable_noise = false;  % 关闭噪声以提高拟合精度
     
-    set_param(model_name, 'StopTime', num2str(T_end));
+    set_param(model_name, 'StopTime', num2str(T_end_run));
     set_param(model_name, 'FixedStep', num2str(Ts));
     
     assignin('base', 'params', params_sim);
@@ -939,7 +1011,7 @@ end
 function best = search_optimal_thresholds(...
     I_high_grid, accel_stall_grid, stall_dwell_grid, ...
     scenes, num_runs, params, T_end, Ts, ...
-    v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
+    v0_range, R_range, theta_slope_range, theta_slope_set, bumpy_amp_range, turn_trans_range, slope_hold_time, ...
     slip_prob, slip_t_start_range, slip_duration_range, slip_gamma_range, ...
     slip_in_turn_prob, slip_in_turn_gamma_range, ...
     stall_prob, stall_t_start_range, stall_duration_range, stall_load_range, ...
@@ -959,9 +1031,9 @@ end
 val_data = cell(length(scenes), 1);
 for s_idx = 1:length(scenes)
     scene = scenes{s_idx};
-    [ref_path, inj_signal, inject_info] = generate_reference_path(...
+    [ref_path, inj_signal, inject_info, T_end_run] = generate_reference_path(...
         scene, params, T_end, Ts, ...
-        v0_range, R_range, theta_slope_range, bumpy_amp_range, turn_trans_range, ...
+        v0_range, R_range, theta_slope_range, theta_slope_set, bumpy_amp_range, turn_trans_range, slope_hold_time, ...
         slip_prob, slip_t_start_range, slip_duration_range, slip_gamma_range, ...
         slip_in_turn_prob, slip_in_turn_gamma_range, ...
         stall_prob, stall_t_start_range, stall_duration_range, stall_load_range);
@@ -969,7 +1041,7 @@ for s_idx = 1:length(scenes)
     params_sim = params;
     params_sim.enable_noise = false;
     
-    set_param(model_name, 'StopTime', num2str(T_end));
+    set_param(model_name, 'StopTime', num2str(T_end_run));
     set_param(model_name, 'FixedStep', num2str(Ts));
     
     assignin('base', 'params', params_sim);

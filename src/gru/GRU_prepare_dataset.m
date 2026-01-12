@@ -58,6 +58,7 @@ if ~isfield(cfg, 'verbose');      cfg.verbose     = true;                       
 %% ==================== 配置区域（用户可修改） ====================
 cfg.seq_len = 48;                 % 序列长度（≈2.4s @ Ts=0.05s）
 cfg.stride = 12;                  % 滑窗步长（≈0.6s滑窗间隔）
+cfg.skip_initial_sec = 3.0;       % 前3s平地不用于切片
 % 如需对比 64/16 等组合，可在此处同步修改两项并重新生成数据集
 cfg.output_file = fullfile(data_gru_dir, 'GRU_dataset_processed.mat');      % 输出数据文件
 cfg.scaler_file = fullfile(data_gru_dir, 'GRU_scaler.mat');                % 归一化参数文件
@@ -131,6 +132,17 @@ for k = 1:length(data.runs)
     % 提取原始传感量（y_raw）
     y_raw = run_data.y_raw;
     N = size(y_raw, 1);
+    % 跳过前 skip_initial_sec 秒的平地段，再做滑窗切片
+    skip_steps = min(N, max(0, ceil(cfg.skip_initial_sec / Ts)));
+    idx_keep = (skip_steps + 1):N;
+    if isempty(idx_keep)
+        continue;
+    end
+    y_raw = y_raw(idx_keep, :);
+    label_main_run = run_data.label_main(idx_keep);
+    label_turn_run = run_data.label_turn(idx_keep);
+    theta_run = run_data.theta(idx_keep);
+    N = size(y_raw, 1);
     
     % 必选原始通道（规范8.6）
     accel_x = y_raw(:, 9);           % y9: accel_x_meas [m/s²]
@@ -200,9 +212,9 @@ for k = 1:length(data.runs)
     
     % 累积到全局（V1.2: 同时记录run_id）
     all_features = [all_features; features];
-    all_label_main = [all_label_main; run_data.label_main];
-    all_label_turn = [all_label_turn; run_data.label_turn];
-    all_theta = [all_theta; run_data.theta];
+    all_label_main = [all_label_main; label_main_run];
+    all_label_turn = [all_label_turn; label_turn_run];
+    all_theta = [all_theta; theta_run];
     all_run_id = [all_run_id; k * ones(N, 1)];  % V1.2: 记录回合编号
 end
 
@@ -599,6 +611,7 @@ dataset.meta.author = 'LPV-MPC Project';
 dataset.meta.input_file = cfg.input_file;
 dataset.meta.seq_len = cfg.seq_len;
 dataset.meta.stride = cfg.stride;
+dataset.meta.skip_initial_sec = cfg.skip_initial_sec;
 dataset.meta.Ts = Ts;
 dataset.meta.split_strategy = 'run_grouped';  % V1.2: 按回合分组，防止数据泄漏
 dataset.meta.num_runs_total = num_runs;      % V1.2: 总回合数

@@ -1,5 +1,115 @@
 # 变更记录
 
+## 2026-01-07 – GRU 坡度数据分布修复：生成/预处理/训练评估链路补强
+
+### Subject
+feat(gru): 增强坡度样本覆盖与诊断（固定坡段停留时间、按场景回合数、跳过初始3s切片、训练后输出转弯混淆矩阵与坡度回归图）
+
+### Context
+- 原始训练数据中 0°（平地）样本占比过高；预处理后 slope-only 数量偏少且角度分布不均。
+- 需要从“数据生成 → 预处理切片 → 训练评估可视化 → 分布诊断脚本”全链路补强，定位并缓解角度覆盖不足的问题。
+
+### Changes
+
+#### 1) 数据生成（GRU_gen_train_data.m）
+1. 新增 `cfg.enable_bumpy`：可控开关是否生成 bumpy 场景（便于消融）。
+2. 新增 `cfg.num_runs_per_scene`：允许为不同场景配置不同回合数（未配置则回落到 `cfg.num_runs`）。
+3. 坡度离散集合：`theta_slope_set` 更新为 **{3,4,5,6,7,8,9,10}°**，并保持正负交替。
+4. 新增 `theta_slope_hold_time`（默认 12s）：坡度场景强制仿真时长 ≥ 3s 初始直行 + hold 时间，保证每个坡度角有固定持续段。
+5. 场景级 StopTime 透传：主循环、k_torque 拟合、阈值搜索均使用 `T_end_run`；打滑/堵转窗口裁剪也按场景实际时长处理。
+6. 元数据补强：保存 `scene_runs`（与 `scenes` 一一对应）。
+
+#### 2) 预处理切片（GRU_prepare_dataset.m）
+1. 新增 `cfg.skip_initial_sec = 3.0`：切片前跳过每回合开头 3s 的平地段（保留仿真中的 3s 直行，但不用于训练切片）。
+2. `dataset.meta` 记录 `skip_initial_sec`，便于追溯数据集构造。
+
+#### 3) 训练后评估输出（GRU_train.m）
+1. 新增转弯三分类混淆矩阵（测试集），输出 `confusion_matrix_turn.png`。
+2. 新增坡度回归评估图（仅 slope 样本）：
+  - `theta_scatter.png`：\(\theta_{true}\) vs \(\theta_{pred}\)
+  - `theta_error_hist.png`：误差直方图（pred-true）
+  - `theta_error_cdf.png`：绝对误差 CDF
+3. 评估函数返回值扩展：`evaluateModel` 额外返回 `all_pred_theta`（用于测试阶段绘图），并在无 slope 样本时自动跳过绘图。
+
+#### 4) 分布/误差诊断脚本（新增）
+1. 新增 `analyze_raw_theta_distribution.m`：对比“原始未预处理数据”与“预处理后 slope-only 数据集”的坡度角分布，输出直方图、分箱计数图与 .mat 汇总。
+2. 新增/整理 `export_gru_figures.m`：离线评估与快速诊断输出（至少包含 slope-only 的 \(\theta_{true}\) 直方图与分箱 MAE）。
+
+### Files
+- [src/gru/GRU_gen_train_data.m](src/gru/GRU_gen_train_data.m)
+- [src/gru/GRU_prepare_dataset.m](src/gru/GRU_prepare_dataset.m)
+- [src/gru/GRU_train.m](src/gru/GRU_train.m)
+- [src/tests/analyze_raw_theta_distribution.m](src/tests/analyze_raw_theta_distribution.m)
+- [src/tests/export_gru_figures.m](src/tests/export_gru_figures.m)
+
+### Impact / Next
+- 建议按顺序重跑：`GRU_gen_train_data.m → GRU_prepare_dataset.m → GRU_train.m`，再用 `analyze_raw_theta_distribution.m` 验证 slope-only 的角度覆盖是否更均衡。
+
+## 2026-01-02 – 转向几何右转修复 & 性能回归
+
+### Subject
+fix(core): 修复右转象限翻转并恢复右转能力，同时保持转弯跟踪精度
+
+### Context
+- 右转时转向几何分母符号被截断，导致右转失效（omega_cmd < 0 时仍左转/不转）。
+- 在回退到 V2 几何后转弯跟踪变好，但右转仍不支持，需要保留符号又防止除零。
+
+### Changes
+1. 使用符号保护的分母：`sign(denom)*max(abs(denom),1e-6)`，保留右转符号并防止除零。
+2. 前轮用 `atan((L/2 - x_c)/safe_denom_lf)`，后轮用 `-atan((x_c + L/2)/safe_denom_rr)`，保持右轮负号，避免象限翻转。
+3. 结果：右转恢复；转弯速度 RMS 维持低误差；无饱和。
+
+### Files
+- [src/core/output_eq_ref.m](src/core/output_eq_ref.m)
+- [src/core/state_eq_ref.m](src/core/state_eq_ref.m)
+
+### Verification (test_closed_loop_performance)
+- 平均速度 RMS: 0.021 m/s；平均坡度 MAE: 0.008 rad；坡度延迟: 0.27 s。
+- 直行/左转/右转/坡度/颠簸全场景无饱和；右转速度 RMS ≈ 0.020 m/s。
+
+## 2026-01-02 – 闭环性能测试脚本全面修复 (V1.0 → V1.1)
+
+### Subject
+fix(tests): 修复 test_closed_loop_performance.m 场景映射、信号提取、标签定义
+
+### Context
+- 原脚本中 `turn`、`straight_turn`、`flat` 等场景名映射到不存在的路径文件
+- Simulink 信号日志提取方式与新版本不兼容（`Dataset` vs `Signal` 类型）
+- GRU 主分类已从 4 类简化为 3 类，slope 标签需从 4 改为 3
+
+### Changes
+
+#### 1. 场景映射更新
+- **默认场景列表**：`{'straight', 'straight_left_turn', 'straight_right_turn', 'slope', 'bumpy'}`
+- **scenario_from_name** 函数映射：
+  - `straight`/`flat` → `path_straight.mat`
+  - `straight_left_turn`/`turn_left` → `path_straight_left_turn.mat`
+  - `straight_right_turn`/`turn_right` → `path_straight_right_turn.mat`
+  - `slope` → `path_slope.mat`
+  - `bumpy` → `path_bumpy.mat`
+
+#### 2. 信号提取逻辑重构
+- **新增 `extract_timeseries_data` 函数**：兼容多种 Simulink 日志格式
+  - `timeseries`：直接使用
+  - `Simulink.SimulationData.Signal`：提取 `.Values`
+  - `Simulink.SimulationData.Dataset`：取第一个元素（处理同名信号）
+- **theta_ref 信号映射**：改为使用 `diag.theta_ground`（与 theta_ground 相同）
+
+#### 3. MPC 控制器初始化
+- **run_simulation 函数**：添加 `ctrl` 变量检查与自动创建逻辑
+  - 如果工作区中不存在 `ctrl`，自动调用 `init_project()` 并创建控制器
+  - 加载 LPV 数据库并调用 `mpc_setup_single_interp`
+
+#### 4. 标签定义更新
+- **compute_slope_delay 函数**：slope 标签从 `4` 改为 `3`（符合 V5.0+ 3类分类系统）
+- 标签定义：1=flat, 2=stall, 3=slope
+
+### Files
+- [test_closed_loop_performance.m](file:///e:/Matlab/Simulink/S-Function_14/src/tests/test_closed_loop_performance.m)
+
+---
+
+
 ## 2025-12-31 – GRU_train.m 修复 4 类到 3 类遗留问题
 
 ### Subject

@@ -188,6 +188,25 @@
 
 ---
 
+  ### tests/scripts - 批量仿真与对比
+
+  #### 1. **run_controller_comparison_batch.m** - 控制器批量对比脚本
+  - **路径**：src/tests/run_controller_comparison_batch.m
+  - **职责**：批量驱动 LPVMPC 系列控制器（默认仅 GRU，可扩展 IMU/NMPC），按 diag.* 契约提取日志，计算指标，按控制器-场景-重复输出报告，可选保存时序与汇总。
+  - **关键配置（cfg，可为空）**：
+    - controller_variants：默认 {'lpvmpc_gru'}；可添加 'lpvmpc_imu'、'nmpc'
+    - model_map：默认 'lpvmpc_gru'→'LPVMPC_AGV_simulink'（扩展分支需自行映射）
+    - scenarios：默认五条路径（path_straight/left/right/slope/bumpy）
+    - repeats：默认 1；stop_time：默认 20s；enable_noise：默认 true；use_fast_restart：默认 false
+    - save_timeseries：默认 false；save_summary：默认 true；F_cmd_limit_fallback：默认 300；Ts：默认空，尝试从 params.Ts 获取
+  - **日志契约**：
+    - 必选：diag.e_*，diag.F_cmd，diag.omega_cmd，diag.F_limit_hi（上界，缺省下界可不接）
+    - 可选：diag.F_limit_lo（下界），diag.rho_f/rho_n；diag.solve_time_ms/total_step_time_ms（若模型输出）
+  - **使用示例**：`summary = run_controller_comparison_batch(struct('use_fast_restart', false));`
+  - **输出**：`summary.controllers(i).reports{k}`（含指标、元数据、保存路径）；可生成 timeseries_* 与 closed_loop_summary_*.mat
+
+  ---
+
 ## 模块：paths - 参考轨迹生成
 
 ### 1. **gen_agv_ref_path.m** - 统一路径生成接口

@@ -129,7 +129,7 @@ else
     safe_denom_lf = sign(denom_lf) * max(abs(denom_lf), 1e-6);
     safe_denom_rr = sign(denom_rr) * max(abs(denom_rr), 1e-6);
     delta_lf_geom = atan((L/2 - x_c) / safe_denom_lf);
-    delta_rr_geom = atan((x_c + L/2) / safe_denom_rr);
+    delta_rr_geom = -atan((x_c + L/2) / safe_denom_rr);
 
     % 误差缩放（不破坏两轮几何比例）
     delta_lf_target = delta_lf_geom * delta_scale;

@@ -1,0 +1,6 @@
+PWD e:/Matlab/Simulink/S-Function_14/results/papers
+INPUT d:/LenovoSoftstore/install/texlive/2024/texmf.cnf
+INPUT d:/LenovoSoftstore/install/texlive/2024/texmf-dist/web2c/texmf.cnf
+INPUT d:/LenovoSoftstore/install/texlive/2024/texmf-var/web2c/pdftex/pdflatex.fmt
+INPUT e:/Matlab/Simulink/S-Function_14/results/papers/papert.tex
+OUTPUT papert.log

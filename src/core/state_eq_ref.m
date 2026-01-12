@@ -90,14 +90,13 @@ else
     x_c = 0.0;                      % 对称转弯，ICR 在 y 轴上
     y_c = R_cmd;                    % ICR y 坐标（可正可负）
 
-    % 几何约束：使用符号安全的 atan，确保转向角在 (-pi/2, pi/2) 范围内
-    % sign(denom)*max(abs(denom),eps) 保留分母符号，避免除零
+    % 使用带符号保护的分母，避免右转时象限翻转，同时保持右轮负号
     denom_lf = y_c - W/2;
     denom_rr = y_c + W/2;
     safe_denom_lf = sign(denom_lf) * max(abs(denom_lf), 1e-6);
     safe_denom_rr = sign(denom_rr) * max(abs(denom_rr), 1e-6);
     delta_lf_geom = atan((L/2 - x_c) / safe_denom_lf);
-    delta_rr_geom = atan((x_c + L/2) / safe_denom_rr);
+    delta_rr_geom = -atan((x_c + L/2) / safe_denom_rr);
 
     % 误差缩放（不破坏两轮几何比例）
     delta_lf_target = delta_lf_geom * delta_scale;

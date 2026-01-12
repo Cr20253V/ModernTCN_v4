@@ -135,7 +135,7 @@ else
     safe_denom_lf = sign(denom_lf) * max(abs(denom_lf), 1e-6);
     safe_denom_rr = sign(denom_rr) * max(abs(denom_rr), 1e-6);
     delta_lf_target = atan((L/2 - x_c) / safe_denom_lf);
-    delta_rr_target = atan((x_c + L/2) / safe_denom_rr);
+    delta_rr_target = -atan((x_c + L/2) / safe_denom_rr);
 end
 
 % NOTE(open-loop test): 观测侧不更新/不预测转角，仅读取状态中的

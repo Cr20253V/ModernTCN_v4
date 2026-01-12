@@ -1,13 +1,13 @@
 % =============================
 % 文件名：test_closed_loop_performance.m
-% 版本号：V1.0
-% 最后修改时间：2025-11-24
+% 版本号：V1.1
+% 最后修改时间：2026-01-02
 % 作者：LPV-MPC Project
 % 功能描述：
 %   批量运行 LPVMPC_AGV_simulink，提取速度、姿态、坡度识别、
 %   执行器饱和等闭环指标，用于对比不同 GRU 或控制配置。
-%   默认会针对 flat / straight / turn / straight_turn / slope / bumpy
-%   等行驶模式逐一取样仿真，亦可通过 cfg.scenarios 自定义。
+%   支持场景：straight / straight_left_turn / straight_right_turn / slope / bumpy
+%   亦可通过 cfg.scenarios 自定义。
 % 使用方法：
 %   >> test_closed_loop_performance();
 %   >> cfg = struct('mode_names', {{'flat','slope','bumpy'}}, 'mode_sample_count', 2);
@@ -36,7 +36,7 @@ end
 % 统一填充默认参数，提高脚本易用性
 cfg = apply_defaults(cfg, struct( ...
     'model_name',           'LPVMPC_AGV_simulink', ...
-    'scenarios',            {{'flat','straight','turn','straight_turn','slope','bumpy'}}, ...
+    'scenarios',            {{'straight','straight_left_turn','straight_right_turn','slope','bumpy'}}, ...
     'mode_sample_count',    10, ...
     'stop_time',            [], ...
     'results_dir',          default_results_dir, ...
@@ -137,22 +137,20 @@ end
 
 function sc = scenario_from_name(name)
 paths_dir = fullfile(project_root(), 'data', 'paths');
-% 预设三种常用场景，便于快速调用
+% 场景名称到路径文件的映射（与 data/paths 目录下实际文件匹配）
 switch name
-    case {'path_flat_default','flat'}
-        sc = struct('name','path_flat_default','path_file',fullfile(paths_dir,'path_straight.mat'),'description','平路/低坡');
-    case {'straight','path_straight'}
-        sc = struct('name','path_straight','path_file',fullfile(paths_dir,'path_straight.mat'),'description','直线恒速');
-    case {'turn','path_turn'}
-        sc = struct('name','path_turn','path_file',fullfile(paths_dir,'path_turn.mat'),'description','恒速转弯');
-    case {'straight_turn','path_straight_turn'}
-        sc = struct('name','path_straight_turn','path_file',fullfile(paths_dir,'path_straight_turn.mat'),'description','直线+弯道混合');
-    case {'path_slope_default','slope'}
-        sc = struct('name','path_slope_default','path_file',fullfile(paths_dir,'path_slope.mat'),'description','长上坡');
-    case {'path_bumpy_default','bumpy'}
-        sc = struct('name','path_bumpy_default','path_file',fullfile(paths_dir,'path_bumpy.mat'),'description','连续扰动');
+    case {'straight','path_straight','flat'}
+        sc = struct('name','straight','path_file',fullfile(paths_dir,'path_straight.mat'),'description','平地直线行驶');
+    case {'straight_left_turn','path_straight_left_turn','turn_left'}
+        sc = struct('name','straight_left_turn','path_file',fullfile(paths_dir,'path_straight_left_turn.mat'),'description','直行后左转');
+    case {'straight_right_turn','path_straight_right_turn','turn_right'}
+        sc = struct('name','straight_right_turn','path_file',fullfile(paths_dir,'path_straight_right_turn.mat'),'description','直行后右转');
+    case {'slope','path_slope'}
+        sc = struct('name','slope','path_file',fullfile(paths_dir,'path_slope.mat'),'description','坡度直线行驶');
+    case {'bumpy','path_bumpy'}
+        sc = struct('name','bumpy','path_file',fullfile(paths_dir,'path_bumpy.mat'),'description','颠簸直线行驶');
     otherwise
-        error('未知场景名称: %s', name);
+        error('未知场景名称: %s。支持场景: straight, straight_left_turn, straight_right_turn, slope, bumpy', name);
 end
 end
 
@@ -162,6 +160,30 @@ function sim_out = run_simulation(model_name, sc)
 ref_struct = load_ref_path(sc.path_file);
 assignin('base','agv_ref_path', ref_struct);
 assignin('base','ref', ref_struct);  % 兼容 From Workspace 的默认变量名
+
+% 确保 ctrl 变量在工作区中可用（Adaptive MPC Controller 需要）
+if ~evalin('base', 'exist(''ctrl'', ''var'')')
+    % 如果 ctrl 不存在，尝试从模型的 PreLoadFcn 初始化
+    % 这会触发 PreLoadFcn 回调，创建所有必要变量
+    fprintf('  → 初始化模型变量...\n');
+    evalin('base', 'init_project();');
+    
+    % 加载 LPV 数据库
+    db_file = fullfile(project_root(), 'data', 'models', 'lin_agv_db.mat');
+    if exist(db_file, 'file')
+        db_data = load(db_file);
+        if isfield(db_data, 'db')
+            assignin('base', 'db_rt', db_data.db);
+        end
+    end
+    
+    % 创建 MPC 控制器
+    params = evalin('base', 'parameters()');
+    db_rt = evalin('base', 'db_rt');
+    ctrl = mpc_setup_single_interp(db_rt, struct());
+    assignin('base', 'ctrl', ctrl);
+end
+
 if isfield(sc,'stop_time') && ~isempty(sc.stop_time)
         stop_time = sc.stop_time;
 else
@@ -215,7 +237,9 @@ sig = struct();
 fields = fieldnames(signal_names);
 for i = 1:numel(fields)
     f = fields{i};
-    sig.(f) = logsout.get(signal_names.(f)).Values;
+    logged_signal = logsout.get(signal_names.(f));
+    % 提取 timeseries 数据，兼容多种返回类型
+    sig.(f) = extract_timeseries_data(logged_signal);
 end
 
 % 速度误差指标
@@ -242,17 +266,44 @@ end
 rpt.cmd_sat_ratio = mean(cmd_abs > sat_threshold);
 
 % slope 检测延迟：将 label_main 与地面坡度变化对齐
-rpt.slope_delay = compute_delay(sig.label_main, sig.theta_ground);
+rpt.slope_delay = compute_slope_delay(sig.label_main, sig.theta_ground);
 
 rpt.name = sc.name;
 rpt.description = sc.description;
 rpt.duration = sig.v.Time(end) - sig.v.Time(1);
 end
 
-function delay = compute_delay(label_signal, theta_ground_signal)
+%% ======================================================================
+function ts = extract_timeseries_data(logged_signal)
+% 从各种 Simulink 日志格式中提取 timeseries
+if isa(logged_signal, 'timeseries')
+    ts = logged_signal;
+elseif isa(logged_signal, 'Simulink.SimulationData.Signal')
+    ts = logged_signal.Values;
+elseif isa(logged_signal, 'Simulink.SimulationData.Dataset')
+    % 如果有多个同名信号，取第一个
+    if logged_signal.numElements > 0
+        first_signal = logged_signal.getElement(1);
+        ts = extract_timeseries_data(first_signal);  % 递归处理
+    else
+        error('Dataset 为空');
+    end
+else
+    % 尝试访问 Values 属性
+    try
+        ts = logged_signal.Values;
+    catch
+        ts = logged_signal;
+    end
+end
+end
+
+%% ======================================================================
+function delay = compute_slope_delay(label_signal, theta_ground_signal)
 % 计算 slope 场景中预测与真值的首次出现时间差
+% 标签定义：1=flat, 2=stall, 3=slope（V5.0+ 3类分类系统）
 truth_idx = find(theta_ground_signal.Data > deg2rad(1), 1, 'first');
-pred_idx = find(label_signal.Data == 4, 1, 'first');
+pred_idx = find(label_signal.Data == 3, 1, 'first');  % slope 标签 = 3
 if isempty(truth_idx) || isempty(pred_idx)
     delay = NaN;
 else
@@ -303,7 +354,7 @@ names = struct();
 names.v = 'diag.v';
 names.v_ref = 'diag.v_ref';
 names.theta_hat = 'diag.theta_hat';
-names.theta_ref = 'diag.theta_ref';
+names.theta_ref = 'diag.theta_ground';  % theta_ref 与 theta_ground 相同
 names.theta_ground = 'diag.theta_ground';
 names.label_main = 'diag.label_main';
 names.F_cmd = 'diag.F_cmd';

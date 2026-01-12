@@ -54,7 +54,7 @@ cfg.dropout = 0.2;                   % Dropout概率
 
 % 训练超参数
 cfg.batch_size = 64;                 % 批量大小
-cfg.max_epochs = 200;                % 最大训练轮数（V1.5：从100增至150，充分训练）
+cfg.max_epochs = 10;                % 最大训练轮数（V1.5：从100增至150，充分训练）
 cfg.initial_lr = 1e-3;               % 初始学习率
 cfg.lr_schedule = 'cosine';          % 学习率调度策略（'cosine' / 'step' / 'none'）
 cfg.lr_drop_factor = 0.5;            % 学习率下降因子（step策略）
@@ -64,6 +64,9 @@ cfg.lr_drop_period = 20;             % 学习率下降周期（step策略）
 cfg.lambda_turn = 0.3;               % 转弯分类损失权重
 cfg.lambda_theta = 0.5;              % 坡度回归损失权重
 cfg.lambda_theta_flat = 0.2;         % 平地theta=0约束权重（抑制平地漂移）
+cfg.theta_weight_mode = 'abs';       % 坡度回归权重模式：'none'/'abs' 按|theta|增权
+cfg.theta_weight_scale_deg = 8;      % 权重增长标度，收紧到 8° 以更强调大坡度
+cfg.theta_weight_cap = 4.0;          % 权重上限提高到 4，缓解高坡度压缩
 
 % 梯度裁剪
 cfg.grad_clip = 5.0;                 % 梯度裁剪阈值
@@ -382,6 +385,11 @@ best_val_loss = inf;
 patience_counter = 0;
 best_params = [];
 
+% 坡度回归权重预处理
+theta_weight_mode = lower(string(cfg.theta_weight_mode));
+theta_weight_scale = deg2rad(cfg.theta_weight_scale_deg);
+theta_weight_cap = cfg.theta_weight_cap;
+
 if cfg.verbose
     fprintf('  ✓ 优化器初始化完成！\n');
     fprintf('    优化器: Adam\n');
@@ -449,7 +457,8 @@ for epoch = 1:cfg.max_epochs
             fc_turn_weights, fc_turn_bias, ...
             fc_theta_weights, fc_theta_bias, ...
             X_batch, y_main_batch, y_turn_batch, y_theta_batch, mask_theta_batch, ...
-            class_weights, cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, exec_env);
+            class_weights, cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, ...
+            theta_weight_mode, theta_weight_scale, theta_weight_cap, exec_env);
         
         % 梯度裁剪
         [gradients, grad_norm] = clipGradients(gradients, cfg.grad_clip);
@@ -492,13 +501,14 @@ for epoch = 1:cfg.max_epochs
     % 验证
     if mod(epoch, cfg.validation_frequency) == 0
         [val_loss, val_loss_main, val_loss_turn, val_loss_theta, val_loss_theta_flat, ...
-         val_acc_main, val_acc_turn, val_mae_theta, ~, ~] = ...
+         val_acc_main, val_acc_turn, val_mae_theta, ~, ~, ~] = ...
             evaluateModel(net_feature, ...
                 fc_main_weights, fc_main_bias, ...
                 fc_turn_weights, fc_turn_bias, ...
                 fc_theta_weights, fc_theta_bias, ...
                 X_val, y_main_val, y_turn_val_cls, y_theta_val, mask_theta_val, ...
                 class_weights, cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, ...
+                theta_weight_mode, theta_weight_scale, theta_weight_cap, ...
                 cfg.batch_size, exec_env);
         
         history.val_loss(epoch) = val_loss;
@@ -597,13 +607,14 @@ end
 
 y_turn_test_cls = y_turn_test + 2;
 [test_loss, test_loss_main, test_loss_turn, test_loss_theta, test_loss_theta_flat, ...
- test_acc_main, test_acc_turn, test_mae_theta, pred_main_test, pred_turn_test] = ...
+ test_acc_main, test_acc_turn, test_mae_theta, pred_main_test, pred_turn_test, pred_theta_test] = ...
     evaluateModel(net_feature, ...
         fc_main_weights, fc_main_bias, ...
         fc_turn_weights, fc_turn_bias, ...
         fc_theta_weights, fc_theta_bias, ...
         X_test, y_main_test, y_turn_test_cls, y_theta_test, mask_theta_test, ...
         class_weights, cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, ...
+        theta_weight_mode, theta_weight_scale, theta_weight_cap, ...
         cfg.batch_size, exec_env);
 
 if cfg.verbose
@@ -682,6 +693,64 @@ if cfg.verbose
     saveas(gcf, fullfile(cfg.log_dir, 'confusion_matrix_main.png'));
     if cfg.verbose
         fprintf('\n  ✓ 混淆矩阵已保存至: %s\n', fullfile(cfg.log_dir, 'confusion_matrix_main.png'));
+    end
+
+    % ========== 转弯三分类混淆矩阵 ==========
+    turn_class_names = {'right', 'straight', 'left'};  % 对应标签 {1,2,3}
+    CM_turn = confusionmat(y_turn_test_cls, pred_turn_test, 'Order', 1:3);
+    figure('Name', '转弯分类混淆矩阵', 'NumberTitle', 'off');
+    confusionchart(CM_turn, turn_class_names);
+    title(sprintf('转弯分类混淆矩阵（测试集）- 准确率: %.2f%%', test_acc_turn * 100));
+    saveas(gcf, fullfile(cfg.log_dir, 'confusion_matrix_turn.png'));
+    if cfg.verbose
+        fprintf('  ✓ 转弯混淆矩阵已保存至: %s\n', fullfile(cfg.log_dir, 'confusion_matrix_turn.png'));
+    end
+
+    % ========== 坡度回归可视化（theta vs theta / 误差直方 / CDF） ==========
+    theta_true = gather(y_theta_test(:));
+    theta_pred = gather(pred_theta_test(:));
+    mask_slope = gather(mask_theta_test(:)) == 1;
+    theta_true_deg = rad2deg(theta_true(mask_slope));
+    theta_pred_deg = rad2deg(theta_pred(mask_slope));
+    theta_err_deg = theta_pred_deg - theta_true_deg;
+    theta_abs_err_deg = abs(theta_err_deg);
+
+    if isempty(theta_true_deg)
+        warning('坡度样本为空，跳过坡度回归可视化。');
+    else
+
+        % 散点图：theta_true vs theta_pred
+        figure('Name', '坡度回归散点', 'NumberTitle', 'off');
+        scatter(theta_true_deg, theta_pred_deg, 12, 'filled', 'MarkerFaceAlpha', 0.6);
+        hold on; grid on;
+        lim_min = min([theta_true_deg; theta_pred_deg]);
+        lim_max = max([theta_true_deg; theta_pred_deg]);
+        plot([lim_min, lim_max], [lim_min, lim_max], 'k--', 'LineWidth', 1);
+        xlabel('\\theta True (deg)'); ylabel('\\theta Pred (deg)');
+        title(sprintf('坡度回归: \\theta_{true} vs \\theta_{pred} (MAE=%.3f°)', rad2deg(test_mae_theta)));
+        xlim([lim_min, lim_max]); ylim([lim_min, lim_max]);
+        saveas(gcf, fullfile(cfg.log_dir, 'theta_scatter.png'));
+
+        % 误差直方图
+        figure('Name', '坡度回归误差直方图', 'NumberTitle', 'off');
+        histogram(theta_err_deg, 40, 'Normalization', 'pdf'); grid on;
+        xlabel('误差 (deg)'); ylabel('概率密度');
+        title('坡度回归误差直方图 (pred - true)');
+        saveas(gcf, fullfile(cfg.log_dir, 'theta_error_hist.png'));
+
+        % 绝对误差CDF
+        figure('Name', '坡度回归误差CDF', 'NumberTitle', 'off');
+        [f_ecdf, x_ecdf] = ecdf(theta_abs_err_deg);
+        plot(x_ecdf, f_ecdf, 'LineWidth', 1.5); grid on;
+        xlabel('|误差| (deg)'); ylabel('CDF');
+        title('坡度回归绝对误差CDF');
+        saveas(gcf, fullfile(cfg.log_dir, 'theta_error_cdf.png'));
+        if cfg.verbose
+            fprintf('  ✓ 坡度回归图已保存至: %s, %s, %s\n', ...
+                fullfile(cfg.log_dir, 'theta_scatter.png'), ...
+                fullfile(cfg.log_dir, 'theta_error_hist.png'), ...
+                fullfile(cfg.log_dir, 'theta_error_cdf.png'));
+        end
     end
     
     % ========== 自动分析与建议 ==========
@@ -881,7 +950,8 @@ end
 
 function [loss, loss_main, loss_turn, loss_theta, loss_theta_flat, gradients] = modelGradients(...
     net_feature, fc_main_w, fc_main_b, fc_turn_w, fc_turn_b, fc_theta_w, fc_theta_b, ...
-    X, y_main, y_turn, y_theta, mask_theta, class_weights, lambda_turn, lambda_theta, lambda_theta_flat, exec_env)
+    X, y_main, y_turn, y_theta, mask_theta, class_weights, lambda_turn, lambda_theta, lambda_theta_flat, ...
+    theta_weight_mode, theta_weight_scale, theta_weight_cap, exec_env)
 % 计算模型损失和梯度（多任务学习）
 % 输入:
 %   net_feature: dlnetwork对象（GRU特征提取器）
@@ -897,6 +967,7 @@ function [loss, loss_main, loss_turn, loss_theta, loss_theta_flat, gradients] = 
 %   lambda_turn: 转弯分类损失权重
 %   lambda_theta: 坡度回归损失权重
 %   lambda_theta_flat: 平地theta约束损失权重
+%   theta_weight_mode/scale/cap: 坡度回归样本权重参数
 %   exec_env: 'cpu' 或 'gpu'
 % 输出:
 %   loss: 总损失（标量）
@@ -952,21 +1023,27 @@ function [loss, loss_main, loss_turn, loss_theta, loss_theta_flat, gradients] = 
     end
     loss_turn = loss_turn / batch_size;
     
-    % 3) 坡度回归损失（MSE，仅slope样本）
-    % 将y_theta和mask_theta转换为行向量以匹配pred_theta的形状[1, batch]
+    % 3) 坡度回归损失（按|theta|增权，仅slope样本）
     if strcmp(exec_env, 'gpu')
         y_theta = gpuArray(y_theta);
         mask_theta = gpuArray(mask_theta);
     end
     
-    % 转为行向量并转为dlarray
     y_theta_row = dlarray(reshape(y_theta, 1, []));  % [1, batch]
     mask_theta_row = dlarray(reshape(mask_theta, 1, []));  % [1, batch]
     
-    % 计算误差
-    errors = (pred_theta - y_theta_row) .* mask_theta_row;  % [1, batch]
-    n_slope = sum(mask_theta) + 1e-8;  % 避免除零
-    loss_theta = sum(errors.^2) / n_slope;
+    theta_weights = ones(size(mask_theta_row), 'like', mask_theta_row);
+    if theta_weight_scale > 0 && (strcmpi(theta_weight_mode, 'abs') || theta_weight_mode == "abs")
+        theta_weights = theta_weights + abs(y_theta_row) / theta_weight_scale;
+    end
+    if theta_weight_cap > 0
+        theta_weights = min(theta_weights, theta_weight_cap);
+    end
+    theta_weights = theta_weights .* mask_theta_row;
+    
+    errors = pred_theta - y_theta_row;
+    n_slope = sum(theta_weights) + 1e-8;  % 避免除零
+    loss_theta = sum((errors.^2) .* theta_weights) / n_slope;
     
     % 4) 平地theta约束（平地样本MSE）
     flat_mask = double(y_main == 1);
@@ -990,11 +1067,12 @@ function [loss, loss_main, loss_turn, loss_theta, loss_theta_flat, gradients] = 
 end
 
 function [val_loss, val_loss_main, val_loss_turn, val_loss_theta, val_loss_theta_flat, ...
-          val_acc_main, val_acc_turn, val_mae_theta, all_pred_main, all_pred_turn] = ...
+          val_acc_main, val_acc_turn, val_mae_theta, all_pred_main, all_pred_turn, all_pred_theta] = ...
     evaluateModel(net_feature, fc_main_w, fc_main_b, fc_turn_w, fc_turn_b, ...
                   fc_theta_w, fc_theta_b, ...
                   X_val, y_main_val, y_turn_val, y_theta_val, mask_theta_val, ...
-                  class_weights, lambda_turn, lambda_theta, lambda_theta_flat, batch_size, exec_env)
+            class_weights, lambda_turn, lambda_theta, lambda_theta_flat, ...
+            theta_weight_mode, theta_weight_scale, theta_weight_cap, batch_size, exec_env)
 % 评估模型在验证集上的性能（V1.1: 返回预测结果用于详细分析）
 
     n_val = size(X_val, 3);
@@ -1081,9 +1159,17 @@ function [val_loss, val_loss_main, val_loss_turn, val_loss_theta, val_loss_theta
         end
         batch_loss_turn = batch_loss_turn / curr_batch_size;
         
-        errors = (pred_theta(:) - y_theta_batch(:)) .* mask_theta_batch(:);
-        n_slope = sum(mask_theta_batch) + 1e-8;
-        batch_loss_theta = sum(errors.^2) / n_slope;
+        theta_weights = ones(size(mask_theta_batch), 'like', mask_theta_batch);
+        if theta_weight_scale > 0 && (strcmpi(theta_weight_mode, 'abs') || theta_weight_mode == "abs")
+            theta_weights = theta_weights + abs(y_theta_batch) / theta_weight_scale;
+        end
+        if theta_weight_cap > 0
+            theta_weights = min(theta_weights, theta_weight_cap);
+        end
+        theta_weights = theta_weights .* mask_theta_batch;
+        errors = pred_theta(:) - y_theta_batch(:);
+        n_slope = sum(theta_weights(:)) + 1e-8;
+        batch_loss_theta = sum((errors.^2) .* theta_weights(:)) / n_slope;
         
         flat_mask_batch = double(y_main_batch == 1);
         batch_loss_theta_flat = sum((pred_theta(:) .* flat_mask_batch(:)).^2) / (sum(flat_mask_batch) + 1e-8);
