@@ -1,4 +1,0 @@
-﻿SCAN_ROOT=e:/Matlab/Simulink/S-Function_16
-FILE_COUNT=5966
-
-=== PATTERN: LPVMPC_AGV_simulink_Mamba.slx ===

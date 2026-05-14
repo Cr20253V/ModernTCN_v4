@@ -1,7 +1,0 @@
-controller,metric,n_groups_checked,n_invariant,invariant_ratio
-GRU,ey_rmse,0,0,NaN
-GRU,epsi_rmse,0,0,NaN
-GRU,ev_rmse,1,1,1
-GRU,eomega_rmse,0,0,NaN
-GRU,j_du,1,1,1
-GRU,viol_rate,1,1,1

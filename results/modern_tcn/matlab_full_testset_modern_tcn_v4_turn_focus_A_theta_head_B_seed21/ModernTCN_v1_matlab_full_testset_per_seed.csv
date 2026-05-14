@@ -1,2 +1,0 @@
-model,seed,best_epoch,n_windows,elapsed_seconds,acc_main,acc_turn,acc_turn_pure,acc_turn_transition,theta_mae_deg,flat_recall,stall_recall,slope_recall,uphill_recall,downhill_recall,onnx_file
-ModernTCN-small v1 MATLAB,21,1,13596,171.862838,0.986687260959106,0.952927331568108,0.981869016351775,0.762409369771333,0.48684557522274,0.98762157382847,0.972062448644207,0.989018377409233,0.994418604651163,0.983996539792388,E:\Matlab\Simulink\S-Function_16\results\modern_tcn\modern_tcn_v4_turn_focus_A_theta_head_B_seed21\modern_tcn_seed21.onnx

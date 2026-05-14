@@ -1,0 +1,4 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+ModernTCN,6,6,4,16,1
+TCN,13,5,11,29,2
+GRU,17,7,9,33,3

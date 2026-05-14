@@ -1,2 +1,0 @@
-controller,n_cases,ey_rmse_mean,ey_rmse_std,ey_rmse_median,epsi_rmse_mean,epsi_rmse_std,epsi_rmse_median,ev_rmse_mean,ev_rmse_std,ev_rmse_median,eomega_rmse_mean,eomega_rmse_std,eomega_rmse_median,j_du_mean,j_du_std,j_du_median,viol_rate_mean,viol_rate_std,viol_rate_median
-Mamba2,2,0,0,0,0,0,0,0.605991477306327,0,0.605991477306327,0,0,0,7140374.33551525,0,7140374.33551525,0.0588235294117647,0,0.0588235294117647

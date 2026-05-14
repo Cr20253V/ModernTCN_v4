@@ -1,3 +1,0 @@
-field=model
-seq_len=128
-scaler_mean_size=1,19

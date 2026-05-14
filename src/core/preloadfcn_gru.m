@@ -9,14 +9,17 @@ if nargin < 1 || isempty(mode)
     mode = 'gru';
 end
 mode = lower(char(mode));
-if ~ismember(mode, {'gru', 'modern_tcn'})
+if ~ismember(mode, {'gru', 'modern_tcn', 'tcn'})
     error('preloadfcn_gru:BadMode', 'Unknown preload mode: %s', mode);
 end
 
-if strcmp(mode, 'modern_tcn')
-    title_text = 'LPVMPC_AGV preload (ModernTCN standalone)';
-else
-    title_text = 'LPVMPC_AGV preload (GRU standalone)';
+switch mode
+    case 'modern_tcn'
+        title_text = 'LPVMPC_AGV preload (ModernTCN standalone)';
+    case 'tcn'
+        title_text = 'LPVMPC_AGV preload (TCN standalone)';
+    otherwise
+        title_text = 'LPVMPC_AGV preload (GRU standalone)';
 end
 
 fprintf('\n');
@@ -323,6 +326,35 @@ if strcmp(mode, 'modern_tcn')
     fprintf('  OK ModernTCN config frozen: seed=%d\n', modern_tcn_cfg.seed);
     fprintf('  ONNX: %s\n', modern_tcn_cfg.onnx_file);
     fprintf('  dataset: %s\n', modern_tcn_cfg.dataset_file);
+elseif strcmp(mode, 'tcn')
+    fprintf('[Step 4/5] Configure TCN model...\n');
+    tcn_cfg = TCN_default_config(root);
+    if exist(tcn_cfg.dataset_file, 'file') ~= 2
+        error('[PreLoadFcn] TCN dataset not found: %s', tcn_cfg.dataset_file);
+    end
+    if exist(tcn_cfg.model_file, 'file') ~= 2
+        error('[PreLoadFcn] TCN model not found: %s', tcn_cfg.model_file);
+    end
+
+    assignin('base', 'tcn_sim_cfg', tcn_cfg);
+    assignin('base', 'tcn_default_cfg', tcn_cfg);
+    assignin(mw, 'tcn_sim_cfg', tcn_cfg);
+    assignin(mw, 'tcn_default_cfg', tcn_cfg);
+
+    info = struct();
+    info.seed = tcn_cfg.seed;
+    info.case_name = tcn_cfg.case_name;
+    info.run_tag = tcn_cfg.run_tag;
+    info.dataset_file = tcn_cfg.dataset_file;
+    info.model_file = tcn_cfg.model_file;
+    info.meta_file = tcn_cfg.meta_file;
+    info.time = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
+    assignin('base', 'tcn_preload_info', info);
+    assignin(mw, 'tcn_preload_info', info);
+    active_model_label = 'TCN model';
+    fprintf('  OK TCN config frozen: seed=%d\n', tcn_cfg.seed);
+    fprintf('  model: %s\n', tcn_cfg.model_file);
+    fprintf('  dataset: %s\n', tcn_cfg.dataset_file);
 else
     fprintf('[Step 4/5] Load GRU model...\n');
     gru_cfg = GRU_default_config(root);

@@ -1,7 +1,0 @@
-controller,metric,n_groups_checked,n_invariant,invariant_ratio
-Mamba2,ey_rmse,4,0,0
-Mamba2,epsi_rmse,4,0,0
-Mamba2,ev_rmse,6,0,0
-Mamba2,eomega_rmse,4,0,0
-Mamba2,j_du,6,0,0
-Mamba2,viol_rate,1,0,0

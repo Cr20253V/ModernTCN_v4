@@ -1,2 +1,0 @@
-controller,n_cases,ey_rmse_mean,ey_rmse_std,ey_rmse_median,epsi_rmse_mean,epsi_rmse_std,epsi_rmse_median,ev_rmse_mean,ev_rmse_std,ev_rmse_median,eomega_rmse_mean,eomega_rmse_std,eomega_rmse_median,j_du_mean,j_du_std,j_du_median,viol_rate_mean,viol_rate_std,viol_rate_median
-GRU,3,0.044151021207974,8.49837472194074e-18,0.044151021207974,0.0404286682591399,0,0.0404286682591399,0.00588896417191529,0,0.00588896417191529,0.0421994013728651,8.49837472194074e-18,0.0421994013728651,1828.91122624663,0,1828.91122624663,0,0,0

@@ -1,0 +1,484 @@
+# Project AI Context
+
+生成日期：2026-05-14
+
+本文档用于让后续 AI 模型快速理解当前项目。它描述当前项目模块、已完成工作、核心实验结果、论文中各部分的作用，以及继续写论文或补图时应遵循的事实边界。本文档不是删除清单；文件保留和清理细节见 `PROJECT_FLOW_MANIFEST.md`。
+
+## 1. 项目一句话概述
+
+本项目研究面向对角双转向驱动 AGV 的 LPV-MPC 闭环控制增强方法。核心思路是在传统车辆模型、LPV 线性化和 MPC 控制器之上，引入时序神经网络对车辆当前工况进行在线感知和调度辅助，包括：
+
+- 主工况分类：`flat`、`stall`、`slope`；
+- 转向方向分类：`right`、`straight`、`left`；
+- 坡度角或调度坡度量回归：`theta_hat`。
+
+当前论文主线算法为 `ModernTCN`，主要对照算法为 `GRU` 和 `TCN`。三者使用同一份统一数据集，均已完成训练和闭环仿真验证。用户已在清理后重新运行三个闭环仿真，均无问题。
+
+## 2. 当前主线结论
+
+当前结论应按下面层次理解：
+
+- 离线感知/预测测试中，`ModernTCN` 的主工况准确率和转向准确率显著高于 `GRU` 和 `TCN`，是当前最强感知模型。
+- `GRU` 是稳定的循环网络基线，主工况准确率接近 `ModernTCN`，但转向方向尤其过渡窗口明显弱于 `ModernTCN`。
+- `TCN` 是卷积基线，转向准确率尚可，但主工况分类明显弱于另外两者；闭环中也表现出更大的控制抖动和约束触碰。
+- 三算法闭环综合排序为 `ModernTCN > TCN > GRU`。`ModernTCN` 在综合跟踪、控制平滑性和总体排序上最好；`TCN` 在闭环原始 `theta_mae_deg` 和 `turn_acc_pct` 上有局部优势，但控制代价较高；`GRU` 在部分调度坡度误差上较好，但整体闭环跟踪弱于 `ModernTCN` 和 `TCN`。
+
+论文中推荐表述为：ModernTCN 在统一数据和统一 LPV-MPC 闭环条件下给出最稳健的综合性能，既提升了感知准确率，也改善了闭环跟踪和控制平滑性。TCN 的局部指标优势不应被表述为整体优于 ModernTCN，因为其主工况识别和控制平滑性存在明显短板。
+
+## 3. 当前权威文件
+
+后续 AI 模型应优先相信以下文件，而不是历史 README 或旧实验报告。
+
+| 类别 | 文件 | 说明 |
+|---|---|---|
+| 项目流程清单 | `PROJECT_FLOW_MANIFEST.md` | 当前文件整理和保留边界 |
+| AI 上下文 | `PROJECT_AI_CONTEXT.md` | 本文档，面向后续 AI 的项目解释 |
+| 统一数据集契约 | `data/tcn/ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2_contract.json` | 当前数据特征、标签、split 和窗口定义 |
+| ModernTCN 默认配置 | `src/ModernTCN/ModernTCN_default_config.m` | 当前 ModernTCN 闭环部署模型 |
+| GRU 默认配置 | `src/gru/GRU_default_config.m` | 当前 GRU 闭环部署模型 |
+| TCN 默认配置 | `src/TCN/TCN_default_config.m` | 当前 TCN 闭环部署模型 |
+| ModernTCN 训练结果 | `results/modern_tcn/modern_tcn_theta10_uniform_h0_v2_seed21/ModernTCN_train_report.md` | 当前 ModernTCN 训练报告 |
+| GRU 训练结果 | `results/gru/train_logs_theta10_uniform_h0_v2/inputstats_hidden96_l2_seed101/GRU_train_report.md` | 当前 GRU 训练报告 |
+| TCN 训练结果 | `results/tcn/train_logs_theta10_uniform_h0_v2/tcn96_rawtheta_sym_seed21/TCN_train_report.md` | 当前 TCN 训练报告 |
+| 三算法闭环结果 | `results/compare/tcn_gru_modern_closed_loop/path_factory_logistics_showcase_theta10_v3/` | 当前三算法闭环对比 |
+| 两算法闭环历史结果 | `results/compare/modern_tcn_gru_closed_loop/` | ModernTCN 和 GRU 的早期闭环对比 |
+
+注意：`data/tcn/README_ModernTCN_dataset.md` 仍包含早期 V3 数据链说明，与当前 `theta10_uniform_conf_h0_v2` 主线不完全一致。后续 AI 不应把该 README 当作当前权威数据定义。
+
+## 4. 统一数据集
+
+当前三种算法使用同一个数据集：
+
+- `data/tcn/ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2.mat`
+
+对应 raw train data：
+
+- `data/tcn/ModernTCN_train_data_agv_dualsteer_theta10_uniform_conf_h0_v2.mat`
+
+数据集关键信息来自 contract：
+
+| 字段 | 当前值 |
+|---|---|
+| vehicle_type | `diagonal_dual_steer_drive_agv` |
+| active_drive_steer_wheels | `LF`, `RR` |
+| passive_support_wheels | `RF`, `LR` |
+| Ts | `0.01 s` |
+| seq_len | `128` |
+| input_dim | `19` |
+| label_time_policy | `current_window_end` |
+| horizon_steps | `0` |
+| split_policy | `run_level_no_window_leakage` |
+| scaler_policy | `fit_train_only_apply_val_test_online` |
+| train_windows | `18302` |
+| val_windows | `2607` |
+| test_windows | `3733` |
+
+19 个输入特征为：
+
+`accel_x`, `gyro_z`, `I_lf`, `I_rr`, `omega_wheel_lf`, `omega_wheel_rr`, `delta_lf`, `delta_rr`, `gyro_y`, `v_hat`, `dv_hat_dt`, `ws_imbalance`, `I_sum`, `I_diff_signed`, `I_diff_abs`, `accel_x_lp`, `kappa_proxy`, `accel_per_current`, `pitch_angle_est`。
+
+标签定义：
+
+| 任务 | 类别/输出 | 说明 |
+|---|---|---|
+| 主工况分类 | `flat=1`, `stall=2`, `slope=3` | 用于识别平地、堵转/异常和坡道工况 |
+| 转向方向分类 | `right=-1`, `straight=0`, `left=1` | 用于识别转向方向 |
+| 坡度回归 | `theta_hat` | 用于闭环中的坡度感知或调度参考 |
+
+论文作用：
+
+- 在“实验数据与标签构建”章节说明所有算法使用同一数据集、同一特征、同一 split，保证对照公平；
+- 在“实验设置”章节说明输入窗口长度为 128 steps，即 1.28 s；
+- 在“模型输出”章节说明三任务学习结构：主工况分类、转向分类、坡度回归。
+
+## 5. 车辆模型、LPV-MPC 与 Simulink 基础层
+
+该模块不是论文中的深度学习贡献，但它是全部闭环结果的实验平台。
+
+主要代码：
+
+| 模块 | 文件 | 作用 |
+|---|---|---|
+| AGV S-Function | `src/core/agv_model_sfunc.m` | 闭环仿真车辆模型 |
+| 数据生成 S-Function | `src/core/agv_model_sfunc_train_data.m` | 训练数据仿真模型 |
+| 状态/输出方程 | `src/core/state_eq.m`, `src/core/output_eq.m` | 非线性车辆状态和输出 |
+| 参考方程 | `src/core/state_eq_ref.m`, `src/core/output_eq_ref.m` | 参考轨迹和参考输出 |
+| 参数 | `src/core/parameters.m` | 车辆和控制参数 |
+| LPV 线性化 | `src/lpv/lin_agv_at_point.m`, `src/lpv/lin_agv_grid.m` | 构造 LPV 网格模型 |
+| MPC | `src/mpc/mpc_setup_single_interp.m`, `src/mpc/mpc_update_from_rho.m`, `src/mpc/Cost_Function.m` | 控制器创建、更新和代价函数 |
+| 植物模型更新 | `src/core/UpdatePlantModel.m`, `src/core/UpdatePlantModel_gru.m` | Simulink 中更新控制模型 |
+
+关键模型和缓存：
+
+| 文件 | 作用 |
+|---|---|
+| `data/models/lin_agv_db.mat` | LPV 线性化数据库 |
+| `data/models/plant_grid_test.mat` | 植物模型网格 |
+| `data/models/ctrl.mat` | MPC 控制器 |
+| `data/models/maps_best.mat` | 调度映射或控制相关映射 |
+
+论文作用：
+
+- 系统建模章节：描述 AGV 模型、对角双转向驱动结构和状态/输入定义；
+- 控制方法章节：说明 LPV-MPC 是闭环控制基线，神经网络输出用于辅助工况识别和调度；
+- 实验平台章节：说明所有算法接入同一 Simulink/LPV-MPC 平台，避免控制器差异影响对比。
+
+## 6. 路径生成与展示路径
+
+路径模块负责生成训练、验证、展示和论文图表所需的参考路径。
+
+当前与论文最相关的路径文件：
+
+| 文件 | 作用 |
+|---|---|
+| `data/paths/path_factory_logistics_showcase_theta10_v3.mat` | 当前三算法闭环对比使用的展示路径 |
+| `data/paths/path_factory_logistics_showcase_theta10_v10.mat` | 早期 ModernTCN/GRU 两算法展示路径 |
+| `data/paths/path_modern_tcn_demo_loop_v1.mat` | ModernTCN demo 路径 |
+| `data/paths/path_modern_tcn_demo_loop_v2.mat` | ModernTCN demo 路径 |
+| `data/paths/path_modern_tcn_theta_sweep_multicond_paper_v1.mat` | 坡度 sweep 论文图相关路径 |
+
+主要脚本：
+
+| 文件 | 作用 |
+|---|---|
+| `src/paths/gen_agv_ref_path.m` | 基础参考路径接口 |
+| `src/paths/gen_agv_theta10_uniform_paths.m` | theta10 uniform 数据路径 |
+| `src/paths/gen_factory_logistics_showcase_path.m` | 工厂物流展示路径 |
+| `src/paths/gen_modern_tcn_demo_path.m` | ModernTCN demo 路径 |
+| `src/paths/gen_modern_tcn_theta_sweep_plot_path.m` | 坡度 sweep 图路径 |
+| `src/paths/gen_modern_tcn_theta_sweep_short_paths.m` | 多工况短路径 sweep |
+
+论文作用：
+
+- 展示路径用于闭环轨迹图、分区指标表和控制输入图；
+- theta sweep 路径用于坡度感知泛化图；
+- 路径图可用于“实验场景设计”或“工业物流场景”小节。
+
+## 7. ModernTCN 模块
+
+ModernTCN 是当前论文主方法。它使用 Python 训练，导出 ONNX 后由 MATLAB/Simulink 加载闭环部署。
+
+当前冻结配置：
+
+| 项 | 当前值 |
+|---|---|
+| seed | `21` |
+| run_tag | `modern_tcn_theta10_uniform_h0_v2_seed21` |
+| seq_len | `128` |
+| input_dim | `19` |
+| channels | `64` |
+| blocks | `5` |
+| kernel_size | `31` |
+| dropout | `0.15` |
+| expansion | `2` |
+| 部署模型 | `results/modern_tcn/modern_tcn_theta10_uniform_h0_v2_seed21/modern_tcn_seed21.onnx` |
+
+主要文件：
+
+| 文件 | 作用 |
+|---|---|
+| `src/ModernTCN/modern_tcn_model.py` | ModernTCN 模型定义 |
+| `src/ModernTCN/modern_tcn_data.py` | 数据读取与 batch 组织 |
+| `src/ModernTCN/modern_tcn_metrics.py` | 指标计算 |
+| `src/ModernTCN/train_modern_tcn.py` | 单次训练 |
+| `src/ModernTCN/run_modern_tcn_theta10_v2_multiseed.py` | 多 seed 训练入口 |
+| `src/ModernTCN/export_modern_tcn_onnx.py` | ONNX 导出 |
+| `src/ModernTCN/check_onnxruntime_consistency.py` | ONNXRuntime 一致性检查 |
+| `src/ModernTCN/ModernTCN_check_matlab_onnx.m` | MATLAB ONNX 检查 |
+| `src/ModernTCN/ModernTCN_load_predictor.m` | MATLAB 加载器 |
+| `src/ModernTCN/ModernTCN_predict_window.m` | MATLAB 在线预测 |
+| `src/ModernTCN/ModernTCN_state_classifier.m` | MATLAB 状态分类器 |
+| `src/ModernTCN/ModernTCN_State_Classifier_sim.m` | Simulink 包装 |
+| `src/ModernTCN/ModernTCN_default_config.m` | 当前部署默认配置 |
+
+当前结果文件：
+
+| 文件 | 作用 |
+|---|---|
+| `results/modern_tcn/modern_tcn_theta10_uniform_h0_v2_seed21/modern_tcn_seed21.pt` | PyTorch checkpoint |
+| `results/modern_tcn/modern_tcn_theta10_uniform_h0_v2_seed21/modern_tcn_seed21.onnx` | Simulink 部署模型 |
+| `results/modern_tcn/modern_tcn_theta10_uniform_h0_v2_seed21/modern_tcn_seed21_pytorch_reference.mat` | PyTorch 参考输出 |
+| `results/modern_tcn/modern_tcn_theta10_uniform_h0_v2_seed21/modern_tcn_seed21_summary.csv` | 训练测试指标 |
+| `results/modern_tcn/modern_tcn_theta10_uniform_h0_v2_seed21/ModernTCN_train_report.md` | 训练报告 |
+
+论文作用：
+
+- 方法章节的主网络结构；
+- 与 GRU/TCN 的离线对比主结果；
+- 闭环实验的主方法；
+- 可用于强调多任务时序感知对 LPV-MPC 调度和闭环稳定性的帮助。
+
+## 8. GRU 模块
+
+GRU 是主要循环网络基线。当前 GRU 使用与 ModernTCN 相同的数据集，不再依赖旧 `data/gru` 数据链。
+
+当前冻结配置：
+
+| 项 | 当前值 |
+|---|---|
+| seed | `101` |
+| case_name | `inputstats_hidden96_l2` |
+| hidden_size | `96` |
+| num_layers | `2` |
+| head_pooling | `last_mean_inputstats` |
+| turn_head | `mlp/inputstats` |
+| 部署模型 | `data/models/GRU_model_gru_theta10_uniform_h0_v2_inputstats_hidden96_l2_seed101.mat` |
+| 元数据 | `data/models/GRU_meta_gru_theta10_uniform_h0_v2_inputstats_hidden96_l2_seed101.mat` |
+
+主要文件：
+
+| 文件 | 作用 |
+|---|---|
+| `src/gru/GRU_train.m` | 主训练函数 |
+| `src/gru/run_GRU_train_theta10_v2_multi_seed.m` | 当前多 seed 训练入口 |
+| `src/gru/GRU_default_config.m` | 当前部署默认配置 |
+| `src/gru/GRU_infer.m` | 推理函数 |
+| `src/gru/GRU_state_classifier.m` | 在线状态分类 |
+| `src/gru/GRU_State_Classifier_gru_sim.m` | Simulink 包装 |
+| `src/gru/GRU_load_default_to_base.m` | 加载到 base workspace |
+
+论文作用：
+
+- 作为循环神经网络基线，证明 ModernTCN 相比传统 RNN/GRU 在转向识别和闭环综合表现上更好；
+- 离线表中重点比较 `acc_turn`、`acc_turn_transition`、`theta_mae_deg`；
+- 闭环表中重点比较跟踪误差、调度误差和控制平滑性。
+
+## 9. TCN 模块
+
+TCN 是普通卷积时序网络基线。当前训练已完成，部署 seed 冻结为 21。
+
+当前冻结配置：
+
+| 项 | 当前值 |
+|---|---|
+| seed | `21` |
+| case_name | `tcn96_rawtheta_sym` |
+| num_blocks | `6` |
+| num_filters | `96` |
+| kernel_size | `3` |
+| head_pooling | `last_mean_max_inputstats` |
+| turn_head | `mlp/inputstats` |
+| 部署模型 | `data/models/TCN_model_tcn_theta10_uniform_h0_v2_tcn96_rawtheta_sym_seed21.mat` |
+| 元数据 | `data/models/TCN_meta_tcn_theta10_uniform_h0_v2_tcn96_rawtheta_sym_seed21.mat` |
+
+主要文件：
+
+| 文件 | 作用 |
+|---|---|
+| `src/TCN/TCN_train.m` | 主训练函数 |
+| `src/TCN/run_TCN_train_theta10_v2_multi_seed.m` | 当前多 seed 训练入口 |
+| `src/TCN/TCN_default_config.m` | 当前部署默认配置 |
+| `src/TCN/TCN_load_predictor.m` | MATLAB 加载器 |
+| `src/TCN/TCN_predict_window.m` | 在线预测 |
+| `src/TCN/TCN_state_classifier.m` | 在线状态分类 |
+| `src/TCN/TCN_State_Classifier_sim.m` | Simulink 包装 |
+| `src/TCN/configure_tcn_simulink_model.m` | Simulink 配置脚本 |
+
+seed 21 的选择依据：
+
+- 在 TCN 多 seed 结果中，seed 21 的 `theta_mae_deg=0.2902` 最低；
+- `theta_abs_le_10_p95_abs_err_deg=0.8473` 最低；
+- `acc_main=0.7479` 最高；
+- `slope_recall=0.8108` 最高；
+- seed 101 的 `acc_turn=0.7849` 略高，但其主工况准确率、坡度误差和 slope recall 更弱。
+
+论文作用：
+
+- 作为普通 TCN baseline，说明不是所有卷积时序模型都能带来同等闭环收益；
+- 可用于突出 ModernTCN 结构设计和训练策略带来的分类可靠性；
+- 闭环中可作为“局部感知指标好但控制综合表现不稳定”的讨论案例。
+
+## 10. Simulink 闭环部署
+
+当前三个闭环模型：
+
+| 算法 | Simulink 模型 | 预加载入口 |
+|---|---|---|
+| ModernTCN | `simulink/LPVMPC_AGV_simulink_Modern_TCN.slx` | `src/core/preloadfcn_modern_tcn.m` |
+| GRU | `simulink/LPVMPC_AGV_simulink_GRU.slx` | `src/core/preloadfcn_gru.m` |
+| TCN | `simulink/LPVMPC_AGV_simulink_TCN.slx` | `src/core/preloadfcn_tcn.m` |
+
+根目录闭环输出快照：
+
+| 文件 | 说明 |
+|---|---|
+| `ModernTCN_out.mat` | ModernTCN 闭环仿真输出 |
+| `GRU_out.mat` | GRU 闭环仿真输出 |
+| `TCN_out.mat` | TCN 闭环仿真输出 |
+
+三算法对比脚本：
+
+- `src/Compare/compare_tcn_gru_modern_closed_loop_out.m`
+
+当前三算法对比结果目录：
+
+- `results/compare/tcn_gru_modern_closed_loop/path_factory_logistics_showcase_theta10_v3/`
+
+论文作用：
+
+- 实验平台和闭环验证章节；
+- 提供最关键的工程结果：神经网络不是只在离线测试上好，而是在 LPV-MPC 闭环中影响轨迹跟踪、控制约束和控制平滑性。
+
+## 11. 离线训练结果对比
+
+所有离线结果来自同一测试集。主要指标如下。
+
+| 算法 | seed | 配置 | acc_main | acc_turn | acc_turn_transition | theta_mae_deg | theta_abs_le_10_p95_abs_err_deg | flat_recall | stall_recall | slope_recall |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ModernTCN | 21 | `modern_tcn_theta10_uniform_h0_v2_seed21` | 0.9807 | 0.9022 | 0.7757 | 0.2519 | 0.8194 | 0.9657 | 0.6923 | 0.9965 |
+| GRU | 101 | `inputstats_hidden96_l2` | 0.9767 | 0.7680 | 0.5271 | 0.2601 | 0.7790 | 0.9604 | 0.6752 | 0.9934 |
+| TCN | 21 | `tcn96_rawtheta_sym` | 0.7479 | 0.7771 | 0.5645 | 0.2902 | 0.8473 | 0.5403 | 0.5556 | 0.8108 |
+
+离线结果解读：
+
+- `ModernTCN` 的主工况分类和转向分类最强，尤其 `acc_turn_transition=0.7757` 明显高于 GRU 和 TCN；
+- `GRU` 的 `theta_abs_le_10_p95_abs_err_deg=0.7790` 略好于 ModernTCN 的 0.8194，但分类尤其转向过渡能力明显较弱；
+- `TCN` 的转向分类略高于 GRU，但主工况分类显著偏弱，flat/stall recall 不足；
+- 对论文主线而言，ModernTCN 的核心优势应放在“多任务时序工况识别可靠性”和“闭环综合收益”，不要单独用某一个 theta P95 指标概括全部结果。
+
+## 12. 三算法闭环结果对比
+
+当前三算法闭环结果来自：
+
+- `results/compare/tcn_gru_modern_closed_loop/path_factory_logistics_showcase_theta10_v3/tcn_gru_modern_closed_loop_summary.csv`
+- `results/compare/tcn_gru_modern_closed_loop/path_factory_logistics_showcase_theta10_v3/tcn_gru_modern_closed_loop_rank.csv`
+- `results/compare/tcn_gru_modern_closed_loop/path_factory_logistics_showcase_theta10_v3/tcn_gru_modern_closed_loop_report.md`
+
+闭环展示路径：
+
+- `data/paths/path_factory_logistics_showcase_theta10_v3.mat`
+
+综合排序：
+
+| controller | tracking_rank_sum | perception_rank_sum | control_rank_sum | overall_rank_sum | overall_rank |
+|---|---:|---:|---:|---:|---:|
+| ModernTCN | 6 | 6 | 4 | 16 | 1 |
+| TCN | 13 | 5 | 11 | 29 | 2 |
+| GRU | 17 | 7 | 9 | 33 | 3 |
+
+总体闭环指标：
+
+| controller | ey_rmse | ey_peak | epsi_rmse | ev_rmse | eomega_rmse | xy_rmse | F_peak | omega_cmd_peak | j_du | viol_rate | theta_mae_deg | theta_sched_mae_deg | main_acc_pct | turn_acc_pct |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| ModernTCN | 0.0246 | 0.0940 | 0.0438 | 0.0535 | 0.0307 | 0.8036 | 285.6759 | 0.8860 | 0.5991 | 0.0000 | 0.8974 | 0.9239 | 94.1375 | 81.3941 |
+| GRU | 0.0623 | 0.3696 | 0.1714 | 0.0753 | 0.0653 | 1.6641 | 325.0353 | 1.5545 | 7.0298 | 0.0000 | 0.3664 | 0.3415 | 92.2168 | 80.0697 |
+| TCN | 0.0364 | 0.1862 | 0.1061 | 0.1154 | 0.0474 | 1.3538 | 720.0000 | 1.4364 | 235.6737 | 5.277e-05 | 0.2590 | 1.7077 | 74.7137 | 86.0904 |
+
+闭环结果解读：
+
+- `ModernTCN` 是综合最优，横向误差、航向误差、角速度误差、XY 误差、控制平滑性和约束安全性都最稳；
+- `TCN` 在闭环 `theta_mae_deg` 和 `turn_acc_pct` 上最好，但 `main_acc_pct` 仅 74.71%，`F_peak=720`，`j_du=235.67`，存在明显控制平滑性问题；
+- `GRU` 的 `theta_sched_mae_deg` 最低，但轨迹跟踪误差和角速度命令峰值明显弱于 ModernTCN；
+- 闭环综合排序比单一离线指标更适合作为论文最终结论，因为论文目标是提升 AGV 闭环控制性能，而不是只优化离线预测误差。
+
+## 13. ModernTCN 与 GRU 两算法闭环历史结果
+
+两算法历史结果位于：
+
+- `results/compare/modern_tcn_gru_closed_loop/`
+
+其中 `factory_showcase_theta10_v10` 是一个重要历史展示路径。该结果显示：
+
+| controller | ey_rmse | epsi_rmse | xy_rmse | theta_mae_deg | theta_sched_mae_deg | main_acc_pct | turn_acc_pct |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| ModernTCN | 0.0275 | 0.1044 | 2.4412 | 0.3789 | 0.4208 | 98.0516 | 95.3002 |
+| GRU | 0.0193 | 0.0799 | 1.8724 | 0.5079 | 0.5075 | 95.3247 | 97.5380 |
+
+这组结果可作为历史补充，但不是当前三算法主闭环结论。论文若篇幅有限，应优先采用三算法 `theta10_v3` 结果；如果要解释路径差异或早期验证过程，再引用该目录。
+
+## 14. 论文中的模块角色
+
+建议论文结构和项目模块对应如下。
+
+| 论文章节 | 项目模块 | 应使用的结果/文件 |
+|---|---|---|
+| 引言 | 项目整体目标 | 说明 AGV 在坡度、转向、堵转等工况下需要更可靠的在线感知辅助 MPC |
+| 系统建模 | `src/core`, `src/lpv`, `src/mpc` | AGV 状态方程、LPV 线性化、MPC 框架 |
+| 数据集构建 | `data/tcn/*contract.json`, `src/paths`, `src/ModernTCN/build_agv_theta10_uniform_dataset.m` | 统一数据集、19 维特征、三任务标签、run-level split |
+| 方法 | `src/ModernTCN` | ModernTCN 结构、多任务输出、ONNX/MATLAB 部署 |
+| 基线 | `src/gru`, `src/TCN` | GRU 和 TCN 配置、训练公平性 |
+| 离线实验 | 三算法训练报告和 summary CSV | acc_main、acc_turn、acc_turn_transition、theta 误差、recall |
+| 闭环实验 | `simulink/*.slx`, `src/Compare` | 三算法闭环 summary、rank、zones |
+| 消融或补充 | 当前暂无主线消融 | 可暂不写，除非后续决定恢复历史 PG-TCN/Mamba/BO 结果 |
+| 讨论 | 三算法对比结论 | 解释离线指标与闭环指标不完全一致的原因 |
+
+## 15. 推荐论文图表
+
+当前最值得进入论文的图表包括：
+
+| 图/表 | 内容 | 数据来源 |
+|---|---|---|
+| 表 1 | 统一数据集与输入特征说明 | `ModernTCN_dataset_*_contract.json` |
+| 表 2 | 三算法配置表 | 三个 `*_default_config.m` 和训练报告 |
+| 表 3 | 三算法离线测试指标 | 三算法 summary CSV |
+| 表 4 | 三算法闭环总体指标 | `tcn_gru_modern_closed_loop_summary.csv` |
+| 表 5 | 三算法闭环综合排序 | `tcn_gru_modern_closed_loop_rank.csv` |
+| 图 1 | 系统框图：AGV + LPV-MPC + 时序神经网络调度 | 需要新画 |
+| 图 2 | ModernTCN 多任务结构图 | 需要新画或由代码抽象绘制 |
+| 图 3 | 展示路径轨迹和分区 | `path_factory_logistics_showcase_theta10_v3.mat`、zones CSV |
+| 图 4 | 三算法闭环轨迹跟踪对比 | 三个 `*_out.mat` 或 compare 结果 |
+| 图 5 | 控制输入/控制增量对比 | 三个 `*_out.mat` |
+| 图 6 | theta 预测或调度误差对比 | summary/zones 或 `results/paper/modern_tcn_theta_*` |
+
+已有论文图表目录：
+
+- `results/paper/modern_tcn_theta_scatter/`
+- `results/paper/modern_tcn_theta_sweep_plot/`
+
+注意：上述 `results/paper` 目录包含多个历史变体。论文正式使用前应确认采用哪一组图，不要直接混用不同训练 run 的图。
+
+## 16. 历史和非主线模块
+
+以下模块仍存在或有残余记录，但当前不属于论文主线。
+
+| 模块 | 当前状态 | 建议 |
+|---|---|---|
+| `src/Mamba/` | 历史算法源码保留，`data/mamba/` 已删除 | 不作为当前论文主线，除非后续明确增加 Mamba 对照 |
+| `src/bo/` | Bayesian optimization 历史模块 | 可作为历史调参说明，不建议进入主结果 |
+| PG-TCN/旧 TCN experiments | 多数结果已清理 | 当前无消融计划，不写入主线 |
+| `data/gru/` | 已删除旧 GRU 数据链 | 当前 GRU 使用统一 `data/tcn` 数据集 |
+| 旧 ModernTCN v3/v4/v6 结果 | 多数已清理或只保留论文图变体 | 不要作为当前训练结论 |
+
+后续 AI 不应根据历史脚本名推断这些模块仍然可完整复现，因为清理后很多旧数据和结果已删除。
+
+## 17. 继续工作的注意事项
+
+后续写论文、补图或补数据时请遵守以下边界：
+
+- 不要重新选择默认模型，除非用户明确要求重新训练或重新冻结；
+- 默认使用三个配置文件中的冻结模型；
+- 默认使用 `data/tcn/ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2.mat`；
+- 默认使用三算法闭环目录 `results/compare/tcn_gru_modern_closed_loop/path_factory_logistics_showcase_theta10_v3/`；
+- 若引用 ModernTCN/GRU 两算法历史闭环结果，要明确它是历史或补充结果，不要和三算法主结果混为同一实验；
+- 不要把旧 README 中的 V3/V4 数据链当作当前主线；
+- 生成论文图时，应把脚本、输入数据和输出目录写回本文档或 `PROJECT_FLOW_MANIFEST.md`，方便后续追踪；
+- 如果需要恢复旧实验文件，应从 Git 历史恢复具体路径，而不是重新构造不明来源的数据。
+
+## 18. 当前最短复现实验链
+
+若后续 AI 需要验证当前主线，不建议直接重训。优先执行轻量复核：
+
+1. `init_project`
+2. 检查三个默认配置：
+   - `ModernTCN_default_config`
+   - `GRU_default_config`
+   - `TCN_default_config`
+3. 加载三个 Simulink 模型：
+   - `simulink/LPVMPC_AGV_simulink_Modern_TCN.slx`
+   - `simulink/LPVMPC_AGV_simulink_GRU.slx`
+   - `simulink/LPVMPC_AGV_simulink_TCN.slx`
+4. 运行或读取根目录闭环输出：
+   - `ModernTCN_out.mat`
+   - `GRU_out.mat`
+   - `TCN_out.mat`
+5. 用 `src/Compare/compare_tcn_gru_modern_closed_loop_out.m` 生成或更新三算法闭环 summary/rank/zones/report。
+
+用户已完成第 3-4 步的三算法闭环仿真验证，当前文件清理后主流程可用。
+
+## 19. 当前论文主张的推荐表述
+
+可以作为论文初稿核心论点的表述：
+
+> 在统一数据集、统一输入特征、统一 LPV-MPC 闭环平台下，ModernTCN 相比 GRU 和普通 TCN 在多任务工况感知上具有更高的主工况和转向识别可靠性，并在工厂物流展示路径的闭环仿真中取得最优综合排序。虽然 TCN 在部分闭环感知指标上具有局部优势，但其主工况识别不足导致控制峰值、控制增量和约束触碰风险增大；GRU 则在部分坡度调度误差上表现稳定，但整体跟踪误差和转向过渡识别弱于 ModernTCN。因此，ModernTCN 是当前 AGV LPV-MPC 感知增强框架下更适合部署的主模型。
+
+这段表述可以后续压缩成摘要、结论或实验分析段落。

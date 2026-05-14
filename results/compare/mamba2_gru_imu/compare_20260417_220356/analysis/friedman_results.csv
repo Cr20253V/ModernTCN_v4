@@ -1,8 +1,0 @@
-metric,n_paired_cases,friedman_p
-ey_rmse,9,0.0111089965382423
-epsi_rmse,9,0.114558843992688
-ev_rmse,9,0.367879441171442
-eomega_rmse,9,0.606530659712633
-j_du,9,0.00482794999383144
-viol_rate,9,0.0183156388887341
-timeout_rate,9,1

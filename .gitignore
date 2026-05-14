@@ -17,6 +17,13 @@ GRU_train_data_full.mat
 GRU_dataset_processed.mat
 GRU_out.mat
 ModernTCN_out.mat
+TCN_out.mat
+results/**/*.mat
+
+# 模型权重和训练 checkpoint
+*.ckpt
+*.pth
+src/Mamba/results/
 
 # Simulink 生成文件
 **/slprj/
@@ -26,3 +33,10 @@ ModernTCN_out.mat
 # MATLAB 临时文件
 *.asv
 *.mex*
+
+# 编译产物和外部/历史子模块缓存
+*.so
+*.pyd
+*.dll
+*.dylib
+src/Mamba/model/mamba/
