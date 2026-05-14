@@ -78,7 +78,15 @@ addpath(layer_root);
 old_dir = pwd;
 cleanup = onCleanup(@() cd(old_dir));
 cd(layer_root);
-net = importNetworkFromONNX(onnx_file, Namespace="modern_tcn_onnx_layers");
+net = importNetworkFromONNX(onnx_file, Namespace=local_onnx_namespace(onnx_file));
+end
+
+function namespace = local_onnx_namespace(onnx_file)
+if contains(lower(char(onnx_file)), 'causal')
+    namespace = "modern_tcn_causal_onnx_layers";
+else
+    namespace = "modern_tcn_onnx_layers";
+end
 end
 
 function [logits_main, logits_turn, theta_hat] = local_predict_all_windows(net, X)

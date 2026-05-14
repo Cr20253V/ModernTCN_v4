@@ -302,6 +302,13 @@ fprintf('\n');
 if strcmp(mode, 'modern_tcn')
     fprintf('[Step 4/5] Configure ModernTCN model...\n');
     modern_tcn_cfg = ModernTCN_default_config(root);
+    if evalin('base', 'exist(''modern_tcn_sim_cfg'', ''var'')==1')
+        external_cfg = evalin('base', 'modern_tcn_sim_cfg');
+        if isstruct(external_cfg)
+            modern_tcn_cfg = merge_struct_fields(modern_tcn_cfg, external_cfg);
+            fprintf('  use external modern_tcn_sim_cfg override\n');
+        end
+    end
     if exist(modern_tcn_cfg.dataset_file, 'file') ~= 2
         error('[PreLoadFcn] ModernTCN dataset not found: %s', modern_tcn_cfg.dataset_file);
     end
@@ -497,4 +504,12 @@ function value = extract_preferred_field(s, preferred_names)
         error('preloadfcn_gru:EmptyMat', 'MAT file has no variables.');
     end
     value = s.(names{1});
+end
+
+function out = merge_struct_fields(base, override)
+    out = base;
+    fields = fieldnames(override);
+    for i = 1:numel(fields)
+        out.(fields{i}) = override.(fields{i});
+    end
 end

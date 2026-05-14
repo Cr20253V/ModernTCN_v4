@@ -24,6 +24,7 @@ class ModernTCNConfig:
     channels: int = 64
     blocks: int = 5
     kernel_size: int = 31
+    temporal_padding: str = "same"
     dropout: float = 0.15
     expansion: int = 2
     readout_input_stats: bool = True
@@ -94,16 +95,53 @@ class ModernTCNConfig:
         return asdict(self)
 
 
+class CausalDepthwiseConv1d(nn.Module):
+    """Depthwise causal Conv1d with ONNX-friendly Conv + Slice semantics."""
+
+    def __init__(self, channels: int, kernel_size: int) -> None:
+        super().__init__()
+        if kernel_size < 1:
+            raise ValueError("kernel_size 必须 >= 1。")
+        self.trim = kernel_size - 1
+        self.conv = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size,
+            padding=self.trim,
+            groups=channels,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.conv(x)
+        if self.trim == 0:
+            return y
+        return y[..., : x.size(-1)]
+
+
 class ModernTCNBlock(nn.Module):
     """大核 depthwise conv + pointwise MLP 的残差块。"""
 
-    def __init__(self, channels: int, kernel_size: int, dropout: float, expansion: int) -> None:
+    def __init__(
+        self,
+        channels: int,
+        kernel_size: int,
+        dropout: float,
+        expansion: int,
+        temporal_padding: str = "same",
+    ) -> None:
         super().__init__()
-        if kernel_size % 2 != 1:
-            raise ValueError("kernel_size 必须为奇数，以便 Conv1d 使用固定 symmetric padding。")
         hidden = int(channels * expansion)
-        padding = kernel_size // 2
-        self.depthwise = nn.Conv1d(channels, channels, kernel_size, padding=padding, groups=channels)
+        temporal_padding = str(temporal_padding).lower()
+        if temporal_padding == "same":
+            if kernel_size % 2 != 1:
+                raise ValueError("same padding 模式下 kernel_size 必须为奇数。")
+            padding = kernel_size // 2
+            self.depthwise = nn.Conv1d(channels, channels, kernel_size, padding=padding, groups=channels)
+        elif temporal_padding == "causal":
+            self.depthwise = CausalDepthwiseConv1d(channels, kernel_size)
+        else:
+            raise ValueError(f"未知 temporal_padding: {temporal_padding}")
+        self.temporal_padding = temporal_padding
         self.bn1 = nn.BatchNorm1d(channels)
         self.pw1 = nn.Conv1d(channels, hidden, kernel_size=1)
         self.pw2 = nn.Conv1d(hidden, channels, kernel_size=1)
@@ -140,7 +178,13 @@ class ModernTCNSmall(nn.Module):
         )
         self.blocks = nn.ModuleList(
             [
-                ModernTCNBlock(cfg.channels, cfg.kernel_size, cfg.dropout, cfg.expansion)
+                ModernTCNBlock(
+                    cfg.channels,
+                    cfg.kernel_size,
+                    cfg.dropout,
+                    cfg.expansion,
+                    temporal_padding=cfg.temporal_padding,
+                )
                 for _ in range(cfg.blocks)
             ]
         )
@@ -237,6 +281,7 @@ def build_model_from_checkpoint_dict(ckpt: Dict[str, object]) -> ModernTCNSmall:
     """按 checkpoint 中的配置恢复模型结构。"""
 
     cfg_dict = dict(ckpt["model_config"])
+    cfg_dict.setdefault("temporal_padding", "same")
     cfg_dict["main_class_multipliers"] = tuple(cfg_dict["main_class_multipliers"])
     cfg_dict["turn_class_multipliers"] = tuple(cfg_dict["turn_class_multipliers"])
     if "turn_feature_indices" in cfg_dict:

@@ -43,6 +43,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--channels", type=int, default=64)
     p.add_argument("--blocks", type=int, default=5)
     p.add_argument("--kernel-size", type=int, default=31)
+    p.add_argument(
+        "--temporal-padding",
+        type=str,
+        default="same",
+        choices=["same", "causal"],
+        help="Temporal convolution padding mode. 默认 same，causal 仅用于因果消融实验。",
+    )
     p.add_argument("--dropout", type=float, default=0.15)
     p.add_argument("--turn-head-source", type=str, default="full", choices=["full", "inputstats", "kinematic_stats"])
     p.add_argument("--lambda-turn", type=float, default=0.05)
@@ -139,6 +146,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         channels=args.channels,
         blocks=args.blocks,
         kernel_size=args.kernel_size,
+        temporal_padding=getattr(args, "temporal_padding", "same"),
         dropout=args.dropout,
         turn_head_source=args.turn_head_source,
         lambda_turn=args.lambda_turn,
@@ -240,7 +248,10 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     print(f"  seed={args.seed}, device={device}, out={out_dir}")
     print(f"  dataset={contract.dataset_file}")
     print(f"  train/val/test={len(train_split.X)}/{len(val_split.X)}/{len(test_split.X)}")
-    print(f"  model channels={cfg.channels}, blocks={cfg.blocks}, kernel={cfg.kernel_size}")
+    print(
+        f"  model channels={cfg.channels}, blocks={cfg.blocks}, kernel={cfg.kernel_size}, "
+        f"temporal_padding={cfg.temporal_padding}"
+    )
 
     best_score = math.inf
     best_epoch = 0

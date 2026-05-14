@@ -1,4 +1,4 @@
-function result = compare_tcn_gru_modern_closed_loop_out(modern_file, gru_file, tcn_file, path_file)
+function result = compare_tcn_gru_modern_closed_loop_out(modern_file, gru_file, tcn_file, path_file, out_dir, modern_label)
 %COMPARE_TCN_GRU_MODERN_CLOSED_LOOP_OUT Compare three closed-loop simulation logs.
 
 if nargin < 1 || isempty(modern_file)
@@ -14,6 +14,12 @@ if nargin < 4 || isempty(path_file)
     path_file = fullfile(local_project_root(), 'data', 'paths', ...
         'path_factory_logistics_showcase_theta10_v3.mat');
 end
+if nargin < 5
+    out_dir = '';
+end
+if nargin < 6 || isempty(modern_label)
+    modern_label = "ModernTCN";
+end
 
 if exist('init_project', 'file') == 2
     init_project();
@@ -21,8 +27,10 @@ end
 
 root = local_project_root();
 [~, path_tag] = fileparts(path_file);
-out_dir = fullfile(root, 'results', 'compare', ...
-    'tcn_gru_modern_closed_loop', path_tag);
+if isempty(out_dir)
+    out_dir = fullfile(root, 'results', 'compare', ...
+        'tcn_gru_modern_closed_loop', path_tag);
+end
 if exist(out_dir, 'dir') ~= 7
     mkdir(out_dir);
 end
@@ -32,7 +40,7 @@ ref = P.ref;
 zones = local_get_zones(ref);
 
 runs = [ ...
-    local_analyze_one("ModernTCN", modern_file, zones), ...
+    local_analyze_one(string(modern_label), modern_file, zones), ...
     local_analyze_one("GRU", gru_file, zones), ...
     local_analyze_one("TCN", tcn_file, zones)];
 

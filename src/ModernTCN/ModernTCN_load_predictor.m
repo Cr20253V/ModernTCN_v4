@@ -48,7 +48,7 @@ addpath(layer_root);
 old_dir = pwd;
 cleanup = onCleanup(@() cd(old_dir));
 cd(layer_root);
-net = importNetworkFromONNX(onnx_file, Namespace="modern_tcn_onnx_layers");
+net = importNetworkFromONNX(onnx_file, Namespace=local_onnx_namespace(onnx_file));
 
 predictor = struct();
 predictor.seed = seed;
@@ -68,5 +68,13 @@ if exist('project_root', 'file') == 2
     root = project_root();
 else
     root = pwd;
+end
+end
+
+function namespace = local_onnx_namespace(onnx_file)
+if contains(lower(char(onnx_file)), 'causal')
+    namespace = "modern_tcn_causal_onnx_layers";
+else
+    namespace = "modern_tcn_onnx_layers";
 end
 end

@@ -56,6 +56,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--channels", type=int, default=64)
     p.add_argument("--blocks", type=int, default=5)
     p.add_argument("--kernel-size", type=int, default=31)
+    p.add_argument(
+        "--temporal-padding",
+        type=str,
+        default="same",
+        choices=["same", "causal"],
+        help="Temporal convolution padding mode. 默认 same，causal 仅用于因果消融实验。",
+    )
     p.add_argument("--dropout", type=float, default=0.15)
     p.add_argument("--turn-head-source", type=str, default="full", choices=["full", "inputstats", "kinematic_stats"])
     p.add_argument("--lambda-turn", type=float, default=0.08)
@@ -125,6 +132,7 @@ def main() -> None:
     print("[ModernTCN V2 multi-seed]")
     print(f"  dataset: {dataset_file}")
     print(f"  seeds: {args.seeds}")
+    print(f"  temporal_padding: {args.temporal_padding}")
     print(f"  theta_gate_mode: {args.theta_gate_mode}")
     print(f"  theta_flat_loss_mode: {args.theta_flat_loss_mode}, tol={args.theta_flat_zero_tol_deg:g} deg")
 
@@ -177,6 +185,7 @@ def _build_train_args(args: argparse.Namespace, seed: int, dataset_file: Path) -
         channels=args.channels,
         blocks=args.blocks,
         kernel_size=args.kernel_size,
+        temporal_padding=args.temporal_padding,
         dropout=args.dropout,
         turn_head_source=args.turn_head_source,
         lambda_turn=args.lambda_turn,
@@ -267,6 +276,7 @@ def _write_report(path: Path, args: argparse.Namespace, dataset_file: Path, rows
         f.write(f"- dataset: `{dataset_file}`\n")
         f.write(f"- seeds: `{args.seeds}`\n")
         f.write(f"- epochs: `{args.epochs}`, batch_size: `{args.batch_size}`\n")
+        f.write(f"- temporal_padding: `{args.temporal_padding}`\n")
         f.write(f"- theta_gate_mode: `{args.theta_gate_mode}`\n")
         f.write(f"- theta_flat_loss_mode: `{args.theta_flat_loss_mode}`, zero_tol_deg: `{args.theta_flat_zero_tol_deg}`\n")
         f.write(f"- lambda_theta: `{args.lambda_theta}`, lambda_turn: `{args.lambda_turn}`\n\n")

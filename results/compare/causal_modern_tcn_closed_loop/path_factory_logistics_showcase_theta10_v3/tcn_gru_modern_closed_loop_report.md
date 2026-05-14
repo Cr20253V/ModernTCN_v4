@@ -1,6 +1,6 @@
 # TCN、GRU 与 ModernTCN 闭环仿真对比报告
 
-- ModernTCN 输出文件：`E:\Matlab\Simulink\S-Function_16\ModernTCN_out.mat`
+- ModernTCN 输出文件：`E:\Matlab\Simulink\S-Function_16\results\compare\causal_modern_tcn_closed_loop\path_factory_logistics_showcase_theta10_v3\ModernTCN_causal_seed11_out.mat`
 - GRU 输出文件：`E:\Matlab\Simulink\S-Function_16\GRU_out.mat`
 - TCN 输出文件：`E:\Matlab\Simulink\S-Function_16\TCN_out.mat`
 - 展示路径文件：`E:\Matlab\Simulink\S-Function_16\data\paths\path_factory_logistics_showcase_theta10_v3.mat`
@@ -11,15 +11,15 @@
 
 | controller | tracking_rank_sum | perception_rank_sum | control_rank_sum | overall_rank_sum | overall_rank |
 |---|---|---|---|---|---|
-| ModernTCN | 6.0000 | 6.0000 | 4.0000 | 16.0000 | 1.0000 |
-| TCN | 13.0000 | 5.0000 | 11.0000 | 29.0000 | 2.0000 |
-| GRU | 17.0000 | 7.0000 | 9.0000 | 33.0000 | 3.0000 |
+| TCN | 7.0000 | 5.0000 | 10.0000 | 22.0000 | 1.0000 |
+| GRU | 11.0000 | 5.0000 | 7.0000 | 23.0000 | 2.0000 |
+| ModernTCN_causal | 18.0000 | 8.0000 | 7.0000 | 33.0000 | 3.0000 |
 
 ## 总体结果
 
 | controller | ey_rmse | ey_peak | epsi_rmse | ev_rmse | eomega_rmse | xy_rmse | F_peak | omega_cmd_peak | j_du | viol_rate | theta_mae_deg | theta_sched_mae_deg | main_acc_pct | turn_acc_pct |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ModernTCN | 0.0246 | 0.0940 | 0.0438 | 0.0535 | 0.0307 | 0.8036 | 285.6759 | 0.8860 | 0.5991 | 0.0000 | 0.8974 | 0.9239 | 94.1375 | 81.3941 |
+| ModernTCN_causal | 23.1318 | 45.1433 | 1.2734 | 0.6595 | 0.0686 | 27.4839 | 717.7244 | 1.4359 | 268.8678 | 0.0000 | 1.5950 | 1.6866 | 77.0988 | 62.2236 |
 | GRU | 0.0623 | 0.3696 | 0.1714 | 0.0753 | 0.0653 | 1.6641 | 325.0353 | 1.5545 | 7.0298 | 0.0000 | 0.3664 | 0.3415 | 92.2168 | 80.0697 |
 | TCN | 0.0364 | 0.1862 | 0.1061 | 0.1154 | 0.0474 | 1.3538 | 720.0000 | 1.4364 | 235.6737 | 5.277e-05 | 0.2590 | 1.7077 | 74.7137 | 86.0904 |
 
@@ -27,7 +27,7 @@
 
 | controller | solve_time_p50_ms | solve_time_p95_ms | solve_time_p99_ms | solve_time_max_ms | timeout_rate |
 |---|---|---|---|---|---|
-| ModernTCN | 0.0214 | 0.0455 | 0.0595 | 3.1903 | 0.0000 |
+| ModernTCN_causal | 0.0253 | 0.0473 | 0.0586 | 3.5480 | 0.0000 |
 | GRU | 0.0123 | 0.0178 | 0.0224 | 0.3071 | 0.0000 |
 | TCN | 0.0115 | 0.0164 | 0.0208 | 0.6190 | 0.0000 |
 
@@ -35,7 +35,7 @@
 
 | controller | F_sat595_pct | F_limit_hit_pct | omega_sat060_pct | omega_limit_hit_pct | viol_rate |
 |---|---|---|---|---|---|
-| ModernTCN | 0.0000 | 0.0000 | 0.0580 | 0.0000 | 0.0000 |
+| ModernTCN_causal | 39.8871 | 39.6496 | 55.1528 | 53.8230 | 0.0000 |
 | GRU | 0.0000 | 0.0000 | 1.9841 | 0.0000 | 0.0000 |
 | TCN | 0.4327 | 0.4063 | 0.4538 | 0.1689 | 5.277e-05 |
 
@@ -43,16 +43,16 @@
 
 | controller | zone | ey_rmse | ey_peak | epsi_rmse | ev_rmse | eomega_rmse | omega_cmd_peak | j_du | theta_mae_deg | theta_sched_mae_deg | main_acc_pct | turn_acc_pct |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ModernTCN | all | 0.0246 | 0.0940 | 0.0438 | 0.0535 | 0.0307 | 0.8860 | 0.5991 | 0.8974 | 0.9239 | 94.1375 | 81.3941 |
-| ModernTCN | startup | 0.0000 | 0.0000 | 0.0000 | 0.1008 | 0.0000 | 0.0002344 | 19.4626 | 0.0635 | 0.0000 | 100.0000 | 100.0000 |
-| ModernTCN | receiving_aisle_right_entry | 0.0456 | 0.0940 | 0.0226 | 0.0033 | 0.0541 | 0.6604 | 0.0336 | 1.1777 | 0.0000 | 100.0000 | 91.8750 |
-| ModernTCN | main_aisle_to_ramp | 0.0027 | 0.0129 | 0.0029 | 0.0628 | 0.0042 | 0.0269 | 0.8543 | 0.1309 | 0.5705 | 92.3500 | 100.0000 |
-| ModernTCN | extended_uphill_left_ramp_transfer | 0.0224 | 0.0671 | 0.0264 | 0.0349 | 0.0261 | 0.4745 | 0.0497 | 2.1294 | 2.1059 | 100.0000 | 41.2750 |
-| ModernTCN | upper_pickup_straight | 0.0050 | 0.0217 | 0.0039 | 0.0453 | 0.0029 | 0.0106 | 2.1075 | 0.1181 | 0.3215 | 94.7500 | 100.0000 |
-| ModernTCN | slope_reversal_right_transfer | 0.0390 | 0.0801 | 0.1062 | 0.0650 | 0.0508 | 0.8860 | 0.4362 | 1.5110 | 1.8758 | 86.9643 | 67.0357 |
-| ModernTCN | downhill_delivery_aisle | 0.0090 | 0.0497 | 0.0188 | 0.1085 | 0.0215 | 0.0759 | 0.4116 | 0.2547 | 0.3537 | 83.5000 | 96.7222 |
-| ModernTCN | shipping_cross_aisle | 0.0004784 | 0.0008773 | 0.0001646 | 0.0487 | 0.0001637 | 0.0014 | 1.8974 | 0.1477 | 0.6957 | 90.2917 | 100.0000 |
-| ModernTCN | dock_approach_straight | 0.0004413 | 0.0008115 | 0.0003342 | 0.0028 | 0.000342 | 0.0013 | 0.0034 | 0.1155 | 1.723e-07 | 100.0000 | 100.0000 |
+| ModernTCN_causal | all | 23.1318 | 45.1433 | 1.2734 | 0.6595 | 0.0686 | 1.4359 | 268.8678 | 1.5950 | 1.6866 | 77.0988 | 62.2236 |
+| ModernTCN_causal | startup | 0.0000 | 0.0000 | 0.0000 | 0.1008 | 0.0000 | 0.0002344 | 19.4626 | 0.1184 | 0.0000 | 100.0000 | 100.0000 |
+| ModernTCN_causal | receiving_aisle_right_entry | 0.0471 | 0.0975 | 0.0230 | 0.0034 | 0.0559 | 0.9189 | 0.0505 | 0.7441 | 0.0000 | 100.0000 | 46.8333 |
+| ModernTCN_causal | main_aisle_to_ramp | 0.0027 | 0.0132 | 0.0030 | 0.0601 | 0.0042 | 0.0266 | 0.9033 | 0.3015 | 0.5738 | 93.0500 | 100.0000 |
+| ModernTCN_causal | extended_uphill_left_ramp_transfer | 2.6510 | 8.3123 | 1.4478 | 0.3715 | 0.1087 | 1.4359 | 761.0316 | 0.8610 | 3.6161 | 54.6000 | 10.9750 |
+| ModernTCN_causal | upper_pickup_straight | 8.3171 | 8.3205 | 2.9872 | 0.9557 | 0.0129 | 1.3277 | 3.4901 | 3.0127 | 3.1870 | 56.3333 | 100.0000 |
+| ModernTCN_causal | slope_reversal_right_transfer | 32.5502 | 45.1433 | 1.9303 | 0.8435 | 0.1102 | 1.3744 | 730.6743 | 1.5260 | 1.6727 | 92.6786 | 17.0714 |
+| ModernTCN_causal | downhill_delivery_aisle | 36.2476 | 36.2762 | 0.4390 | 0.9349 | 0.0065 | 1.3239 | 9.04e-24 | 2.2805 | 2.0236 | 68.2778 | 100.0000 |
+| ModernTCN_causal | shipping_cross_aisle | 36.1497 | 36.2120 | 0.4767 | 0.9557 | 0.0065 | 1.3239 | 1.63e-24 | 3.5091 | 1.7500 | 54.7917 | 100.0000 |
+| ModernTCN_causal | dock_approach_straight | 36.0550 | 36.0856 | 0.5089 | 0.8309 | 0.0065 | 1.3239 | 2.224e-25 | 3.1949 | 1.515e-07 | 100.0000 | 100.0000 |
 | GRU | all | 0.0623 | 0.3696 | 0.1714 | 0.0753 | 0.0653 | 1.5545 | 7.0298 | 0.3664 | 0.3415 | 92.2168 | 80.0697 |
 | GRU | startup | 0.0000 | 0.0000 | 0.0000 | 0.1008 | 0.0000 | 0.0002344 | 19.4626 | 0.0000 | 0.0000 | 100.0000 | 100.0000 |
 | GRU | receiving_aisle_right_entry | 0.0456 | 0.0940 | 0.0226 | 0.0033 | 0.0539 | 0.6606 | 0.0312 | 0.0000 | 0.0000 | 100.0000 | 95.1250 |
