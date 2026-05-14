@@ -1,0 +1,24 @@
+MODEL=LPVMPC_AGV_simulink_Mamba
+  file=e:\Matlab\Simulink\S-Function_16\simulink\LPVMPC_AGV_simulink_Mamba.slx
+  exist(file,file)=4
+  PreLoadFcn=preloadfcn_v2
+  InitFcn=
+  StartFcn=
+  StopFcn=
+
+MODEL=LPVMPC_AGV_simulink_GRU
+  file=E:\Matlab\Simulink\S-Function_16\simulink\LPVMPC_AGV_simulink_GRU.slx
+  exist(file,file)=4
+  PreLoadFcn=preloadfcn_gru
+  InitFcn=
+  StartFcn=
+  StopFcn=
+
+MODEL=LPVMPC_AGV_simulink_IMU
+  file=E:\Matlab\Simulink\S-Function_16\simulink\LPVMPC_AGV_simulink_IMU.slx
+  exist(file,file)=4
+  PreLoadFcn=preloadfcn_v2
+  InitFcn=
+  StartFcn=
+  StopFcn=
+

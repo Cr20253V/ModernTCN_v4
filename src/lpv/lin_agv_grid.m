@@ -122,17 +122,21 @@ for i = 1:Nv
             v0 = v_star;
             omega0 = omega_star;  % 保留符号（可正可负）
             
-            % 转向角计算（基于阿克曼几何）
-            % 等效单轨假设：左前/右后双舵轮等角，简化为单一转向角
-            % 几何关系：tan(δ) ≈ L*κ (小角度近似)
+            % 转向角计算（对角式 LF/RR 舵驱几何）
+            % RF/LR 为万向支撑轮，只参与垂向支撑；工作点舵角应与
+            % state_eq_ref 的 ICR 约束一致，而不是单轨等角近似。
             L = params.L;  % 轴距
-            if abs(kappa_star) > 1e-6
-                delta_approx = atan(L * kappa_star);  % 近似转向角（保留符号）
+            W = params.W;  % 轮距
+            if abs(omega_star) > 1e-6 && abs(v_star) > 1e-6
+                R_star = (v_star / max(abs(omega_star), 1e-6)) * sign(omega_star);
+                denom_lf = signed_min_abs(R_star - W / 2, 1e-6);
+                denom_rr = signed_min_abs(R_star + W / 2, 1e-6);
+                delta_lf0 = atan((L / 2) / denom_lf);
+                delta_rr0 = -atan((L / 2) / denom_rr);
             else
-                delta_approx = 0;
+                delta_lf0 = 0;
+                delta_rr0 = 0;
             end
-            delta_lf0 = delta_approx;  % 左前轮
-            delta_rr0 = delta_approx;  % 右后轮（等角假设）
             
             beta0 = 0;  % 假设平衡点侧滑角为零
             
@@ -267,8 +271,8 @@ db.meta.generated_by = 'lin_agv_grid.m';
 db.meta.generated_time = datestr(now, 'yyyy-mm-dd HH:MM:SS');
 db.meta.model_semantics = 'discrete';  % 表内矩阵为离散时间模型
 db.meta.discretization_note = 'lin_agv_at_point返回离散模型，本函数不再c2d';
-db.meta.steer_model = 'single-track-equivalent';  % 转向模型：双舵轮等角假设
-db.meta.steer_assumption = 'delta_lf = delta_rr = atan(L*kappa)';
+db.meta.steer_model = 'diagonal-lf-rr-icr-with-caster-support';  % RF/LR 为万向支撑轮
+db.meta.steer_assumption = 'delta_lf=atan((L/2)/(R-W/2)), delta_rr=-atan((L/2)/(R+W/2)), R=v/omega';
 db.meta.coordinate = opts.coord;
 db.meta.discretization = opts.disc;
 db.meta.total_time = total_time;
@@ -301,3 +305,10 @@ fprintf('========== 网格线性化流程结束 ==========\n\n');
 
 end
 
+function y = signed_min_abs(x, eps_value)
+if x == 0
+    y = eps_value;
+else
+    y = sign(x) * max(abs(x), eps_value);
+end
+end

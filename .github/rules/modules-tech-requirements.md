@@ -1,130 +1,70 @@
-# 模块技术要求（LPV-MPC + GRU）
-
-> 面向当前仓库现状（根目录为主），在不改变目录结构的前提下，细化各模块的接口、数据、算法与验证标准，便于后续调试与修改。
-
-## 2. 参考路径生成（gen_agv_ref_path.m）
-
-### 2.1 公共接口与参数
-```matlab
+﻿# 妯″潡鎶€鏈姹傦紙LPV-MPC + GRU锛?
+> 闈㈠悜褰撳墠浠撳簱鐜扮姸锛堟牴鐩綍涓轰富锛夛紝鍦ㄤ笉鏀瑰彉鐩綍缁撴瀯鐨勫墠鎻愪笅锛岀粏鍖栧悇妯″潡鐨勬帴鍙ｃ€佹暟鎹€佺畻娉曚笌楠岃瘉鏍囧噯锛屼究浜庡悗缁皟璇曚笌淇敼銆?
+## 2. 鍙傝€冭矾寰勭敓鎴愶紙gen_agv_ref_path.m锛?
+### 2.1 鍏叡鎺ュ彛涓庡弬鏁?```matlab
 function ref = gen_agv_ref_path(path_type, params)
-% path_type ∈ {'straight','turn','straight_turn','slope','bumpy'}
-% params: 结构体（优先使用 parameters() 输出），关键字段：
-%   .Ts (秒)        采样周期（必需）
-%   .T_end (秒)     轨迹时长（默认 20）
-%   .R (米)         转弯半径（默认 10）
-%   .v0 (m/s)       初速度（默认 1）
-%   .theta0 (rad)   坡度常值（默认 0）
-```
-输出 `ref` 字段与单位：
-- `t [N×1] (s)`；`X_ref, Y_ref [N×1] (m)`；`psi_ref [rad]`；`v_ref [m/s]`；`omega_ref [rad/s]`；`theta_ref [rad]`
-- 误差参考：`e_y_ref, e_psi_ref, e_v_ref [N×1]`（通常为 0，供 MPC 用）
-- 调度：`rho [N×3] = [v_ref, omega_ref, theta_ref]`（经一阶低通 τ≈0.3–0.5 s）
-
-### 2.2 生成与保存
-1) `t = (0:Ts:T_end)'`；2) 按类型生成轨迹（直线/转弯/直+弯/坡度/颠簸）；3) 计算 `psi_ref, v_ref, omega_ref`；4) 误差参考置 0；5) 构造并滤波 `rho`；6) 输出 `ref`；
-7) 保存至根目录 `path_<type>.mat`，包含 `{ref, meta}`（meta: 生成时间、参数、版本、作者）。
-
-直线：`X=v0*t, Y=0`；转弯：`X=R*sin(ωt), Y=R*(1-cos(ωt))`；直+弯：前 10 m 直线后接圆弧；坡度直线：直线+常值 `theta0`；颠簸直线：直线+`0.2*sin(t)` 扰动。
-
-### 2.5 调度变量滤波说明
-调度原始向量：`rho_raw = [v_ref, omega_ref, theta_ref]`。一阶低通：\(\tau \dot{\rho}_f + \rho_f = \rho_{raw}\)。离散实现：
+% path_type 鈭?{'straight','turn','straight_turn','slope','bumpy'}
+% params: 缁撴瀯浣擄紙浼樺厛浣跨敤 parameters() 杈撳嚭锛夛紝鍏抽敭瀛楁锛?%   .Ts (绉?        閲囨牱鍛ㄦ湡锛堝繀闇€锛?%   .T_end (绉?     杞ㄨ抗鏃堕暱锛堥粯璁?20锛?%   .R (绫?         杞集鍗婂緞锛堥粯璁?10锛?%   .v0 (m/s)       鍒濋€熷害锛堥粯璁?1锛?%   .theta0 (rad)   鍧″害甯稿€硷紙榛樿 0锛?```
+杈撳嚭 `ref` 瀛楁涓庡崟浣嶏細
+- `t [N脳1] (s)`锛沗X_ref, Y_ref [N脳1] (m)`锛沗psi_ref [rad]`锛沗v_ref [m/s]`锛沗omega_ref [rad/s]`锛沗theta_ref [rad]`
+- 璇樊鍙傝€冿細`e_y_ref, e_psi_ref, e_v_ref [N脳1]`锛堥€氬父涓?0锛屼緵 MPC 鐢級
+- 璋冨害锛歚rho [N脳3] = [v_ref, omega_ref, theta_ref]`锛堢粡涓€闃朵綆閫?蟿鈮?.3鈥?.5 s锛?
+### 2.2 鐢熸垚涓庝繚瀛?1) `t = (0:Ts:T_end)'`锛?) 鎸夌被鍨嬬敓鎴愯建杩癸紙鐩寸嚎/杞集/鐩?寮?鍧″害/棰犵案锛夛紱3) 璁＄畻 `psi_ref, v_ref, omega_ref`锛?) 璇樊鍙傝€冪疆 0锛?) 鏋勯€犲苟婊ゆ尝 `rho`锛?) 杈撳嚭 `ref`锛?7) 淇濆瓨鑷虫牴鐩綍 `path_<type>.mat`锛屽寘鍚?`{ref, meta}`锛坢eta: 鐢熸垚鏃堕棿銆佸弬鏁般€佺増鏈€佷綔鑰咃級銆?
+鐩寸嚎锛歚X=v0*t, Y=0`锛涜浆寮細`X=R*sin(蠅t), Y=R*(1-cos(蠅t))`锛涚洿+寮細鍓?10 m 鐩寸嚎鍚庢帴鍦嗗姬锛涘潯搴︾洿绾匡細鐩寸嚎+甯稿€?`theta0`锛涢绨哥洿绾匡細鐩寸嚎+`0.2*sin(t)` 鎵板姩銆?
+### 2.5 璋冨害鍙橀噺婊ゆ尝璇存槑
+璋冨害鍘熷鍚戦噺锛歚rho_raw = [v_ref, omega_ref, theta_ref]`銆備竴闃朵綆閫氾細\(\tau \dot{\rho}_f + \rho_f = \rho_{raw}\)銆傜鏁ｅ疄鐜帮細
 ```matlab
-alpha = Ts/(tau+Ts);    % tau≈0.3–0.5 s
+alpha = Ts/(tau+Ts);    % tau鈮?.3鈥?.5 s
 rho_f(k,:) = rho_f(k-1,:) + alpha*(rho_raw(k,:) - rho_f(k-1,:));
 ```
-归一化：`rho_n = (rho_f - rho_min)./(rho_max - rho_min)`并裁剪到 `[0,1]`。`rho_min, rho_max` 由网格 `V_grid,W_grid,T_grid` 最值确定。
-
-### 2.3 Simulink 对接（From Workspace）
-- 路径全局参考（用于必要的可视化/外部模块）：`[X Y psi v omega]` 共 5 路。
-- MPC 误差参考端口实际为 4×1，对应 `[e_y,e_psi,e_v,e_omega]`，常用零向量或误差目标。
-- `ref_ts`: `time=t`, `signals.values` 按端口尺寸组织；若给误差参考则仅提供 4 列。
-- 可直接将 `ref` 导出或生成 `ref_ts` 输入 `LPVMPC_AGV_simulink.slx`；端口尺寸以模型为准。
-
-### 2.4 验收与自检
-- 脚本：`test_gen_paths.m` 跑通；
-- 产物：更新/覆盖根目录 `path_*.mat`；
-- 维度：`numel(t)` 一致，无 NaN/Inf；`rho` 经过滤波。
-
+褰掍竴鍖栵細`rho_n = (rho_f - rho_min)./(rho_max - rho_min)`骞惰鍓埌 `[0,1]`銆俙rho_min, rho_max` 鐢辩綉鏍?`V_grid,W_grid,T_grid` 鏈€鍊肩‘瀹氥€?
+### 2.3 Simulink 瀵规帴锛團rom Workspace锛?- 璺緞鍏ㄥ眬鍙傝€冿紙鐢ㄤ簬蹇呰鐨勫彲瑙嗗寲/澶栭儴妯″潡锛夛細`[X Y psi v omega]` 鍏?5 璺€?- MPC 璇樊鍙傝€冪鍙ｅ疄闄呬负 4脳1锛屽搴?`[e_y,e_psi,e_v,e_omega]`锛屽父鐢ㄩ浂鍚戦噺鎴栬宸洰鏍囥€?- `ref_ts`: `time=t`, `signals.values` 鎸夌鍙ｅ昂瀵哥粍缁囷紱鑻ョ粰璇樊鍙傝€冨垯浠呮彁渚?4 鍒椼€?- 鍙洿鎺ュ皢 `ref` 瀵煎嚭鎴栫敓鎴?`ref_ts` 杈撳叆 `LPVMPC_AGV_simulink._GRU.slx`锛涚鍙ｅ昂瀵镐互妯″瀷涓哄噯銆?
+### 2.4 楠屾敹涓庤嚜妫€
+- 鑴氭湰锛歚test_gen_paths.m` 璺戦€氾紱
+- 浜х墿锛氭洿鏂?瑕嗙洊鏍圭洰褰?`path_*.mat`锛?- 缁村害锛歚numel(t)` 涓€鑷达紝鏃?NaN/Inf锛沗rho` 缁忚繃婊ゆ尝銆?
 ---
 
-## 3. 典型点线性化（lin_agv_grid.m / lin_agv_at_point.m）
-
-### 3.1 接口与默认参数
-```matlab
+## 3. 鍏稿瀷鐐圭嚎鎬у寲锛坙in_agv_grid.m / lin_agv_at_point.m锛?
+### 3.1 鎺ュ彛涓庨粯璁ゅ弬鏁?```matlab
 function db = lin_agv_grid(params, grid, opts)
-% params: parameters() 结构体（物理/轮胎/采样等）；
-% grid  : struct，字段 V_grid(Nv×1), W_grid(Nw×1), T_grid(Nt×1)  % ρ=[v,ω,θ]
+% params: parameters() 缁撴瀯浣擄紙鐗╃悊/杞儙/閲囨牱绛夛級锛?% grid  : struct锛屽瓧娈?V_grid(Nv脳1), W_grid(Nw脳1), T_grid(Nt脳1)  % 蟻=[v,蠅,胃]
 % opts  : .coord='path', .disc='zoh'|'foh', .keep_E=true,
-%         .export_mat='plant_grid.mat'  % 根目录，沿用现有产物命名
+%         .export_mat='plant_grid.mat'  % 鏍圭洰褰曪紝娌跨敤鐜版湁浜х墿鍛藉悕
 ```
-默认约定：
-- 工作点 `ρ*=[v*, ω*, θ*]`，曲率 `κ*=ω*/max(v*,1e-3)`，误差为 0；
-- 状态 `x=[e_y,e_psi,e_v,e_omega]^T (nx=4)`；输入 `u=[F_cmd,omega_cmd]^T (nu=2)`；输出 `y=[e_y,e_psi,e_v,e_omega]^T (ny=4)`；扰动 `d=[theta]^T (nd=1)` 进入 `E(ρ)`（纵向）。
-
-### 3.2 数学与近似
-- 纵向：`F_long = F_cmd - F_roll - F_aero(v) - m g sin(theta)`；
-- 横向：小角侧偏线性 `F_y ≈ C_alpha·alpha`；
-- 非线性开关：在工作点附近等效线性化，避免 A/B 出现离散切换。
-
-### 3.3 离散化与导出
-- `(Ac,Bc,Cc,Dc,Ec) → sysd=c2d(ss(Ac,Bc,Cc,Dc),Ts,opts.disc)`；
-- 表结构：`db.grid.(V/W/T), db.Ts, db.A/B/C/D/E(i,j,k,:,:)`；
-- 导出：`save(opts.export_mat,'-struct','db')`（根目录 `plant_grid.mat`）。
-
-### 3.4 验证与回归
-- 极点位于单位圆内或可被 MPC 稳定；
-- `C` 与输出选择一致；
-- `v→0, ω→0, |θ|→max` 数值稳定；
-- 1–2 步预测与高保真 Plant 对比误差 ≤ 5%；
-- 快速检查：若存在 `lin_agv_db.mat`/`plant_grid_test.mat`，用以对比维度与采样时间一致性。
-
-日志建议：`lin_log(i,j,k).rho=[v;ω;θ]; lin_log(i,j,k).eig=eig(A);` 用于后续稳定性筛选。
-
-### 3.5 失败与回退
-- 若某工作点线性化结果含 NaN/Inf：记录并跳过该点；插值时自动由相邻点平滑补偿。
-- 若极点模值最大 `>1.05`：可做谱缩放：`A = A * (0.99/max_abs_eig)`（保守修正）。
-- 若 E(ρ) 维度不一致：抛出错误而非静默继续。
-
+榛樿绾﹀畾锛?- 宸ヤ綔鐐?`蟻*=[v*, 蠅*, 胃*]`锛屾洸鐜?`魏*=蠅*/max(v*,1e-3)`锛岃宸负 0锛?- 鐘舵€?`x=[e_y,e_psi,e_v,e_omega]^T (nx=4)`锛涜緭鍏?`u=[F_cmd,omega_cmd]^T (nu=2)`锛涜緭鍑?`y=[e_y,e_psi,e_v,e_omega]^T (ny=4)`锛涙壈鍔?`d=[theta]^T (nd=1)` 杩涘叆 `E(蟻)`锛堢旱鍚戯級銆?
+### 3.2 鏁板涓庤繎浼?- 绾靛悜锛歚F_long = F_cmd - F_roll - F_aero(v) - m g sin(theta)`锛?- 妯悜锛氬皬瑙掍晶鍋忕嚎鎬?`F_y 鈮?C_alpha路alpha`锛?- 闈炵嚎鎬у紑鍏筹細鍦ㄥ伐浣滅偣闄勮繎绛夋晥绾挎€у寲锛岄伩鍏?A/B 鍑虹幇绂绘暎鍒囨崲銆?
+### 3.3 绂绘暎鍖栦笌瀵煎嚭
+- `(Ac,Bc,Cc,Dc,Ec) 鈫?sysd=c2d(ss(Ac,Bc,Cc,Dc),Ts,opts.disc)`锛?- 琛ㄧ粨鏋勶細`db.grid.(V/W/T), db.Ts, db.A/B/C/D/E(i,j,k,:,:)`锛?- 瀵煎嚭锛歚save(opts.export_mat,'-struct','db')`锛堟牴鐩綍 `plant_grid.mat`锛夈€?
+### 3.4 楠岃瘉涓庡洖褰?- 鏋佺偣浣嶄簬鍗曚綅鍦嗗唴鎴栧彲琚?MPC 绋冲畾锛?- `C` 涓庤緭鍑洪€夋嫨涓€鑷达紱
+- `v鈫?, 蠅鈫?, |胃|鈫抦ax` 鏁板€肩ǔ瀹氾紱
+- 1鈥? 姝ラ娴嬩笌楂樹繚鐪?Plant 瀵规瘮璇樊 鈮?5%锛?- 蹇€熸鏌ワ細鑻ュ瓨鍦?`lin_agv_db.mat`/`plant_grid_test.mat`锛岀敤浠ュ姣旂淮搴︿笌閲囨牱鏃堕棿涓€鑷存€с€?
+鏃ュ織寤鸿锛歚lin_log(i,j,k).rho=[v;蠅;胃]; lin_log(i,j,k).eig=eig(A);` 鐢ㄤ簬鍚庣画绋冲畾鎬х瓫閫夈€?
+### 3.5 澶辫触涓庡洖閫€
+- 鑻ユ煇宸ヤ綔鐐圭嚎鎬у寲缁撴灉鍚?NaN/Inf锛氳褰曞苟璺宠繃璇ョ偣锛涙彃鍊兼椂鑷姩鐢辩浉閭荤偣骞虫粦琛ュ伩銆?- 鑻ユ瀬鐐规ā鍊兼渶澶?`>1.05`锛氬彲鍋氳氨缂╂斁锛歚A = A * (0.99/max_abs_eig)`锛堜繚瀹堜慨姝ｏ級銆?- 鑻?E(蟻) 缁村害涓嶄竴鑷达細鎶涘嚭閿欒鑰岄潪闈欓粯缁х画銆?
 ---
 
-## 4. 自适应 MPC（mpc_setup_single_interp.m / mpc_update_from_rho.m）
-
-### 4.1 控制器创建接口
-```matlab
+## 4. 鑷€傚簲 MPC锛坢pc_setup_single_interp.m / mpc_update_from_rho.m锛?
+### 4.1 鎺у埗鍣ㄥ垱寤烘帴鍙?```matlab
 function ctrl = mpc_setup_single_interp(db, opts)
-% 输入：db（线性化库），opts（Np,Nc,Q,R,dR,约束、软约束…）
-% 流程：选 ρ 中心点基准模型 → mpc(ss(...)) → 设置 Weights/Constraints
-% 输出：ctrl 结构，含 mpcobj 与（可选）权重/约束映射 maps
+% 杈撳叆锛歞b锛堢嚎鎬у寲搴擄級锛宱pts锛圢p,Nc,Q,R,dR,绾︽潫銆佽蒋绾︽潫鈥︼級
+% 娴佺▼锛氶€?蟻 涓績鐐瑰熀鍑嗘ā鍨?鈫?mpc(ss(...)) 鈫?璁剧疆 Weights/Constraints
+% 杈撳嚭锛歝trl 缁撴瀯锛屽惈 mpcobj 涓庯紙鍙€夛級鏉冮噸/绾︽潫鏄犲皠 maps
 ```
 
-### 4.2 在线插值与模型更新接口
+### 4.2 鍦ㄧ嚎鎻掑€间笌妯″瀷鏇存柊鎺ュ彛
 ```matlab
 function upd = mpc_update_from_rho(rho, db, maps)
-% rho=[v;omega;theta]（有符号，前置一阶滤波 τ≈0.3–0.5 s）
-% 步骤：ρ 归一化 → 角点与权重 → A..E 三线性插值 → （可选）Q/R/约束映射
-% 返回：upd.A,B,C,D,E 及（可选）权重/约束更新项
-```
+% rho=[v;omega;theta]锛堟湁绗﹀彿锛屽墠缃竴闃舵护娉?蟿鈮?.3鈥?.5 s锛?% 姝ラ锛毾?褰掍竴鍖?鈫?瑙掔偣涓庢潈閲?鈫?A..E 涓夌嚎鎬ф彃鍊?鈫?锛堝彲閫夛級Q/R/绾︽潫鏄犲皠
+% 杩斿洖锛歶pd.A,B,C,D,E 鍙婏紙鍙€夛級鏉冮噸/绾︽潫鏇存柊椤?```
 
-### 4.3 Simulink 接线（Adaptive MPC）
-- 测量输出 mo：`[e_y,e_psi,e_v,e_omega]`（4×1）。
-- 参考 ref：实际为 4×1 零向量（误差趋零）或误差目标 `[e_y_ref,e_psi_ref,e_v_ref,e_omega_ref]`。
-- 测量扰动 md：`theta_hat`（如启用 E(ρ)）。
-- Scheduling：`rho_f=[v_f;ω_f;θ_f]`（一阶滤波后）。
-- 自定义更新函数应用 `upd.A..E`；权重/约束可由外部端口或回调覆盖。
-
-### 4.4 设计默认值与安全裁剪
-- 预测/控制域：`Np≈2.0–3.0 s`，`Nc≈0.5–1.0 s`；
-- 权重：`Q=diag([3,8,1,1])`，`R=diag([1e-3,1e-3])`，`dR=diag([1e-2,1e-2])`；
-- 约束示例：`F∈[-Fmax,Fmax]`，`ω∈[-0.6,0.6]`，`|ΔF|≤400 N/步`，`|Δω|≤0.4 rad/s/步`；
-- 小量保护：`v_sat=max(v,1e-3)`；所有权重/约束做边界裁剪防数值发散。
-
-### 4.5 验证清单
-- 固定 ρ 在角点处闭环可稳定；
-- `straight→turn`（S 曲线≈2 s）与 `bumpy`（θ 正弦）场景切换平滑；
-- 记录 `rho, solve_time, slack, status`；P95 求解时间满足目标。
-失败兜底：插值后若 A/B/C/D 任意出现 NaN/Inf → 使用上一周期预测模型并递增失败计数；连续 ≥3 次进入安全模式（输出保持或限幅）。
-
-### 4.6 代价函数与 API 映射
+### 4.3 Simulink 鎺ョ嚎锛圓daptive MPC锛?- 娴嬮噺杈撳嚭 mo锛歚[e_y,e_psi,e_v,e_omega]`锛?脳1锛夈€?- 鍙傝€?ref锛氬疄闄呬负 4脳1 闆跺悜閲忥紙璇樊瓒嬮浂锛夋垨璇樊鐩爣 `[e_y_ref,e_psi_ref,e_v_ref,e_omega_ref]`銆?- 娴嬮噺鎵板姩 md锛歚theta_hat`锛堝鍚敤 E(蟻)锛夈€?- Scheduling锛歚rho_f=[v_f;蠅_f;胃_f]`锛堜竴闃舵护娉㈠悗锛夈€?- 鑷畾涔夋洿鏂板嚱鏁板簲鐢?`upd.A..E`锛涙潈閲?绾︽潫鍙敱澶栭儴绔彛鎴栧洖璋冭鐩栥€?
+### 4.4 璁捐榛樿鍊间笌瀹夊叏瑁佸壀
+- 棰勬祴/鎺у埗鍩燂細`Np鈮?.0鈥?.0 s`锛宍Nc鈮?.5鈥?.0 s`锛?- 鏉冮噸锛歚Q=diag([3,8,1,1])`锛宍R=diag([1e-3,1e-3])`锛宍dR=diag([1e-2,1e-2])`锛?- 绾︽潫绀轰緥锛歚F鈭圼-Fmax,Fmax]`锛宍蠅鈭圼-0.6,0.6]`锛宍|螖F|鈮?00 N/姝锛宍|螖蠅|鈮?.4 rad/s/姝锛?- 灏忛噺淇濇姢锛歚v_sat=max(v,1e-3)`锛涙墍鏈夋潈閲?绾︽潫鍋氳竟鐣岃鍓槻鏁板€煎彂鏁ｃ€?
+### 4.5 楠岃瘉娓呭崟
+- 鍥哄畾 蟻 鍦ㄨ鐐瑰闂幆鍙ǔ瀹氾紱
+- `straight鈫抰urn`锛圫 鏇茬嚎鈮? s锛変笌 `bumpy`锛埼?姝ｅ鸡锛夊満鏅垏鎹㈠钩婊戯紱
+- 璁板綍 `rho, solve_time, slack, status`锛汸95 姹傝В鏃堕棿婊¤冻鐩爣銆?澶辫触鍏滃簳锛氭彃鍊煎悗鑻?A/B/C/D 浠绘剰鍑虹幇 NaN/Inf 鈫?浣跨敤涓婁竴鍛ㄦ湡棰勬祴妯″瀷骞堕€掑澶辫触璁℃暟锛涜繛缁?鈮? 娆¤繘鍏ュ畨鍏ㄦā寮忥紙杈撳嚭淇濇寔鎴栭檺骞咃級銆?
+### 4.6 浠ｄ环鍑芥暟涓?API 鏄犲皠
 $$
 J = \sum_{i=1}^{N_p} (y_{k+i|k}-r_{k+i})^\top Q (y_{k+i|k}-r_{k+i})
  + \sum_{i=0}^{N_c-1} \Delta u_{k+i|k}^\top R_\Delta \Delta u_{k+i|k}
@@ -136,82 +76,49 @@ $$
 mpcobj.Weights.OutputVariables = [q_y, q_psi, q_v, q_omega];
 mpcobj.Weights.ManipulatedVariables = [r_F, r_omega];
 mpcobj.Weights.ManipulatedVariablesRate = [r_dF, r_domega];
-% MV/OV 上下界与软约束（示例，按项目现值替换）
+% MV/OV 涓婁笅鐣屼笌杞害鏉燂紙绀轰緥锛屾寜椤圭洰鐜板€兼浛鎹級
 ```
 
-### 4.7 三线性插值权重
-归一化坐标 `(ξ,η,ζ)∈[0,1]^3` 八角点：
+### 4.7 涓夌嚎鎬ф彃鍊兼潈閲?褰掍竴鍖栧潗鏍?`(尉,畏,味)鈭圼0,1]^3` 鍏鐐癸細
 ```
-w000=(1-ξ)*(1-η)*(1-ζ)
-w100=ξ*(1-η)*(1-ζ)
-w010=(1-ξ)*η*(1-ζ)
-w110=ξ*η*(1-ζ)
-w001=(1-ξ)*(1-η)*ζ
-w101=ξ*(1-η)*ζ
-w011=(1-ξ)*η*ζ
-w111=ξ*η*ζ
+w000=(1-尉)*(1-畏)*(1-味)
+w100=尉*(1-畏)*(1-味)
+w010=(1-尉)*畏*(1-味)
+w110=尉*畏*(1-味)
+w001=(1-尉)*(1-畏)*味
+w101=尉*(1-畏)*味
+w011=(1-尉)*畏*味
+w111=尉*畏*味
 ```
-插值：`A = Σ w_ijk*A_ijk`（B,C,D,E 同理）。权重做：`w=abs(w); w=w/sum(w)` 防微负漂移。
-
-### 4.8 RhoFilter 与驻留
-滤波：`alpha=Ts/(tau+Ts)`；驻留判定：若 `|rho_raw-rho_f|/max(|rho_raw|,1e-6)<1e-3` 连续 ≥5 步 → 可降低更新频率。
-最小驻留时间 `T_stay≈0.2–0.3 s` 避免曲率快速闪动。
-
+鎻掑€硷細`A = 危 w_ijk*A_ijk`锛圔,C,D,E 鍚岀悊锛夈€傛潈閲嶅仛锛歚w=abs(w); w=w/sum(w)` 闃插井璐熸紓绉汇€?
+### 4.8 RhoFilter 涓庨┗鐣?婊ゆ尝锛歚alpha=Ts/(tau+Ts)`锛涢┗鐣欏垽瀹氾細鑻?`|rho_raw-rho_f|/max(|rho_raw|,1e-6)<1e-3` 杩炵画 鈮? 姝?鈫?鍙檷浣庢洿鏂伴鐜囥€?鏈€灏忛┗鐣欐椂闂?`T_stay鈮?.2鈥?.3 s` 閬垮厤鏇茬巼蹇€熼棯鍔ㄣ€?
 ---
 
-## 6. 在线控制与仿真（LPVMPC_AGV_simulink.slx）
-- 参考信号：`ref=[X Y psi v omega]`（或误差参考，依模型配置）；
-- 扰动：`md=theta_ground`（坡度）；
-- 日志：每步记录 `rho, slack, solve_time, status`；
-- 自检脚本：`test_lpvmpc_workflow.m`。
-### 6.1 安全模式
-- MPC 求解失败或 `solve_time_ms>10` → 使用 `u_prev` 并标记 `status='fallback'`；连续失败 ≥3 次 → 进入降级：`u=[0;0]`。
-### 6.2 日志字段建议
-`t, rho_f, u_cmd, u_prev, solve_time_ms, status, slack, e_y, e_psi, e_v, e_omega`。
-
+## 6. 鍦ㄧ嚎鎺у埗涓庝豢鐪燂紙LPVMPC_AGV_simulink._GRU.slx锛?- 鍙傝€冧俊鍙凤細`ref=[X Y psi v omega]`锛堟垨璇樊鍙傝€冿紝渚濇ā鍨嬮厤缃級锛?- 鎵板姩锛歚md=theta_ground`锛堝潯搴︼級锛?- 鏃ュ織锛氭瘡姝ヨ褰?`rho, slack, solve_time, status`锛?- 鑷鑴氭湰锛歚test_lpvmpc_workflow.m`銆?### 6.1 瀹夊叏妯″紡
+- MPC 姹傝В澶辫触鎴?`solve_time_ms>10` 鈫?浣跨敤 `u_prev` 骞舵爣璁?`status='fallback'`锛涜繛缁け璐?鈮? 娆?鈫?杩涘叆闄嶇骇锛歚u=[0;0]`銆?### 6.2 鏃ュ織瀛楁寤鸿
+`t, rho_f, u_cmd, u_prev, solve_time_ms, status, slack, e_y, e_psi, e_v, e_omega`銆?
 ---
 
-## 7. 贝叶斯优化（Bayesian_Optimization.m / Cost_Function.m）
-
-### 7.1 评估函数细化
-- 输入：`params`（`parameters()` 结果）、`db`（可为空则内部构建 3×3×3 默认网格）、`cfg`（权重/范围/滤波/罚值/ctrl/maps）、`scenes`（默认权重：turn 0.35, slope 0.30, straight_turn 0.20, bumpy 0.10, straight 0.05）。
-- 流程：每 `Ts` 计算误差 → 构造并滤波 `rho`（τ=0.4）→ `mpc_update_from_rho` → 更新 `MPCobj` → `mpcmoveAdaptive` → `state_eq_ref` 推进 → 记录指标；
-- 失败即返回 `1e6`；屏蔽控制台输出（`evalc`）。
-
-### 7.2 优化脚本细化
-- 变量范围与形参映射按现有实现（见仓库脚本）；
-- 评估 ≥ 60 次建议；单线程；
-- 产物：根目录 `maps_best.mat`（含范围/形参、rho_min/max、timestamp、version），可选 `bo_report_*.mat`, `bo_history_*.mat`。
-#### 7.2.1 失败处理
-- 单场景失败（NaN/Inf / mpc 失败）→ 该场景代价设高罚（如 2e6）；若 ≥50% 场景失败 → 提前终止评估返回 1e6。
-- 控制器构建异常：直接返回 5e6 并记录 `report.fail_reason`。
-#### 7.2.2 报告字段建议
-`report.scenes(s).RMSE, RMS_du, violations, solve_time_mean, solve_time_max, status_flags`；汇总：`report.J_total, J_components, failure_count`。
-
-### 7.3 运行命令（Windows）
-```cmd
+## 7. 璐濆彾鏂紭鍖栵紙Bayesian_Optimization.m / Cost_Function.m锛?
+### 7.1 璇勪及鍑芥暟缁嗗寲
+- 杈撳叆锛歚params`锛坄parameters()` 缁撴灉锛夈€乣db`锛堝彲涓虹┖鍒欏唴閮ㄦ瀯寤?3脳3脳3 榛樿缃戞牸锛夈€乣cfg`锛堟潈閲?鑼冨洿/婊ゆ尝/缃氬€?ctrl/maps锛夈€乣scenes`锛堥粯璁ゆ潈閲嶏細turn 0.35, slope 0.30, straight_turn 0.20, bumpy 0.10, straight 0.05锛夈€?- 娴佺▼锛氭瘡 `Ts` 璁＄畻璇樊 鈫?鏋勯€犲苟婊ゆ尝 `rho`锛埾?0.4锛夆啋 `mpc_update_from_rho` 鈫?鏇存柊 `MPCobj` 鈫?`mpcmoveAdaptive` 鈫?`state_eq_ref` 鎺ㄨ繘 鈫?璁板綍鎸囨爣锛?- 澶辫触鍗宠繑鍥?`1e6`锛涘睆钄芥帶鍒跺彴杈撳嚭锛坄evalc`锛夈€?
+### 7.2 浼樺寲鑴氭湰缁嗗寲
+- 鍙橀噺鑼冨洿涓庡舰鍙傛槧灏勬寜鐜版湁瀹炵幇锛堣浠撳簱鑴氭湰锛夛紱
+- 璇勪及 鈮?60 娆″缓璁紱鍗曠嚎绋嬶紱
+- 浜х墿锛氭牴鐩綍 `maps_best.mat`锛堝惈鑼冨洿/褰㈠弬銆乺ho_min/max銆乼imestamp銆乿ersion锛夛紝鍙€?`bo_report_*.mat`, `bo_history_*.mat`銆?#### 7.2.1 澶辫触澶勭悊
+- 鍗曞満鏅け璐ワ紙NaN/Inf / mpc 澶辫触锛夆啋 璇ュ満鏅唬浠疯楂樼綒锛堝 2e6锛夛紱鑻?鈮?0% 鍦烘櫙澶辫触 鈫?鎻愬墠缁堟璇勪及杩斿洖 1e6銆?- 鎺у埗鍣ㄦ瀯寤哄紓甯革細鐩存帴杩斿洖 5e6 骞惰褰?`report.fail_reason`銆?#### 7.2.2 鎶ュ憡瀛楁寤鸿
+`report.scenes(s).RMSE, RMS_du, violations, solve_time_mean, solve_time_max, status_flags`锛涙眹鎬伙細`report.J_total, J_components, failure_count`銆?
+### 7.3 杩愯鍛戒护锛圵indows锛?```cmd
 matlab -batch "run('start_bayesian.m')"
 ```
-### 7.4 版本化
-- 保存旧版本：`maps_best_<timestamp>.mat`；
-- 记录 `meta.seed, meta.max_evals, meta.selection`；
-- 若 `J` 改善 <2% 可选择不覆盖主文件减少 churn。
-
+### 7.4 鐗堟湰鍖?- 淇濆瓨鏃х増鏈細`maps_best_<timestamp>.mat`锛?- 璁板綍 `meta.seed, meta.max_evals, meta.selection`锛?- 鑻?`J` 鏀瑰杽 <2% 鍙€夋嫨涓嶈鐩栦富鏂囦欢鍑忓皯 churn銆?
 ---
 
-## 8. AI 工况识别（GRU_* 系列）
-
-### 8.1 数据生成与预处理
-- 生成：`GRU_gen_train_data.m`（可调用 `GRU_DataGen.slx`），场景使用 `gen_agv_ref_path`；
-- 预处理：`GRU_prepare_dataset.m` 输出 `GRU_dataset_processed.mat`（含 `X, y_main, y_turn, y_theta, mask_theta, scaler, feat_names`）。
-#### 8.1.1 数据质量
-- NaN 比例 >1%：序列剔除或插值；极端值 |z|>6 裁剪到 ±6；
-- 类不平衡：采用类权重或过采样少数类（stall/slip）。
-
-### 8.2 训练与推理
-- 训练：`GRU_train.m` → 产物 `GRU_model.mat`, `GRU_scaler.mat`, `GRU_meta.mat`；
-- 推理：`GRU_infer.m`（序列输入→三头输出）；在线封装：`GRU_state_classifier.m`（驻留/低通/稳健）。
-#### 8.2.1 训练循环示例
+## 8. AI 宸ュ喌璇嗗埆锛圙RU_* 绯诲垪锛?
+### 8.1 鏁版嵁鐢熸垚涓庨澶勭悊
+- 鐢熸垚锛歚GRU_gen_train_data.m`锛堝彲璋冪敤 `GRU_DataGen.slx`锛夛紝鍦烘櫙浣跨敤 `gen_agv_ref_path`锛?- 棰勫鐞嗭細`GRU_prepare_dataset.m` 杈撳嚭 `GRU_dataset_processed.mat`锛堝惈 `X, y_main, y_turn, y_theta, mask_theta, scaler, feat_names`锛夈€?#### 8.1.1 鏁版嵁璐ㄩ噺
+- NaN 姣斾緥 >1%锛氬簭鍒楀墧闄ゆ垨鎻掑€硷紱鏋佺鍊?|z|>6 瑁佸壀鍒?卤6锛?- 绫讳笉骞宠　锛氶噰鐢ㄧ被鏉冮噸鎴栬繃閲囨牱灏戞暟绫伙紙stall/slip锛夈€?
+### 8.2 璁粌涓庢帹鐞?- 璁粌锛歚GRU_train.m` 鈫?浜х墿 `GRU_model.mat`, `GRU_scaler.mat`, `GRU_meta.mat`锛?- 鎺ㄧ悊锛歚GRU_infer.m`锛堝簭鍒楄緭鍏モ啋涓夊ご杈撳嚭锛夛紱鍦ㄧ嚎灏佽锛歚GRU_state_classifier.m`锛堥┗鐣?浣庨€?绋冲仴锛夈€?#### 8.2.1 璁粌寰幆绀轰緥
 ```matlab
 for epoch = 1:opts.epochs
 	[loss_main, loss_turn, loss_theta] = forward_pass(batch,...);
@@ -221,30 +128,14 @@ for epoch = 1:opts.epochs
 	if early_stop_trigger, break; end
 end
 ```
-#### 8.2.2 产物保存
-- `GRU_model.mat`: `net`, 最优 epoch, 指标摘要；
-- `GRU_meta.mat`: `feat_names, class_weights, seq_len, stride, Ts, commit_SHA`（可选）；
-- `GRU_scaler.mat`: `mean, std`。
-
-### 8.3 评估与目标
-- 指标：主分类 Acc/macro-F1，转弯 Acc，坡度 MAE/RMSE（deg）；
-- 时延：MATLAB 推理均值/P95 < 1 ms/步；
-- 压测：低 μ、强噪声、长坡、急转+颠簸、连续打滑；
-- 自检：`test_GRU_workflow.m`；日志输出至 `GRU_logs/`。
-#### 8.3.1 指标阈值建议
-- `macro_F1_main >= 0.85`；`Acc_turn >= 0.85`；`MAE_theta_deg <= 1.5`；
-- 推理时延：mean <0.6 ms, P95 <1.0 ms；
-- 低于阈值需在 `change.md` 说明原因与改进计划。
-
+#### 8.2.2 浜х墿淇濆瓨
+- `GRU_model.mat`: `net`, 鏈€浼?epoch, 鎸囨爣鎽樿锛?- `GRU_meta.mat`: `feat_names, class_weights, seq_len, stride, Ts, commit_SHA`锛堝彲閫夛級锛?- `GRU_scaler.mat`: `mean, std`銆?
+### 8.3 璇勪及涓庣洰鏍?- 鎸囨爣锛氫富鍒嗙被 Acc/macro-F1锛岃浆寮?Acc锛屽潯搴?MAE/RMSE锛坉eg锛夛紱
+- 鏃跺欢锛歁ATLAB 鎺ㄧ悊鍧囧€?P95 < 1 ms/姝ワ紱
+- 鍘嬫祴锛氫綆 渭銆佸己鍣０銆侀暱鍧°€佹€ヨ浆+棰犵案銆佽繛缁墦婊戯紱
+- 鑷锛歚test_GRU_workflow.m`锛涙棩蹇楄緭鍑鸿嚦 `GRU_logs/`銆?#### 8.3.1 鎸囨爣闃堝€煎缓璁?- `macro_F1_main >= 0.85`锛沗Acc_turn >= 0.85`锛沗MAE_theta_deg <= 1.5`锛?- 鎺ㄧ悊鏃跺欢锛歮ean <0.6 ms, P95 <1.0 ms锛?- 浣庝簬闃堝€奸渶鍦?`change.md` 璇存槑鍘熷洜涓庢敼杩涜鍒掋€?
 ---
 
-## 9. 变更同步与文档
-- 修改/新增上述任一脚本或接口，须同步更新根目录 `func.md`（条目含：路径/职责/签名/输入输出/单位/备注）；
-- 在 `change.md` 留痕（Context/Changes/Impact/Verification/Artifacts/Migration/Refs）。
-### 9.1 func.md 条目建议字段
-- `deps`（依赖脚本或 .mat）、`interfaces`（函数签名）、`units`（关键单位）、`updated_at`、`status`(`stable|experimental|deprecated`)。
-### 9.2 CI 检查要点
-- 新增 `.m` 未更新 `func.md` → 阻断；
-- 接口/维度变化无 `BREAKING CHANGE` 声明 → 阻断；
-- GRU 或 MPC 关键指标低于阈值且无解释 → 阻断；
-- 提交正文缺少 `Context` 或 `Changes` 段 → 警告或阻断（按策略）。
+## 9. 鍙樻洿鍚屾涓庢枃妗?- 淇敼/鏂板涓婅堪浠讳竴鑴氭湰鎴栨帴鍙ｏ紝椤诲悓姝ユ洿鏂版牴鐩綍 `func.md`锛堟潯鐩惈锛氳矾寰?鑱岃矗/绛惧悕/杈撳叆杈撳嚭/鍗曚綅/澶囨敞锛夛紱
+- 鍦?`change.md` 鐣欑棔锛圕ontext/Changes/Impact/Verification/Artifacts/Migration/Refs锛夈€?### 9.1 func.md 鏉＄洰寤鸿瀛楁
+- `deps`锛堜緷璧栬剼鏈垨 .mat锛夈€乣interfaces`锛堝嚱鏁扮鍚嶏級銆乣units`锛堝叧閿崟浣嶏級銆乣updated_at`銆乣status`(`stable|experimental|deprecated`)銆?### 9.2 CI 妫€鏌ヨ鐐?- 鏂板 `.m` 鏈洿鏂?`func.md` 鈫?闃绘柇锛?- 鎺ュ彛/缁村害鍙樺寲鏃?`BREAKING CHANGE` 澹版槑 鈫?闃绘柇锛?- GRU 鎴?MPC 鍏抽敭鎸囨爣浣庝簬闃堝€间笖鏃犺В閲?鈫?闃绘柇锛?- 鎻愪氦姝ｆ枃缂哄皯 `Context` 鎴?`Changes` 娈?鈫?璀﹀憡鎴栭樆鏂紙鎸夌瓥鐣ワ級銆?

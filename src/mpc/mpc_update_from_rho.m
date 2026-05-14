@@ -409,13 +409,13 @@ if enable_weight_interp && isfield(maps, 'R_range')
     if isfield(maps, 'R_F_gain_max_uphill')
         R_F_gain_max_uphill = maps.R_F_gain_max_uphill;
     else
-        R_F_gain_max_uphill = 1.2;  % 默认：上坡时 R(1) 放大 1.2 倍
+        R_F_gain_max_uphill = 1.0;  % 默认：上坡不额外加重惩罚
     end
     
     if isfield(maps, 'R_F_gain_max_downhill')
         R_F_gain_max_downhill = maps.R_F_gain_max_downhill;
     else
-        R_F_gain_max_downhill = 1.5;  % 默认：下坡时 R(1) 放大 1.5 倍（制动更平滑）
+        R_F_gain_max_downhill = 1.2;  % 默认：下坡适度增大R(1)保证平滑
     end
     
     % 根据上坡/下坡选择增益（使用带符号的theta）
@@ -435,8 +435,8 @@ if enable_weight_interp && isfield(maps, 'R_range')
         R_F_gain = 1.0 + (R_F_gain_max - 1.0) * (3*s^2 - 2*s^3);
     end
     
-    % 应用增益到 R(1)
-    R_interp(1) = R_interp(1) * R_F_gain;
+    % 应用增益到 R(1)：保持“增益越大，驱动力惩罚越小”的语义
+    R_interp(1) = R_interp(1) / max(R_F_gain, 1e-6);
     
     % ====== 方案C (R部分) 结束 ======
 else
@@ -453,13 +453,13 @@ if enable_weight_interp && isfield(maps, 'dR_range')
     if isfield(maps, 'dR_F_gain_max_uphill')
         dR_F_gain_max_uphill = maps.dR_F_gain_max_uphill;
     else
-        dR_F_gain_max_uphill = 1.3;  % 默认：上坡时 dR(1) 放大 1.3 倍
+        dR_F_gain_max_uphill = 1.0;  % 默认：上坡不额外限制dF变化
     end
     
     if isfield(maps, 'dR_F_gain_max_downhill')
         dR_F_gain_max_downhill = maps.dR_F_gain_max_downhill;
     else
-        dR_F_gain_max_downhill = 1.6;  % 默认：下坡时 dR(1) 放大 1.6 倍（更平滑）
+        dR_F_gain_max_downhill = 1.2;  % 默认：下坡适度增大dR(1)保证平滑
     end
     
     % 根据上坡/下坡选择增益（使用带符号的theta）

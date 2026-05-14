@@ -6,7 +6,7 @@ function agv_model_sfunc(block)
 % 接口：
 %   - 参数 p：parameters() 结构体（必须包含 Ts；可选 nx、x0）
 %   - 输入端口(1)：u_all = [F_cmd; omega_cmd; theta_ground] (3x1)
-%   - 输出端口(1)：y (31x1)
+%   - 输出端口(1)：y (34x1) - V4.3 Mamba适配
 %   - 离散状态：x (nx×1，默认 8)，使用 DWork 管理
 % ==========================================
 setup(block);
@@ -27,9 +27,9 @@ function setup(block)
   block.InputPort(1).Complexity        = 'Real';
   block.InputPort(1).DirectFeedthrough = false;
 
-  % 输出端口：31×1
+  % 输出端口：34×1 (V4.3 Mamba适配)
   block.SetPreCompOutPortInfoToDynamic;
-  block.OutputPort(1).Dimensions = 31;
+  block.OutputPort(1).Dimensions = 34;
   block.OutputPort(1).DatatypeID = 0; % double
   block.OutputPort(1).Complexity = 'Real';
 

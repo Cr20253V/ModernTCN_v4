@@ -41,6 +41,11 @@ function [label_main, label_turn, theta_hat, conf] = GRU_infer(x_seq, model)
     if nargin < 2
         error('需要提供输入序列和模型: GRU_infer(x_seq, model)');
     end
+
+    if isfield(model, 'feature_net') && isfield(model, 'heads')
+        [label_main, label_turn, theta_hat, conf] = local_infer_v4_model(x_seq, model);
+        return;
+    end
     
     % 检查输入维度
     if size(x_seq, 1) == model.net_feature.Layers(1).InputSize && ...
@@ -117,3 +122,133 @@ function [label_main, label_turn, theta_hat, conf] = GRU_infer(x_seq, model)
     theta_hat = double(theta_hat);
 end
 
+function [label_main, label_turn, theta_hat, conf] = local_infer_v4_model(x_seq, model)
+%LOCAL_INFER_V4_MODEL Inference path for GRU_train.m V4 artifacts.
+
+expected_feat_dim = model.feature_net.Layers(1).InputSize;
+x_seq = local_prepare_sequence(x_seq, expected_feat_dim);
+X = dlarray(x_seq, 'CBT');
+
+Z = predict(model.feature_net, X);
+cfg = model.cfg;
+heads = model.heads;
+[H, H_inputstats] = local_temporal_readout(Z, X, cfg);
+H_turn = local_turn_readout(H, H_inputstats, cfg);
+
+logits_main = heads.main_W * H + heads.main_b;
+logits_turn = local_turn_logits(heads, H_turn, cfg);
+theta = heads.theta_W * H + heads.theta_b;
+
+probs_main = softmax(logits_main, 'DataFormat', 'CB');
+probs_turn = softmax(logits_turn, 'DataFormat', 'CB');
+probs_main = extractdata(gather(probs_main));
+probs_turn = extractdata(gather(probs_turn));
+
+[conf_main_max, label_main] = max(probs_main, [], 1);
+[conf_turn_max, label_turn_idx] = max(probs_turn, [], 1);
+label_turn = label_turn_idx - 2;
+theta_hat = extractdata(gather(theta));
+
+[main_names, turn_names] = local_class_names(model);
+
+conf = struct();
+conf.conf_main = probs_main(:);
+conf.conf_turn = probs_turn(:);
+conf.conf_main_max = conf_main_max;
+conf.conf_turn_max = conf_turn_max;
+conf.label_main_name = main_names{label_main};
+conf.label_turn_name = turn_names{label_turn_idx};
+
+label_main = double(label_main);
+label_turn = double(label_turn);
+theta_hat = double(theta_hat(1));
+end
+
+function x_seq = local_prepare_sequence(x_seq, expected_feat_dim)
+if size(x_seq, 1) == expected_feat_dim && size(x_seq, 2) > 1
+    x_seq = reshape(x_seq, size(x_seq, 1), size(x_seq, 2), []);
+elseif size(x_seq, 2) == expected_feat_dim && size(x_seq, 1) > 1
+    x_seq = permute(x_seq, [2, 1]);
+    x_seq = reshape(x_seq, size(x_seq, 1), size(x_seq, 2), []);
+end
+
+if size(x_seq, 1) ~= expected_feat_dim
+    error('GRU_infer:FeatureMismatch', 'Expected %d features, got %d.', ...
+        expected_feat_dim, size(x_seq, 1));
+end
+end
+
+function [H, H_inputstats] = local_temporal_readout(Z, X, cfg)
+H_inputstats = local_input_stats_readout(X);
+switch lower(char(cfg.head_pooling))
+    case 'last'
+        H = Z(:, end, :);
+    case 'last_mean'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H = cat(1, H_last, H_mean);
+    case 'last_mean_inputstats'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H = cat(1, H_last, H_mean, H_inputstats);
+    case 'last_mean_max'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H_max = max(Z, [], 2);
+        H = cat(1, H_last, H_mean, H_max);
+    case 'last_mean_max_inputstats'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H_max = max(Z, [], 2);
+        H = cat(1, H_last, H_mean, H_max, H_inputstats);
+    otherwise
+        error('GRU_infer:BadHeadPooling', 'Unknown head_pooling: %s', cfg.head_pooling);
+end
+H = reshape(H, size(H,1), []);
+H_inputstats = reshape(H_inputstats, size(H_inputstats,1), []);
+end
+
+function H = local_input_stats_readout(X)
+X_last = X(:, end, :);
+X_mean = mean(X, 2);
+X_std = sqrt(mean((X - X_mean).^2, 2) + 1e-8);
+X_max = max(X, [], 2);
+X_min = min(X, [], 2);
+H = cat(1, X_last, X_mean, X_std, X_max, X_min);
+end
+
+function H_turn = local_turn_readout(H, H_inputstats, cfg)
+switch lower(char(cfg.turn_head_source))
+    case 'readout'
+        H_turn = H;
+    case 'inputstats'
+        H_turn = H_inputstats;
+    otherwise
+        error('GRU_infer:BadTurnHeadSource', 'Unknown turn_head_source: %s', cfg.turn_head_source);
+end
+end
+
+function logits = local_turn_logits(heads, H_turn, cfg)
+switch lower(char(cfg.turn_head_type))
+    case 'linear'
+        logits = heads.turn_W * H_turn + heads.turn_b;
+    case 'mlp'
+        A = max(heads.turn_W1 * H_turn + heads.turn_b1, 0);
+        logits = heads.turn_W2 * A + heads.turn_b2;
+    otherwise
+        error('GRU_infer:BadTurnHead', 'Unknown turn_head_type: %s', cfg.turn_head_type);
+end
+end
+
+function [main_names, turn_names] = local_class_names(model)
+if isfield(model, 'class_labels_main')
+    main_names = model.class_labels_main;
+else
+    main_names = {'flat', 'stall', 'slope'};
+end
+if isfield(model, 'class_labels_turn')
+    turn_names = model.class_labels_turn;
+else
+    turn_names = {'right', 'straight', 'left'};
+end
+end

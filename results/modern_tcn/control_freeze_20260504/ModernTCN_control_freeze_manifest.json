@@ -1,0 +1,80 @@
+{
+  "freeze_date": "2026-05-04",
+  "freeze_name": "ModernTCN_control_freeze_before_demo_path",
+  "scope": {
+    "frozen": [
+      "ModernTCN candidate E model files",
+      "MATLAB default ModernTCN loader target",
+      "label_turn controlled-input baseline",
+      "theta_hat diagnostic-only policy"
+    ],
+    "not_frozen": [
+      "theta_hat closed-loop scheduling",
+      "path_industrial_lite-specific control thresholds",
+      "final demo path"
+    ]
+  },
+  "model": {
+    "run_tag": "transition_rich_v3_theta_head_E_online_aug_seed73",
+    "seed": 73,
+    "checkpoint": "results/modern_tcn/transition_rich_v3_theta_head_E_online_aug_seed73/modern_tcn_seed73.pt",
+    "onnx": "results/modern_tcn/transition_rich_v3_theta_head_E_online_aug_seed73/modern_tcn_seed73.onnx",
+    "dataset_file": "data/tcn/TCN_dataset_v3_transition_rich_clean_turn_aug.mat",
+    "base_run_tag": "transition_rich_v3_kinTurnD_seed73",
+    "training_mode": "theta_head_only_finetune_backbone_main_turn_frozen"
+  },
+  "default_loader_files": [
+    "src/ModernTCN/ModernTCN_state_classifier.m",
+    "src/ModernTCN/ModernTCN_load_predictor.m",
+    "src/ModernTCN/ModernTCN_replay_closed_loop_yraw.m"
+  ],
+  "control_policy": {
+    "label_turn": "allowed_as_control_candidate",
+    "theta_hat": "diagnostic_only_for_frozen_baseline",
+    "theta_scheduling_resume_policy": "guarded_experiment_only_after_demo_path_is_ready",
+    "plant_true_slope": "must_remain_connected_to_path_true_theta"
+  },
+  "offline_metrics": {
+    "acc_main": 0.9751903016633775,
+    "acc_turn": 0.7893994925288976,
+    "acc_turn_transition": 0.5944170771756979,
+    "turn_left_recall": 0.9596469104665826,
+    "theta_mae_deg": 0.7192201018333435,
+    "theta_flat_abs_p95_deg": 0.969150722026825,
+    "theta_flat_bias_deg": 0.007806075271219015,
+    "theta_near_flat_abs_p95_deg": 0.9691554307937622,
+    "theta_flat_turn_abs_p95_deg": 0.6469419002532959,
+    "slope_sign_acc": 1.0
+  },
+  "stable_closed_loop_reference": {
+    "theta_hat_connected_to_scheduling": false,
+    "zones": {
+      "pure_turn": {
+        "ey_rmse": 0.027732,
+        "epsi_rmse": 0.067691,
+        "theta_mae_deg": 0.0
+      },
+      "pure_slope": {
+        "ey_rmse": 0.005693,
+        "epsi_rmse": 0.019004,
+        "theta_mae_deg": 0.64156
+      },
+      "composite": {
+        "ey_rmse": 0.009716,
+        "epsi_rmse": 0.021662,
+        "theta_mae_deg": 0.47231
+      },
+      "closure": {
+        "ey_rmse": 0.005824,
+        "epsi_rmse": 0.054901,
+        "theta_mae_deg": 0.000707
+      }
+    }
+  },
+  "resume_when_demo_path_ready": [
+    "Run baseline with theta_hat diagnostic-only",
+    "Analyze out.mat per zone",
+    "Only then decide whether to test guarded theta scheduling",
+    "Avoid further path_industrial_lite-specific tuning"
+  ]
+}

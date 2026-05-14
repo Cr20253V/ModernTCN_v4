@@ -1,0 +1,11 @@
+metric,mean,std,min,max
+acc_main,1,0,1,1
+acc_turn,0.9375,0,0.9375,0.9375
+acc_turn_pure,0.928571428571429,0,0.928571428571429,0.928571428571429
+acc_turn_transition,1,0,1,1
+theta_mae_deg,0.603093599751422,0,0.603093599751422,0.603093599751422
+flat_recall,1,0,1,1
+stall_recall,0,0,0,0
+slope_recall,1,0,1,1
+uphill_recall,1,0,1,1
+downhill_recall,1,0,1,1

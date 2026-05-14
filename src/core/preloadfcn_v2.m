@@ -1,0 +1,383 @@
+%% PreLoadFcn - 自动路径兼容版 V3.4 (2026-01-22)
+% 修复内容：
+%   - 检测旧 ctrl.mat 的 Np 不匹配时强制重建
+%   - 步骤编号连续化 (0-5)
+%   - 修正 ctrl.meta 字段名为 Np/Nc
+%   - 创建新控制器后自动保存 ctrl.mat
+
+fprintf('\n');
+fprintf('╔════════════════════════════════════════════════════════════╗\n');
+fprintf('║     LPVMPC_AGV 模型初始化 (PreLoadFcn, V3.4, 2026-01-22)   ║\n');
+fprintf('╚════════════════════════════════════════════════════════════╝\n\n');
+
+%% Bootstrap path + 目录配置
+init_project();
+root = project_root();
+data_dir = fullfile(root, 'data');
+data_models_dir = fullfile(data_dir, 'models');
+data_paths_dir = fullfile(data_dir, 'paths');
+data_gru_dir = fullfile(data_dir, 'gru');
+results_root = results_dir('');
+results_paths = struct( ...
+    'root', results_root, ...
+    'simulink', results_dir('simulink'), ...
+    'closed_loop', results_dir('closed_loop'), ...
+    'paths', results_dir('paths'), ...
+    'gru_logs', results_dir('gru/sim'));
+env_paths = struct('root', root, 'data', data_dir, 'models', data_models_dir, ...
+    'paths', data_paths_dir, 'gru', data_gru_dir, 'results', results_paths);
+
+assignin('base', 'results_paths', results_paths);
+assignin('base', 'env_paths', env_paths);
+
+mw = get_param(bdroot, 'ModelWorkspace');
+assignin(mw, 'results_paths', results_paths);
+assignin(mw, 'env_paths', env_paths);
+% Do not save ModelWorkspace during PreLoadFcn; this can block load_system in batch mode.
+
+%% ===== 目标预测时域配置 =====
+TARGET_NP = 150;  % 1.5s 预测时域（适应 S弯大曲率）
+TARGET_NC = 50;   % 0.5s 控制时域
+
+%% 步骤0：加载基础参数
+fprintf('[步骤 0/5] 加载基础参数...\n');
+try
+    params = parameters();
+    fprintf('  ✓ parameters() 加载成功 (Ts=%.3fs, m=%.1fkg, L=%.2fm)\n', ...
+        params.Ts, params.mass, params.L);
+catch ME
+    warning('[PreLoadFcn] parameters() 失败: %s', ME.message);
+    params = struct('Ts',0.05,'mass',100,'gravity',9.81, ...
+        'rolling_resistance',0.015,'air_density',1.225, ...
+        'drag_coefficient_area',0.5,'L',2.0);
+end
+assignin('base','params',params);
+assignin(mw,'params',params);
+
+ff_rt = struct('m',params.mass,'g',params.gravity, ...
+    'c_r',params.rolling_resistance,'rho',params.air_density, ...
+    'CdA',params.drag_coefficient_area);
+v_ff_nom = 1.0;
+assignin('base','ff_rt',ff_rt);
+assignin('base','v_ff_nom',v_ff_nom);
+assignin(mw,'ff_rt',ff_rt);
+assignin(mw,'v_ff_nom',v_ff_nom);
+fprintf('\n');
+
+%% 步骤1：载入 LPV 数据库
+fprintf('[步骤 1/5] 加载 LPV 数据库...\n');
+base_names = {'lin_agv_db.mat', 'plant_grid_test.mat', 'plant_grid.mat'};
+base_dirs = {data_models_dir, root, ''};
+db_files = {};
+for d = 1:numel(base_dirs)
+    for n = 1:numel(base_names)
+        if isempty(base_dirs{d})
+            db_files{end+1} = base_names{n}; %#ok<AGROW>
+        else
+            db_files{end+1} = fullfile(base_dirs{d}, base_names{n}); %#ok<AGROW>
+        end
+    end
+end
+db_files = unique(db_files, 'stable');
+
+S = [];
+loaded_db_file = '';
+for i = 1:numel(db_files)
+    if exist(db_files{i}, 'file')
+        try
+            S = load(db_files{i});
+            loaded_db_file = db_files{i};
+            fprintf('  ✓ 文件加载成功: %s\n', db_files{i});
+            break;
+        catch ME
+            fprintf('  ⚠ 尝试加载 %s 失败: %s\n', db_files{i}, ME.message);
+        end
+    end
+end
+
+if isempty(S)
+    error('[PreLoadFcn] ❌ 未找到 LPV 数据库文件（请先运行 lin_agv_grid 或 test_lpvmpc_workflow）');
+end
+
+if isfield(S,'db') && isstruct(S.db)
+    db_data = S.db;
+    fprintf('  → 使用 db 结构体格式\n');
+elseif all(isfield(S, {'A','B','C','D','E'}))
+    db_data = S;
+    fprintf('  → 使用顶层字段格式\n');
+else
+    error('[PreLoadFcn] 数据库格式无法识别 (字段: %s)', strjoin(fieldnames(S), ', '));
+end
+
+req = {'A','B','C','D','E','Ts','grid'};
+missing = req(~isfield(db_data, req));
+if ~isempty(missing)
+    error('[PreLoadFcn] ❌ 数据库缺少字段: %s', strjoin(missing, ', '));
+end
+
+A=db_data.A; B=db_data.B; C=db_data.C; D=db_data.D; E=db_data.E;
+Ts=db_data.Ts; grid=db_data.grid;
+nx=size(A,4); nu=size(B,5); ny=size(C,4); nd=size(E,5);
+Nv=size(A,1); Nw=size(A,2); Nt=size(A,3);
+
+fprintf('  ✓ 网格: %d×%d×%d (总 %d 点), nx=%d, nu=%d, nd=%d, Ts=%.3fs\n', ...
+    Nv, Nw, Nt, Nv*Nw*Nt, nx, nu, nd, Ts);
+
+db_rt = struct('A',A,'B',B,'C',C,'D',D,'E',E, ...
+    'grid',grid,'Ts',Ts,'nx',nx,'nu',nu,'ny',ny,'nd',nd, ...
+    'Nv',Nv,'Nw',Nw,'Nt',Nt);
+assignin('base','db_rt',db_rt);
+assignin(mw,'db_rt',db_rt);
+fprintf('\n');
+
+%% 步骤2：创建 MPCPlantBus
+fprintf('[步骤 2/5] 创建 MPCPlantBus...\n');
+nu_md = nu + nd;
+samplePlant = struct('A',zeros(nx,nx),'B',zeros(nx,nu_md), ...
+    'C',zeros(ny,nx),'D',zeros(ny,nu_md),'U',zeros(nu_md,1), ...
+    'X',zeros(nx,1),'Y',zeros(ny,1),'DX',zeros(nx,1),'Ts',Ts);
+info = Simulink.Bus.createObject(samplePlant);
+assignin('base','MPCPlantBus', eval(info.busName));
+if ~strcmp(info.busName,'MPCPlantBus')
+    eval(sprintf('clear %s;', info.busName));
+end
+assignin('base','plant_ic', samplePlant);
+fprintf('  ✓ MPCPlantBus 创建成功 (nu_md=%d = %d MV + %d MD)\n\n', nu_md, nu, nd);
+
+%% 步骤3：加载优化权重 (Phase 2 > Phase 1) / 创建控制器
+fprintf('[步骤 3/5] 加载优化权重 / ctrl...\n');
+
+% 搜索路径：优先看 results/bo_results
+bo_results_dir = fullfile(results_root, 'bo_results');
+base_dirs_mb = {bo_results_dir, data_models_dir, root, ''};
+
+% 优先级：phase2_best > phase1_best
+maps_names = {'phase2_best.mat', 'phase1_best.mat'};
+
+maps_files = {};
+for d = 1:numel(base_dirs_mb)
+    for n = 1:numel(maps_names)
+        if isempty(base_dirs_mb{d})
+            maps_files{end+1} = maps_names{n}; %#ok<AGROW>
+        else
+            maps_files{end+1} = fullfile(base_dirs_mb{d}, maps_names{n}); %#ok<AGROW>
+        end
+    end
+end
+maps_files = unique(maps_files, 'stable');
+
+maps_best = [];
+maps_loaded = false;
+maps_source_file = '';
+for i = 1:numel(maps_files)
+    if exist(maps_files{i}, 'file')
+        try
+            Tm = load(maps_files{i});
+            
+            % 提取权重数据（兼容 best 或 maps_best 结构）
+            if isfield(Tm, 'best')
+                if isfield(Tm.best, 'ctrl_maps')
+                    maps_best = Tm.best.ctrl_maps;
+                    maps_best.timestamp = datestr(now, 'yyyy-mm-dd HH:MM:SS');
+                    [~, fname, ~] = fileparts(maps_files{i});
+                    maps_best.version = fname;
+                elseif isfield(Tm.best, 'Q_range')
+                    maps_best = Tm.best;
+                end
+            elseif isfield(Tm, 'maps_best')
+                maps_best = Tm.maps_best;
+            end
+            
+            if ~isempty(maps_best)
+                maps_loaded = true;
+                maps_source_file = maps_files{i};
+                [~, fname, ~] = fileparts(maps_files{i});
+                fprintf('  ✓ 权重加载成功 (%s)\n', fname);
+                break;
+            end
+        catch ME
+            fprintf('  ⚠ 加载 %s 失败: %s\n', maps_files{i}, ME.message);
+        end
+    end
+end
+if ~maps_loaded
+    fprintf('  ⚠ 未找到 phase2_best.mat 或 phase1_best.mat，将使用默认权重\n');
+end
+
+% 尝试加载现有 ctrl.mat（带 Np 版本检查）
+ctrl = [];
+ctrl_source = '未创建';
+ctrl_file_path = fullfile(data_models_dir, 'ctrl.mat');
+
+if exist(ctrl_file_path, 'file')
+    try
+        Tc = load(ctrl_file_path);
+        if isfield(Tc, 'ctrl')
+            % 检查 Np 是否匹配目标值
+            if isfield(Tc.ctrl, 'meta') && isfield(Tc.ctrl.meta, 'Np')
+                old_Np = Tc.ctrl.meta.Np;
+                if old_Np == TARGET_NP
+                    ctrl = Tc.ctrl;
+                    ctrl_source = ctrl_file_path;
+                    fprintf('  ✓ 从 ctrl.mat 加载控制器 (Np=%d)\n', old_Np);
+                else
+                    fprintf('  ⚠ 发现旧 ctrl.mat (Np=%d)，需重建 (目标 Np=%d)\n', old_Np, TARGET_NP);
+                end
+            else
+                fprintf('  ⚠ ctrl.mat 缺少 meta.Np 信息，需重建\n');
+            end
+        end
+    catch ME
+        fprintf('  ⚠ 加载 ctrl.mat 失败: %s\n', ME.message);
+    end
+end
+
+% 如果需要创建新控制器
+if isempty(ctrl) && exist('mpc_setup_single_interp','file')==2
+    fprintf('  → 创建新控制器 (Np=%d, Nc=%d)...\n', TARGET_NP, TARGET_NC);
+    
+    if maps_loaded && all(isfield(maps_best, {'Q_range','R_range','dR_range'}))
+        Q_base = mean(maps_best.Q_range, 1);
+        R_base = mean(maps_best.R_range, 1);
+        dR_base = mean(maps_best.dR_range, 1);
+        fprintf('    使用加载的优化权重\n');
+    else
+        Q_base = [10, 15, 5, 1];
+        R_base = [1e-3, 1e-3];
+        dR_base = [1e-2, 1e-2];
+        fprintf('    使用默认权重 (未优化)\n');
+    end
+    
+    mpc_opts = struct('Np', TARGET_NP, 'Nc', TARGET_NC, ...
+                      'Q', Q_base, 'R', R_base, 'dR', dR_base);
+    
+    ctrl = mpc_setup_single_interp(db_rt, mpc_opts);
+    ctrl_source = '新创建';
+    fprintf('  ✓ 控制器创建成功 (P=%.2fs, M=%.2fs)\n', ...
+        ctrl.meta.prediction_horizon_sec, ctrl.meta.control_horizon_sec);
+    
+    % 保存新创建的控制器
+    try
+        save(ctrl_file_path, 'ctrl');
+        fprintf('  → 已保存新控制器到 ctrl.mat\n');
+    catch ME
+        fprintf('  ⚠ 保存 ctrl.mat 失败: %s\n', ME.message);
+    end
+end
+
+% 将优化参数注入控制器 maps
+if maps_loaded && ~isempty(ctrl)
+    fields = {'Q_range','R_range','dR_range','alpha_Q','beta_Q', ...
+        'alpha_R','beta_R','alpha_dR','beta_dR', ...
+        'scale_umin_lo','scale_umin_hi','scale_umax_lo','scale_umax_hi', ...
+        'omega_threshold', 'q_y_gain_max', 'theta_threshold', 'q_v_gain_max', ...
+        'R_F_gain_max_uphill', 'R_F_gain_max_downhill', ...
+        'transition_width', 'theta_transition_width'};
+    
+    copied = 0;
+    for i = 1:numel(fields)
+        if isfield(maps_best, fields{i})
+            ctrl.maps.(fields{i}) = maps_best.(fields{i});
+            copied = copied + 1;
+        end
+    end
+    fprintf('  → 已将 %d 个优化参数注入 ctrl.maps\n', copied);
+end
+
+if ~isempty(ctrl)
+    assignin('base', 'ctrl', ctrl);
+else
+    warning('[PreLoadFcn] 无法创建/加载 ctrl');
+end
+fprintf('\n');
+
+%% 步骤4：加载 GRU 模型
+fprintf('[步骤 4/5] 加载 GRU 模型...\n');
+gru_model = [];
+gru_scaler = [];
+
+base_dirs_gru = {data_models_dir, data_gru_dir, root};
+gru_files = {};
+for d = 1:numel(base_dirs_gru)
+    gru_files{end+1} = fullfile(base_dirs_gru{d}, 'GRU_model.mat'); %#ok<AGROW>
+end
+gru_files = unique(gru_files, 'stable');
+
+for i = 1:numel(gru_files)
+    if exist(gru_files{i}, 'file')
+        Sg = load(gru_files{i});
+        if isfield(Sg, 'model')
+            gru_model = Sg.model;
+            fprintf('  ✓ GRU_model 加载成功 (%s)\n', gru_files{i});
+            if isfield(gru_model, 'seq_len')
+                fprintf('    - 序列长度: %d\n', gru_model.seq_len);
+            end
+            if isfield(gru_model, 'scaler')
+                gru_scaler = gru_model.scaler;
+            end
+            break;
+        end
+    end
+end
+
+if isempty(gru_model)
+    error('[PreLoadFcn] ❌ 未找到 GRU_model.mat');
+end
+
+scaler_files = {};
+for d = 1:numel(base_dirs_gru)
+    scaler_files{end+1} = fullfile(base_dirs_gru{d}, 'GRU_scaler.mat'); %#ok<AGROW>
+end
+scaler_files = unique(scaler_files, 'stable');
+if isempty(gru_scaler)
+    for i = 1:numel(scaler_files)
+        if exist(scaler_files{i}, 'file')
+            Ss = load(scaler_files{i});
+            if isfield(Ss, 'scaler')
+                gru_scaler = Ss.scaler;
+                fprintf('  ✓ GRU_scaler 加载成功 (%s)\n', scaler_files{i});
+                break;
+            end
+        end
+    end
+end
+
+assignin('base', 'gru_model', gru_model);
+if ~isempty(gru_scaler)
+    assignin('base', 'gru_scaler', gru_scaler);
+end
+fprintf('\n');
+
+%% 步骤5：初始化总结
+fprintf('[步骤 5/5] 初始化总结\n');
+fprintf('  ════════════════════════════════════════════════\n');
+fprintf('  ✓ 基础参数:     已加载 (Ts=%.3fs)\n', params.Ts);
+fprintf('  ✓ LPV 数据库:   %s (%d×%d×%d)\n', loaded_db_file, Nv, Nw, Nt);
+fprintf('  ✓ MPCPlantBus:  已创建\n');
+fprintf('  ✓ GRU 模型:     就绪\n');
+
+if maps_loaded
+    [~, fname, ~] = fileparts(maps_source_file);
+    fprintf('  ✓ 优化权重:     已加载 (%s)\n', fname);
+else
+    fprintf('  ⚠ 优化权重:     未加载 (使用默认)\n');
+end
+
+if ~isempty(ctrl)
+    fprintf('  ✓ MPC 控制器:   %s (Np=%d, Nc=%d)\n', ctrl_source, ...
+        ctrl.meta.Np, ctrl.meta.Nc);
+else
+    fprintf('  ❌ MPC 控制器:  未创建\n');
+end
+fprintf('  ════════════════════════════════════════════════\n');
+
+% 最终状态判定
+if maps_loaded && ~isempty(ctrl)
+    fprintf('\n✓ 初始化成功！使用优化权重与 GRU 调度\n');
+elseif ~isempty(ctrl)
+    fprintf('\n⚠ 初始化完成，使用默认权重\n');
+else
+    fprintf('\n❌ 初始化失败，请检查上方日志\n');
+end
+
+fprintf('\n[PreLoadFcn] 完成\n\n');

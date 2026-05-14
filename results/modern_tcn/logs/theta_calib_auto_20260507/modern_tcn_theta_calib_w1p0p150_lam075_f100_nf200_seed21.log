@@ -1,0 +1,25 @@
+
+===== START modern_tcn_theta_calib_w1p0p150_lam075_f100_nf200_seed21 2026-05-07 23:14:39 =====
+[ModernTCN theta finetune] start
+  base=results\modern_tcn\modern_tcn_v4_turn_focus_A_seed21\modern_tcn_seed21.pt
+  dataset=data\tcn\ModernTCN_dataset_v4_industrial.mat
+  train/val/test=63022/13141/13596
+  output=E:\Matlab\Simulink\S-Function_16\results\modern_tcn\modern_tcn_theta_calib_w1p0p150_lam075_f100_nf200_seed21
+  device=cuda
+  trainable_params=288
+  theta_weight neg/pos=1.000/1.500
+  epoch 001 train=0.01028 val=0.08398 theta=0.5771 pos6_8=0.8312 neg8_6=0.6388 flat_p95=1.1700 flat_bias=0.2694 score=0.21513
+  epoch 005 train=0.00940 val=0.08390 theta=0.4829 pos6_8=0.7749 neg8_6=0.3534 flat_p95=1.0803 flat_bias=0.2066 score=0.16378
+  epoch 010 train=0.00948 val=0.08386 theta=0.5878 pos6_8=0.8498 neg8_6=0.5785 flat_p95=0.9929 flat_bias=0.1392 score=0.13343
+  epoch 015 train=0.00931 val=0.08387 theta=0.5380 pos6_8=1.0449 neg8_6=0.4811 flat_p95=1.0672 flat_bias=-0.1062 score=0.15882
+[ModernTCN theta finetune] early stop epoch=18, best_epoch=10
+[ModernTCN theta finetune] done
+  checkpoint=E:\Matlab\Simulink\S-Function_16\results\modern_tcn\modern_tcn_theta_calib_w1p0p150_lam075_f100_nf200_seed21\modern_tcn_seed21.pt
+  theta=0.5415 deg
+  theta_pos_6_8=0.6797 deg
+  theta_neg_8_6=0.8566 deg
+  flat_p95=0.9964 deg
+  flat_bias=0.1262 deg
+  near_flat_p95=0.8637 deg
+  main=0.9867 turn=0.9529
+===== END modern_tcn_theta_calib_w1p0p150_lam075_f100_nf200_seed21 2026-05-07 23:16:13 =====

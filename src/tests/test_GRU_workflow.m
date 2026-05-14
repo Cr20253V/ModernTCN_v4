@@ -100,7 +100,7 @@ acc_main = mean([test_results.label_main_pred] == [test_results.label_main_true]
 acc_turn = mean([test_results.label_turn_pred] == [test_results.label_turn_true]);
 
 % 计算MAE（仅slope样本）
-slope_idx = find([test_results.label_main_true] == 4);
+slope_idx = find([test_results.label_main_true] == 3);
 if ~isempty(slope_idx)
     mae_theta = mean(abs([test_results(slope_idx).theta_hat] - [test_results(slope_idx).theta_true]));
 else
@@ -196,7 +196,7 @@ acc_turn_online = mean(online_results.label_turn(start_idx:end) == ...
                        online_results.label_turn_true(start_idx:end));
 
 % 坡度角MAE（仅slope样本）
-slope_idx_online = find(online_results.label_main_true(start_idx:end) == 4);
+slope_idx_online = find(online_results.label_main_true(start_idx:end) == 3);
 if ~isempty(slope_idx_online)
     mae_theta_online = mean(abs(online_results.theta_hat(start_idx + slope_idx_online - 1) - ...
                                  online_results.theta_true(start_idx + slope_idx_online - 1)));
@@ -223,9 +223,9 @@ ylabel('主分类');
 title(sprintf('主分类识别（准确率: %.2f%%）', acc_main_online * 100));
 legend('Location', 'best');
 grid on;
-ylim([0.5, 4.5]);
-yticks(1:4);
-yticklabels({'flat', 'slip', 'stall', 'slope'});
+ylim([0.5, 3.5]);
+yticks(1:3);
+yticklabels({'flat', 'stall', 'slope'});
 
 % 子图2：转弯状态
 subplot(3, 1, 2);

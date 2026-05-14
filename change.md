@@ -1,5 +1,1676 @@
 # 变更记录
 
+## 2026-04-15 – GRU 对照组自动化与公平对比链路加固（不改 Mamba）
+
+### Subject
+feat/fix(gru): 新增对照组一键脚本，GRU 侧复现 Mamba 划分策略，完善训练模式与文档同步
+
+### Context
+- 目标：在“**Mamba 为实验组，GRU 为对照组**”前提下，不修改现有 Mamba 代码，仅通过 GRU 侧改造实现可复现、公平对比。
+- 约束：
+  - 使用同一母集 `Mamba_train_data_full.mat`；
+  - 保持 run-level 划分逻辑一致；
+  - 对照组可在“严格同分布”与“stall 优化”两种模式间切换。
+
+### Changes
+
+**src/gru/GRU_prepare_dataset.m**：
+- 新增数据源适配（支持 Mamba 母集输入）与来源识别元数据写回。
+- 新增 `theta` 监督目标自动选择逻辑（优先 `y_theta_ground`，其次 `theta`，兜底 `y_raw(:,16)`）。
+- 修复切片策略为“仅同回合内滑窗”（`within_run_only`），消除跨回合窗口泄漏风险。
+- 新增 run-level 划分导出：`cfg.save_split_file / cfg.split_file`，可生成 `data/gru/GRU_run_split.mat`。
+- 新增 `cfg.split_policy`：
+  - `windowed_runs_only`（历史默认）
+  - `mamba_like`（按 `1..N_runs` 全体回合划分，复现 Mamba `randperm(N_runs)` 行为）
+- 新增 `cfg.enable_train_resampling` 开关（默认 true）：
+  - 可关闭训练集重采样，保持对照组原始分布。
+- 新增重采样细粒度参数（用于 stall 优化）：
+  - `cfg.resample_stall_multiplier`
+  - `cfg.resample_stall_target_min`
+  - `cfg.resample_flat_max_ratio`
+- 新增重采样配置写入 `dataset.meta`，便于复现实验。
+- 新增/补充 `dataset.meta` 字段：`dataset_source`、`split_policy`、`enable_train_resampling`、`split_file` 等。
+
+**src/gru/run_GRU_prepare_dataset_mamba_compare.m**（新增）：
+- 新增一键预处理脚本，固定对照组推荐配置：
+  - `dataset_source='mamba'`
+  - `seq_len=128`，`stride=64`
+  - `train/val/test=0.80/0.10/0.10`
+  - `seed=42`
+  - `split_policy='mamba_like'`
+  - `enable_train_resampling=true`（默认开启 stall 样本优化）
+  - `resample_stall_multiplier=3.0`
+  - `resample_stall_target_min=900`
+  - `resample_flat_max_ratio=30.0`
+- 支持严格同分布回退：将 `enable_train_resampling=false`。
+- 2026-04-15：补充完整头注释（用途/依赖/输出/注意事项）。
+
+**src/gru/GRU_train.m**：
+- 配置逻辑改造为“外部 cfg 优先”，避免脚本内部默认值覆盖外部实验设置。
+- 新增 `cfg.experiment_mode`（默认 `default`），支持 `mamba_control`：
+  - 对照组默认输出命名：`GRU_model_mamba_control.mat` / `GRU_meta_mamba_control.mat`；
+  - 默认日志目录：`results/gru/train_logs_mamba_control`；
+  - 对照组默认 `max_epochs=30`、`patience=10`（可覆盖）。
+- 新增对照一致性检查告警（`dataset.meta`）：
+  - 数据来源是否 mamba；
+  - `seq_len=128`、`stride=64` 是否匹配；
+  - `split_policy` 是否为 `mamba_like`；
+  - 是否误开启预处理重采样。
+- 修复 `meta.test_detailed` 写入时机，避免“结构体值可能未使用”诊断告警。
+
+**src/gru/run_GRU_train_mamba_control.m**（新增）：
+- 新增一键训练脚本，设置 `experiment_mode='mamba_control'` 并使用独立产物命名。
+- 默认启用 `class_weight_method='sqrt_inverse'`，在提升 stall 学习强度的同时抑制误报风险。
+- 2026-04-15：补充完整头注释（用途/依赖/输出/注意事项）。
+
+**src/tests/test_gru_performance.m**：
+- 主分类从历史 4 类对齐到当前 3 类：`flat/stall/slope`。
+- 斜坡类别判定从 `==4` 更正为 `==3`。
+- 可视化 y 轴刻度从 4 类改为 3 类。
+
+**src/tests/test_GRU_workflow.m**：
+- 斜坡类别判定从 `==4` 更正为 `==3`。
+- 可视化标签从 4 类更新为 3 类。
+
+**func.md**：
+- 在 GRU 模块新增两项脚本导航：
+  - `run_GRU_prepare_dataset_mamba_compare.m`
+  - `run_GRU_train_mamba_control.m`
+
+### Verification
+- 已通过 MATLAB 静态诊断检查：
+  - `src/gru/GRU_prepare_dataset.m`
+  - `src/gru/GRU_train.m`
+  - `src/gru/run_GRU_prepare_dataset_mamba_compare.m`
+  - `src/gru/run_GRU_train_mamba_control.m`
+- 预处理运行日志（用户提供）显示：
+  - 母集读取、窗口参数、run 划分（192/24/24）与 `mamba_like` 策略已生效。
+
+### Files
+- [src/gru/GRU_prepare_dataset.m](src/gru/GRU_prepare_dataset.m)
+- [src/gru/run_GRU_prepare_dataset_mamba_compare.m](src/gru/run_GRU_prepare_dataset_mamba_compare.m)
+- [src/gru/GRU_train.m](src/gru/GRU_train.m)
+- [src/gru/run_GRU_train_mamba_control.m](src/gru/run_GRU_train_mamba_control.m)
+- [src/tests/test_gru_performance.m](src/tests/test_gru_performance.m)
+- [src/tests/test_GRU_workflow.m](src/tests/test_GRU_workflow.m)
+- [func.md](func.md)
+
+---
+
+## 2026-04-15 – GRU 对照实验矩阵增补（strict vs stall_optimized）
+
+### Subject
+feat(gru): 新增严格同分布对照脚本与结果汇总脚本，支持最小额外实验矩阵快速对比
+
+### Context
+- 在 stall 优化版结果明显改善后，需要补一组 strict 同分布对照，区分“模型能力提升”与“样本分布改动收益”。
+- 目标：新增最小代价的实验入口与汇总工具，不影响现有 Mamba 流程。
+
+### Changes
+**src/gru/run_GRU_prepare_dataset_mamba_strict_control.m**（新增）：
+- 生成 strict 同分布预处理数据：
+  - `split_policy='mamba_like'`
+  - `enable_train_resampling=false`
+- 输出使用 strict 后缀，避免覆盖：
+  - `GRU_dataset_processed_mamba_strict.mat`
+  - `GRU_scaler_mamba_strict.mat`
+  - `GRU_run_split_mamba_strict.mat`
+
+**src/gru/run_GRU_train_mamba_control_strict.m**（新增）：
+- 基于 strict 数据集训练 GRU 对照模型。
+- 输出使用 strict 后缀：
+  - `GRU_model_mamba_control_strict.mat`
+  - `GRU_meta_mamba_control_strict.mat`
+  - `results/gru/train_logs_mamba_control_strict/`
+
+**src/gru/summarize_gru_mamba_control_results.m**（新增）：
+- 读取 strict 与优化版两组 meta 文件并输出核心指标对比：
+  - `acc_main`、`acc_turn`、`mae_theta(deg)`、`macro_f1`
+  - `stall_precision`、`stall_recall`、`stall_f1`
+- 默认对比对象：
+  - strict：`GRU_meta_mamba_control_strict.mat`
+  - 优化版：`GRU_meta_mamba_control.mat`
+
+**func.md**：
+- GRU 模块新增 3 个脚本索引：
+  - strict 预处理入口
+  - strict 训练入口
+  - strict vs 优化版汇总入口
+
+### Verification
+- 新增脚本与文档静态检查通过，无语法错误。
+
+### Files
+- [src/gru/run_GRU_prepare_dataset_mamba_strict_control.m](src/gru/run_GRU_prepare_dataset_mamba_strict_control.m)
+- [src/gru/run_GRU_train_mamba_control_strict.m](src/gru/run_GRU_train_mamba_control_strict.m)
+- [src/gru/summarize_gru_mamba_control_results.m](src/gru/summarize_gru_mamba_control_results.m)
+- [func.md](func.md)
+
+---
+
+## 2026-04-15 – 默认入口切换为 strict 基线（optimized 保留为消融）
+
+### Subject
+chore/docs(gru): 默认入口改为 strict 同分布基线，新增 optimized 专用入口并完善文档标注
+
+### Context
+- 依据 strict vs optimized 实验对比，stall 指标已在 strict 基线达到高位，optimized 分支未带来额外 stall 收益，且在部分非目标指标上存在退化风险。
+- 目标：将默认工作流切回 strict 基线，同时保留 optimized 作为可复现消融分支。
+
+### Changes
+**src/gru/run_GRU_prepare_dataset_mamba_compare.m**：
+- 默认策略改为 strict 同分布（`enable_stall_optimization=false`，等效 `enable_train_resampling=false`）。
+- 保留可选开关：可切换到 stall_optimized 消融模式。
+
+**src/gru/run_GRU_train_mamba_control.m**：
+- 文案明确为“推荐默认训练入口（strict 基线）”。
+- 备注中增加 optimized 专用入口提示。
+
+**src/gru/run_GRU_prepare_dataset_mamba_stall_optimized.m**（新增）：
+- 新增 optimized 预处理专用脚本。
+- 输出使用 `_mamba_opt` 后缀，避免覆盖 strict 数据。
+
+**src/gru/run_GRU_train_mamba_control_stall_optimized.m**（新增）：
+- 新增 optimized 训练专用脚本。
+- 输出使用 `_opt` 后缀，避免覆盖 strict 模型。
+
+**src/gru/summarize_gru_mamba_control_results.m**：
+- 默认 optimized 对比文件改为 `GRU_meta_mamba_control_opt.mat`。
+- 保留向后兼容：若 `_opt` 文件不存在，自动回退历史 `GRU_meta_mamba_control.mat`。
+
+**func.md**：
+- 明确标注：
+  - strict 为推荐基线（默认入口）
+  - stall_optimized 为消融分支（专用入口脚本）
+
+### Verification
+- 新增与修改文件静态检查通过，无语法错误。
+
+### Files
+- [src/gru/run_GRU_prepare_dataset_mamba_compare.m](src/gru/run_GRU_prepare_dataset_mamba_compare.m)
+- [src/gru/run_GRU_train_mamba_control.m](src/gru/run_GRU_train_mamba_control.m)
+- [src/gru/run_GRU_prepare_dataset_mamba_stall_optimized.m](src/gru/run_GRU_prepare_dataset_mamba_stall_optimized.m)
+- [src/gru/run_GRU_train_mamba_control_stall_optimized.m](src/gru/run_GRU_train_mamba_control_stall_optimized.m)
+- [src/gru/summarize_gru_mamba_control_results.m](src/gru/summarize_gru_mamba_control_results.m)
+- [func.md](func.md)
+
+---
+
+## 2026-04-14 – GRU 训练流程迁移至 industrial_lite 复合路径（V6.0）
+
+### Subject
+feat(gru): GRU 训练数据生成迁移至 150s industrial_lite 路径，与 Mamba 训练基础对齐
+
+### Context
+- 目标：将 GRU 训练流程对齐 Mamba 的数据基础（150s 复合路径），实现公平闭环对比（Mamba vs GRU vs LPV-MPC）。
+- 原 GRU 使用离散短场景（straight/slope/bumpy/turn，每段 20s），调用 `gen_agv_ref_path.m`。
+- 迁移后统一使用 `gen_agv_ref_path_v1.m`（工业分区路径），采样周期从 0.05s 改为 0.01s。
+
+### Changes
+**src/gru/GRU_gen_train_data.m**（V4.x → V6.0，重写）：
+- 场景配置改为 `industrial_lite`（150s 复合路径）
+- 采样周期 `Ts` 从 `0.05s` 改为 `0.01s`（与 Mamba 对齐）
+- 路径生成从 `gen_agv_ref_path()` 改为 `gen_agv_ref_path_v1()`
+- 事件注入逻辑改为 Mamba 式"黄金区单事件 + 额外区域事件"
+- 路径参数随机化采用 Mamba 方案（v_cruise、坡度网格、过渡时间等）
+- 信号提取字段名改为带后缀版本（`y_raw1`/`u1`/`theta1`）
+- 标签生成简化为注入窗口 ground truth + 启发式补充（3 类主分类 + 转弯）
+- 新增 `prepare_runtime_workspace_local()` 函数
+- 回合数设为 240（与 Mamba 一致）
+
+**src/gru/GRU_prepare_dataset.m**（V1.7 → V2.0）：
+- `seq_len`: 48 → 128（≈1.28s @ 0.01s，与 Mamba 的 window_size 对齐）
+- `stride`: 12 → 64（50% 重叠，与 Mamba 对齐）
+- `skip_initial_sec`: 3.0s → 10.0s（跳过启动区，与黄金测试区起点对齐）
+- `Ts` 改为从数据元信息 `data.meta.Ts` 读取（不再硬编码 `parameters().Ts`）
+
+**src/gru/GRU_train.m**：
+- `max_epochs`: 2 → 150（从测试模式恢复为正式训练）
+
+### Files
+- [src/gru/GRU_gen_train_data.m](src/gru/GRU_gen_train_data.m)
+- [src/gru/GRU_prepare_dataset.m](src/gru/GRU_prepare_dataset.m)
+- [src/gru/GRU_train.m](src/gru/GRU_train.m)
+
+---
+
+## 2026-04-09 – Mamba slip 标注根因修复（V1.5）：仿真物理修复 + 全窗口重标注
+
+### Subject
+fix(mamba/sim/train): 修复 slip_ratio 通道恒零根因（纯运动学轮速无滑差）+ 注入非对称轮速滑差
+
+### Context
+- V1.3（全窗口标注）：slip F1=0.223，但 Precision=0.938，Recall=0.127 → 模型有辨别能力但缺样本
+- V1.4（混合标注：slip_abs >= 0.05 过滤）：所有 20 run 均 slip=0 → F1 彻底归零
+- 根因诊断：`output_eq_ref_train_data.m` 轮速公式是纯运动学：
+  `omega_wheel_lf = v_lf / r` （纯滚动，无滑差物理）
+  `v_obs_ref = 0.5*(omega_lf + omega_rr)*r` → `slip_ratio_lf = 0.5*(omega_lf - omega_rr)*r / den`
+  → 只测左右轮差速，slip_gamma 降低摩擦系数对两轮施加相同效果，差速恒为 0
+  → 任何阈值（0.05/0.15 甚至 0.001）均无法检测到 slip 注入
+
+### Changes
+
+**src/core/output_eq_ref_train_data.m**（V1.5 物理修复）：
+- omega_wheel 计算新增 slip_gamma 驱动的不对称轮速滑差：
+  ```
+  slip_spin = (1/max(slip_gamma, 0.1) - 1) * 0.04
+  omega_wheel_lf_base *= (1 + slip_spin)        ← 左前轮正向加速
+  omega_wheel_rr_base *= (1 - slip_spin * 0.5)  ← 右后轮反向减速（幅值减半）
+  ```
+  物理意义：摩擦系数降低时驱动轮（LF）获得更多轮速超调，从动轮（RR）略滞后
+- 结果：
+  - slip_gamma=0.35 → |slip_ratio_lf/rr|≈0.055（高于 0.05 兜底阈值）
+  - slip_gamma=0.75 → |slip_ratio_lf/rr|≈0.010（高于 0.01，可检测）
+  - slip_gamma=1.00（正常）→ slip_spin=0，slip_ratio≈0（无污染正常段）
+
+**src/Mamba/Mamba_gen_train_data.m**（V1.4→V1.5）：
+- 恢复 V1.3 全窗口标注策略（物理修复后注入窗口内 slip_ratio 真实非零，无特征-标签矛盾）
+- 移除 V1.4 的 `slip_feat_thresh = 0.05` 条件过滤（该过滤是 V1.4 引发 slip=0 的直接原因）
+- 保留兜底：`label_slip(slip_abs > 0.05) = 1`（利用新的真实 slip_ratio 信号）
+- 标注版本注释更新为 V1.5，记录完整修复历史
+
+### Expected Effect
+- 快速验证（20 runs）：slip 帧数应从 0 恢复到约 200~450（每 run 一次注入窗口）
+- 训练目标：slip F1 > 0.35，Recall > 0.30
+
+### Files
+- [src/core/output_eq_ref_train_data.m](src/core/output_eq_ref_train_data.m)
+- [src/Mamba/Mamba_gen_train_data.m](src/Mamba/Mamba_gen_train_data.m)
+
+---
+
+## 2026-04-08 – Mamba2 闭环质量提升：信号来源重构 + 训练数据标注修复 + 控制减振
+
+### Subject
+fix/feat(mamba/sim/train): theta/delta 信号来源重构为物理直读；stall/slope 标注歧义修复；UpdatePlantModel 新增 omega LPF + stall 迟滞滤波
+
+### Context
+- 上一轮集成（04-06）使用 IMU 互补滤波器替换 Mamba theta_hat，仍发现 `theta_out ≡ 0` 的问题，根因是仿真模型 `output_eq_ref.m` 的 `accel_x_meas` 已减去重力分量（纯运动学加速度），IMU CF 的假设成立。
+- 同时发现 `out.delta_hat`（Mamba 回归）在坡度+转弯复合段输出峰值 0.65 rad，约为真值的 10 倍，存在严重精度问题。
+- 训练数据中 stall 注入窗口内未区分"坡道高电流正常行驶"与"真实堵转近零速"，导致 Mamba 在坡道爬坡时 label_main 持续混淆 2（stall）↔3（slope），进而导致 UpdatePlantModel 每 5 步交替放宽/还原约束，MPC 求解抖动。
+- 转弯入口 omega 从 0 跳变到 0.12 rad/s，经上游 RhoFilter（tau=0.35s）后 LPV 插值仍快速跳变，引起 e_psi 和 e_omega 颤振。
+
+### Changes
+
+**src/Mamba/mamba_observer_step.m**（重构）：
+- 废弃 IMU 互补滤波器（V2），改为直接读取 `y_raw(16) = theta_ground`（零延迟，精确）。
+  - 根因证据：`output_eq_ref.m` L198 `accel_x_base = (F_drive - F_drag - F_slope)/m`，重力已减去，IMU CF 恒输出 0。
+- 废弃 `out.delta_hat`，改为物理公式 `atan(L_eq * omega / max(v, 0.20))`（精确且无延迟）。
+  - 数据来源：`y_raw(4)=v`，`y_raw(5)=omega`，`L_eq_cache` 缓存自 `params.L`（默认 2.0m）。
+- persistent 变量由 `theta_cf` 替换为 `L_eq_cache`，在 `reset > 0.5` 时重新从 `params.L` 加载。
+- 保留三层工程保护（幅值限幅 ±10°、死区 ±1.5°、label_main=flat 门控），但应用于 `y_raw(16)` 输出，不再依赖 Mamba 回归。
+- 代码内完整保留 V1/V2/V3 版本失败原因注释，便于追溯。
+
+**src/Mamba/Mamba_gen_train_data.m**（训练数据标注修复，V1.1→V1.2）：
+- `generate_mamba_labels` 函数中 stall 标注引入**车速门控** `stall_v_thresh = 0.40 m/s`：
+  - 原逻辑：注入窗口内所有帧均标为 stall(2)，导致坡道爬坡（高电流+正常车速）被错标。
+  - 新逻辑：`m_eff = m & (v_meas_vec < stall_v_thresh)`，仅近零速帧才标为 stall，坡道爬坡帧保持 slope(3)。
+  - 效果：提供明确对比样本（高电流+正常速度 → slope；高电流+近零速度 → stall），提升模型区分度。
+- 启发式 stall 补充也同步增加 `v < 0.20 m/s` 条件，防止边界误标。
+- `L_eq` 默认值从错误的 `0.45` 修正为与 `parameters.m` 一致的 `2.0`（前后轴距）。
+
+**src/Mamba/train_agv_mamba.py**（新增训练曲线图导出）：
+- 新增 `plot_training_curves(history_path, save_dir)` 函数（读取 `history.jsonl`）。
+- 训练结束后自动保存 `save_dir/training_curve.png`（300 DPI，适合论文）。
+- 图像布局三栏：
+  - (a) Train/Val total loss + Best epoch 竖线
+  - (b) Val 各分量损失（θ/δ 回归 + main/turn 分类）
+  - (c) Val slip-F1 和 stall-F1 随 epoch 变化
+- 新增 `import matplotlib`（使用 `Agg` 后端，兼容无 GUI 的 WSL/Linux server）。
+
+**src/core/UpdatePlantModel.m**（V2→V3，两处减振）：
+- **新增 persistent 变量**：`rho_omega_lpf`、`stall_on`、`stall_on_cnt`、`stall_off_cnt`。
+- **omega 补充 LPF**（转弯入口减振）：
+  - 在 `mpc_update_from_rho` 调用前对 `rho(2)` 补充一层 LPF（tau=0.25s）。
+  - 等效级联：上游 RhoFilter（0.35s）+ 本级（0.25s）→ tau_eff ≈ 0.60s，上升时间 ≈ 1.3s。
+  - `rho(3)` 不加滤（保持坡度信息实时用于 F_eq 重力前馈）。
+  - 传入 `mpc_update_from_rho` 的变量由 `rho` 改为 `rho_upd = [rho(1); rho_omega_lpf; rho(3)]`。
+- **stall 非对称迟滞滤波**（label 2↔3 切换减振）：
+  - 原逻辑：`lbl_main == 2` 直接放宽约束，每 5 步切换一次导致约束抖动。
+  - 新逻辑：非对称迟滞，ON 需连续 20 步（0.2s）确认，OFF 需连续 50 步（0.5s）无 stall 才退出。
+  - 有效标志 `lbl_main_eff`（`stall_on==true` 期间维持为 2），替代原始 `lbl_main` 触发约束放宽。
+  - 端到端 stall 生效延迟：Mamba 推理（0.40s）+ 迟滞 ON（0.20s）≈ **0.60s**。
+
+### Verification
+- `theta_out` 正确跟踪 ±0.15 rad 坡度角（图示与 theta_ref 波形吻合）。
+- `e_v` 误差由 ±0.5 降至 ±0.2（坡度前馈恢复正常）。
+- `e_y` 全程稳定在 ±0.1m 内，无发散，无高频颤振。
+- `delta_hat` 无峰值尖刺（物理公式替代后输出稳定）。
+- UpdatePlantModel 减振修改待下次仿真验证。
+
+### Files
+- [src/Mamba/mamba_observer_step.m](src/Mamba/mamba_observer_step.m)
+- [src/Mamba/Mamba_gen_train_data.m](src/Mamba/Mamba_gen_train_data.m)
+- [src/Mamba/train_agv_mamba.py](src/Mamba/train_agv_mamba.py)
+- [src/core/UpdatePlantModel.m](src/core/UpdatePlantModel.m)
+
+---
+
+## 2026-04-06 – Mamba2 闭环集成修复与控制逻辑接入
+
+### Subject
+feat/fix(mamba/sim): Mamba2 闭环 Mode B 根因修复（IMU 互补滤波替换）+ 分类输出接入 MPC 约束调度
+
+### Context
+- Mamba2 Mode B 集成后闭环误差持续发散，排查发现根本原因与 Mode B 初始假设（theta_hat 噪声/过冲）无关。
+- **真正根因**：Mamba theta_hat 依赖 128 步滑动缓冲（1.28s）+ LPF（tau=0.40s，上升≈0.92s），总延迟约 2.2s；在坡度入/出换段时 LPV 工作点持续偏移，速度误差在转弯段（t≈100s）累积为偏航偏差（e_psi→-0.8 rad），最终导致电机饱和颤振。
+- 解决方案：theta_hat 改由 IMU 互补滤波器（延迟 0.01s）提供；Mamba 分类输出保留并接入 UpdatePlantModel 约束调度。
+
+### Changes
+
+**src/Mamba/mamba_observer_step.m**（重要修改）：
+- 废弃直接使用 `out.theta_hat` 作为 theta_out 来源。
+- 新增 persistent 变量 `theta_cf`，实现 IMU 互补滤波器：
+  - `theta_cf = 0.98*(theta_cf + gyro_pch*Ts) + 0.02*(accel_x/g)`
+  - alpha=0.98，时间常数 τ≈0.5s
+  - `accel_x = y_raw(9)`（前向加速度计），`gyro_pch = y_raw(10)`（俯仰角速率）
+- 工程保护流程变更为三层（去掉原"Layer 4 斜率限幅"错误修复）：
+  1. 幅值限幅 ±10°
+  2. 死区 ±1.5°
+  3. label_main=flat 强制置零
+- 重置逻辑：`reset > 0.5` 时同步清除 `theta_cf = 0.0`。
+
+**src/Mamba/Mamba_state_classifier.m**：
+- `tau_theta` 由 0.15s → 0.40s（theta_hat LPF，用于分类输出的平滑，不再对 MPC 输出产生直接影响）。
+
+**src/core/UpdatePlantModel.m**（新增文件）：
+- 从 Simulink 内联块提取为独立 .m 文件（`src/core/UpdatePlantModel.m`），供模型直接调用。
+- **V2 新增第 6 个输入端口 `label_vec = [label_main; label_slip]`**：
+  - `label_main==2`（stall）：`umin(1)` 和 `umax(1)` 各乘以 1.4
+  - `label_slip==1`（slip）：`umax(1)` 乘以 0.65；`Q(3)`（q_v）乘以 0.5
+- Simulink 接线：Mamba_Observer 输出 6×1 → Selector（索引 [3,5]）→ label_vec 端口
+
+**LPVMPC_AGV_simulink.slx 中 GRU_State_Classifier（用户手动修改）**：
+- 修复 y_raw 维度不匹配问题：AGV 输出由 31 维扩展为 34 维后，在调用前增加切片 `y_raw_31 = y_raw(1:31)`，GRU 内部索引均 ≤ 31，兼容无需更改。
+
+### Verification
+- IMU CF 修复后仿真结果：e_y 峰值 ≤ 0.10m（之前最差 -1.5m，改善 15 倍）；e_psi ≤ 0.10 rad；XY 轨迹完美跟踪。
+- t=50~65s 存在轻微振荡（CF 滤波器吃入制动减速度，固有局限），不影响整体结论。
+- Mamba2 Mode B 达到工程可用标准，与 baseline（无 Mamba）性能持平。
+
+### Files
+- [src/Mamba/mamba_observer_step.m](src/Mamba/mamba_observer_step.m)
+- [src/Mamba/Mamba_state_classifier.m](src/Mamba/Mamba_state_classifier.m)
+- [src/core/UpdatePlantModel.m](src/core/UpdatePlantModel.m)
+- simulink/LPVMPC_AGV_simulink.slx（GRU_State_Classifier 手动修改，未版本化）
+- simulink/test_closed_loop.slx（Mamba2 分支，Selector + label_vec 接线，手动修改）
+
+---
+
+## 2026-03-30 – Mamba 导出链路加固、训练入口落地与 Mamba-3 兼容性热修
+
+### Subject
+feat/fix(mamba): 完成导出脚本健壮化、极值定位工具、统一训练入口（mamba1/2/3）与 Triton 兼容性补丁
+
+### Context
+- 目标 1：审查并修复 `export_mamba_dataset.m` 的潜在风险（短序列、空集、标签合法性、类型一致性）。
+- 目标 2：将导出后的 `Mamba_dataset_export.mat` 接入 Python 训练流程，支持 Mamba / Mamba-2 / Mamba-3 切换训练。
+- 目标 3：定位归一化极值告警来源，并判断是否为脏样本。
+- 运行环境：WSL2 + Python，已完成数据读取与 mamba1/mamba2 冒烟训练验证。
+
+### Changes
+**src/Mamba/export_mamba_dataset.m**：
+- 配置合法性校验：新增 `window_size/stride` 与 `train_ratio/val_ratio` 参数范围检查。
+- 输入结构校验：新增 `data.runs` 存在性检查。
+- 划分与样本非空保护：
+  - 训练集 run 为空时报错；验证/测试集为空给出 warning。
+  - Train 切片样本为 0 时报错，阻止后续均值方差计算污染。
+- 切片引擎健壮性：
+  - 预统计窗口数时仅累计 `windows_i > 0`，修复短序列导致 `total_windows` 负值风险。
+  - 新增 run 字段完整性与标签长度一致性检查。
+  - 新增 `y_mamba` 维度强校验（期望 10 通道）。
+- 标签导出类型修正：`Y_main/Y_turn/Y_slip/Y_stall` 改为 `int8`。
+- 自检增强：新增 train/val/test 三个集合的标签值域校验（main/turn/slip/stall）。
+
+**src/core/output_eq_ref_train_data.m**：
+- Mamba 专用 `slip_ratio` 通道改为观测侧构造：
+  - 从依赖内部 `v_x` 改为基于双轮速构造 `v_obs_ref`。
+  - 目的：降低训练-部署不一致风险，保持输入通道数不变（仍为 10 通道）。
+
+**tools/tmp_locate_mamba_extremes.m**（新增）：
+- 新增极值定位脚本，用于将归一化极值反查到：
+  - `run 编号 + 窗口起点 + 帧索引 + 通道`。
+- 输出全局最大 |z|、Top-K 极值点、各通道 `max/p99/p99.9` 统计，支持快速判定是结构性边界值还是脏数据。
+
+**src/Mamba/mamba_dataset.py**：
+- 补充脚本级说明与详细函数头（`__init__` / `__len__` / `__getitem__` / `close` / `__main__`），不改变业务逻辑。
+
+**src/Mamba/train_agv_mamba.py**（新增）：
+- 新增统一训练入口脚本，支持 `--model mamba1|mamba2|mamba3`。
+- 集成多头任务训练：
+  - 回归：`theta`、`delta`
+  - 分类：`main`、`turn`、`slip`、`stall`
+- 支持 AMP、梯度裁剪、验证集评估、`best.pt/last.pt` checkpoint 保存。
+
+**src/Mamba/model/mamba/mamba_ssm/__init__.py**：
+- 将 `Mamba3` 改为可选导入（try/except），避免在 Mamba-3 不可用时阻断 mamba1/mamba2 训练。
+
+**src/Mamba/model/mamba/mamba_ssm/ops/triton/mamba3/**：
+- 为以下文件中的 `triton.set_allocator(...)` 增加 `hasattr` 与异常保护：
+  - `mamba3_siso_fwd.py`
+  - `mamba3_siso_bwd.py`
+  - `mamba3_siso_step.py`
+- 目的：兼容缺少 `set_allocator` API 的 Triton 版本，避免导入阶段直接崩溃。
+
+### Verification
+- MATLAB 端导出脚本实跑通过：成功生成 `data/mamba/Mamba_dataset_export.mat`。
+- 导出结果核验：
+  - `X_train=[44736,128,10]`, `X_val=[5592,128,10]`, `X_test=[5592,128,10]`
+  - 分类标签导出类型为 `int8`，`mu/sigma` 为 `single`。
+- 极值定位结论：
+  - 全局最大 |z|=44.2737，定位到 `slip_lf` 首帧边界饱和值（结构性边界极值，非 NaN/Inf 污染）。
+- Python 数据加载验证：`mamba_dataset.py` 可正常读取并输出批维度。
+- 训练冒烟验证：
+  - `mamba1`：通过（1 epoch）。
+  - `mamba2`：通过（1 epoch）。
+  - `mamba3`：未通过，当前环境报错 `triton.language.make_tensor_descriptor` 缺失（内核能力/版本兼容问题）。
+
+### Files
+- [src/Mamba/export_mamba_dataset.m](src/Mamba/export_mamba_dataset.m)
+- [src/core/output_eq_ref_train_data.m](src/core/output_eq_ref_train_data.m)
+- [tools/tmp_locate_mamba_extremes.m](tools/tmp_locate_mamba_extremes.m)
+- [src/Mamba/mamba_dataset.py](src/Mamba/mamba_dataset.py)
+- [src/Mamba/train_agv_mamba.py](src/Mamba/train_agv_mamba.py)
+- [src/Mamba/model/mamba/mamba_ssm/__init__.py](src/Mamba/model/mamba/mamba_ssm/__init__.py)
+- [src/Mamba/model/mamba/mamba_ssm/ops/triton/mamba3/mamba3_siso_fwd.py](src/Mamba/model/mamba/mamba_ssm/ops/triton/mamba3/mamba3_siso_fwd.py)
+- [src/Mamba/model/mamba/mamba_ssm/ops/triton/mamba3/mamba3_siso_bwd.py](src/Mamba/model/mamba/mamba_ssm/ops/triton/mamba3/mamba3_siso_bwd.py)
+- [src/Mamba/model/mamba/mamba_ssm/ops/triton/mamba3/mamba3_siso_step.py](src/Mamba/model/mamba/mamba_ssm/ops/triton/mamba3/mamba3_siso_step.py)
+
+## 2026-03-27 – Mamba 训练数据生成脚本 Simulink 兼容性修复
+
+### Subject
+fix(mamba): 修复 Mamba_gen_train_data.m 调用 GRU_DataGen.slx 时的多项编译/运行时错误
+
+### Context
+- 首次运行 `Mamba_gen_train_data.m` 调用 `GRU_DataGen.slx` 进行数据生成时，连续遇到多项兼容性问题。
+- 根因：脚本从 GRU 版本沿袭而来，部分参数与 Mamba 场景不匹配；Simulink 模型工作区残留了过时变量。
+
+### Changes
+**src/Mamba/Mamba_gen_train_data.m**：
+- `prepare_runtime_workspace_local` 函数：
+  - `preloadfcn_v2()` / `preloadfcn_v1()` 调用改为 `evalin('base', 'preloadfcn_v2')` / `evalin('base', 'preloadfcn_v1')`，解决从函数作用域调用时 `Simulink.Bus.createObject` 创建的临时 Bus 变量（如 `slBus1`）在 `eval` 中不可见的问题。
+  - 新增 `MPC_idx` 自动补充逻辑：当 base workspace 中不存在该变量时，自动从 `db_rt` 网格中心计算并赋值为 1×4 向量（Simulink 编译器强制校验维度）。
+- `extract_signals_from_sim` 函数：
+  - 信号名修正：`sim_out.y_raw` → `sim_out.y_raw1`，`sim_out.u` → `sim_out.u1`，`sim_out.theta` → `sim_out.theta1`，与 GRU_DataGen.slx 中 To Workspace 模块实际变量名保持一致。
+- 用户手动修改：
+  - `cfg.Ts` 从 `0.05` 改为 `0.01`，与 `parameters()` 和 MPC 控制器采样周期一致。
+  - `omega_turn_thresh` 从误改的 `0.01` 恢复为 `0.05` rad/s（角速度转弯判定阈值，与 Ts 无关）。
+
+**simulink/GRU_DataGen.slx**（用户手动修改）：
+- 清空模型工作区中残留的 `MPCPlantBus` Bus 对象（Simulink 要求 Bus 对象仅存于 base workspace）。
+- 修正 `Global2PathError` 模块前的 Demux 配置：将状态向量拆分从 `[2,2,2,1,1]` 改为 `[1,1,1,1,1,...]`（每个输出为标量），解决 `mo` 端口信号维度 6×1 与 MPC 期望 4×1 不匹配的编译错误。
+- 删除 `ctrl.mat` 并由 `preloadfcn_v2` 以当前 ny=4 的 LPV 数据库重建 MPC 控制器。
+
+### Verification
+- Simulink 模型编译通过，仿真可正常执行（5s 快速测试验证信号名/维度正确）。
+- `sim_out.who` 确认输出信号：`tout`, `y_raw1`, `u1`, `theta1`。
+
+### Files
+- [src/Mamba/Mamba_gen_train_data.m](src/Mamba/Mamba_gen_train_data.m)
+- simulink/GRU_DataGen.slx（手动修改，未版本化）
+
+## 2026-03-26 – Mamba 150s工业造数策略与路径参数化同步
+
+### Subject
+feat(mamba/path): 切换到 150s 工业分区造数，加入事件注入统计；路径函数支持转向强度参数化
+
+### Context
+- 目标：将 Mamba 训练数据生成从旧短场景流程迁移到工业分区 150s 路径流程，并保证事件分布可控、可追踪。
+- 需求：
+  - 黄金区（10-50s）每回合注入且仅注入一个主事件（slip/load_change/stall）。
+  - 额外异常以约 20%-30% 概率注入 pure_turn/pure_slope/composite 区域。
+  - 支持 run 级路径参数随机化与元信息记录。
+  - 纯坡度区训练覆盖改为 0-10 度、步长 0.1 度；转向强度暂固定。
+
+### Changes
+**src/Mamba/Mamba_gen_train_data.m**：
+- 造数主配置切换为工业分区长周期：
+  - 场景固定为 `industrial_lite`。
+  - `T_end` 调整为 `150s`。
+- 事件策略升级：
+  - 黄金区单主事件（slip/load_change/stall 三选一）。
+  - 额外区异常注入概率 `0.25`，目标区 `pure_turn/pure_slope/composite`。
+- 路径参数随机化升级：
+  - run 级随机化 `v_cruise`、坡度参数、过滤/限幅参数。
+  - 与 `gen_agv_ref_path_v1` 的参数接口对齐。
+- 纯坡度覆盖策略修改：
+  - 由连续随机改为离散网格 `0.0:0.1:10.0`。
+  - 按 `run_idx` 循环覆盖坡度档位，确保数据集覆盖性。
+  - 转向缩放固定为 `turn_scale_pure_fixed=1.0`、`turn_scale_composite_fixed=1.0`（不随 run 变化）。
+- 可靠性与可观测性增强：
+  - 仿真输出提取前优先检查 `SimulationOutput.ErrorMessage`，避免 `tout` 二次误报。
+  - 初始化阶段主动执行 runtime workspace 刷新（优先 `preloadfcn_v2`）。
+  - 增加事件统计 `event_stats`（主事件计数、额外区比例、分区分布）并写入 `data.meta`。
+
+**src/paths/gen_agv_ref_path_v1.m**：
+- 新增路径参数：
+  - `turn_scale_pure`（纯转弯区转角缩放）。
+  - `turn_scale_composite`（复合区转角缩放）。
+- 应用范围：
+  - 纯转弯区与复合区各转弯段 `turn_angle` 均支持缩放。
+- 元信息增强：
+  - 将两项转角缩放参数写入 `ref.meta.params`，便于回放与追溯。
+
+### Verification
+- 结构检查：
+  - `Mamba_gen_train_data.m` 与 `gen_agv_ref_path_v1.m` 参数接口已对齐。
+  - 训练脚本输出信号契约仍保持：`ref_path.signals.values` 为 9 列，`inj_signal.signals.values` 为 2 列。
+- 静态检查：
+  - `src/Mamba/Mamba_gen_train_data.m` 无新增语法/编译错误。
+
+### Files
+- [src/Mamba/Mamba_gen_train_data.m](src/Mamba/Mamba_gen_train_data.m)
+- [src/paths/gen_agv_ref_path_v1.m](src/paths/gen_agv_ref_path_v1.m)
+
+## 2026-03-17 – 训练模型三脚本主干对齐（保留注入通道）
+
+### Subject
+refactor(core/train): 对齐训练版与主模型的运动学/动力学主干，仅保留训练注入差异
+
+### Context
+- 目标：仅修改训练链路的三份核心脚本，使其与当前 AGV 主模型保持同源主干，避免训练-部署模型失配。
+- 约束：训练模型仍需保留注入通道（`slip_gamma`, `stall_load`）用于数据增强。
+- 适配：继续使用现有 Simulink 训练模型 `GRU_DataGen.slx`。
+
+### Changes
+**src/core/agv_model_sfunc_train_data.m**：
+- 训练 S-Function 输出维度调整为 34，与主模型输出契约一致。
+- 保持 5 维输入接口：`[F_cmd; omega_cmd; theta_ground; slip_gamma; stall_load]`。
+
+**src/core/state_eq_ref_train_data.m**：
+- ICR 选择策略与主模型对齐（优先参考曲率，缺失/退化时回退测量）。
+- 关键主干参数对齐：`K_omega_p=120`、`C_damping=250`。
+- 保留注入逻辑：`mu = mu_base * slip_gamma`，并在纵向动力学中保留 `stall_load` 影响。
+
+**src/core/output_eq_ref_train_data.m**：
+- 输出扩展并对齐为 34 维（含 32-34 通道）。
+- `gyro_y_meas` 与主模型一致，采用坡度差分构造。
+- 侧偏与低速保护阈值、ICR 回退逻辑与主模型一致。
+- 保留注入逻辑：打滑系数和堵转负载对观测量的影响不变。
+
+### Verification
+- 代码级核对：训练版 S-Function 确认调用训练版 `state_eq_ref_train_data` 与 `output_eq_ref_train_data`，接口匹配。
+- 模型级核对：`GRU_DataGen.slx` 训练链路可继续使用上述三脚本，接口仍为 5 输入植物块 + 注入信号拼接。
+
+### Files
+- [src/core/agv_model_sfunc_train_data.m](src/core/agv_model_sfunc_train_data.m)
+- [src/core/state_eq_ref_train_data.m](src/core/state_eq_ref_train_data.m)
+- [src/core/output_eq_ref_train_data.m](src/core/output_eq_ref_train_data.m)
+
+## 2026-03-17 – BO 爬坡保速修复（语义校正 + 目标函数增强）
+
+### Subject
+fix(bo/mpc): 修复上坡控制增益语义方向，增强 BO 对“上坡不停车”的优化驱动
+
+### Context
+- 现象：贝叶斯优化后，MPC 在上坡场景可能倾向于降低速度以减少控制惩罚。
+- 根因1：`R_F_gain_max_uphill` 在在线调度中被乘到 `R(1)`，导致“增益越大、惩罚越重”，与“放宽上坡控制努力”的命名语义相反。
+- 根因2：`Cost_Function` 中速度误差项权重较低，且缺少显式“上坡防停车”惩罚，易出现“少出力换低代价”的伪最优。
+
+### Changes
+**src/mpc/mpc_update_from_rho.m**：
+- 语义修正：`R_interp(1)` 从乘法改为除法
+  - 由 `R_interp(1) = R_interp(1) * R_F_gain`
+  - 改为 `R_interp(1) = R_interp(1) / max(R_F_gain, 1e-6)`
+- 默认值调整（避免字段缺失时上坡被额外抑制）：
+  - `R_F_gain_max_uphill`: `1.2 -> 1.0`
+  - `R_F_gain_max_downhill`: `1.5 -> 1.2`
+  - `dR_F_gain_max_uphill`: `1.3 -> 1.0`
+  - `dR_F_gain_max_downhill`: `1.6 -> 1.2`
+
+**src/mpc/Cost_Function.m**：
+- 提高速度误差权重：新增 `cfg.w_ev`（默认 `0.45`）并替代原固定 `0.1`。
+- 新增上坡防停车惩罚 `J_stall`：
+  - 在上坡且有速度参考时，惩罚实际速度低于参考的比例（`stall_ratio`）
+  - 惩罚低速占比（`low_speed_rate`）
+  - 总体加入 `J_scene`，并写入 `report.scene.*.stall`。
+
+**src/bo/Bayesian_Optimization.m**：
+- Phase 2 中 `R_F_gain_max_uphill` 搜索区间调整为 `[1.0, 2.5]`，与新语义对齐：
+  - 增益越大，上坡 `R(1)` 惩罚越小，更倾向保速爬坡。
+
+### Files
+- [src/mpc/mpc_update_from_rho.m](src/mpc/mpc_update_from_rho.m)
+- [src/mpc/Cost_Function.m](src/mpc/Cost_Function.m)
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+## 2026-03-16 – MPC Nominal 前馈补偿与 BO 边界微调
+
+### Subject
+feat(mpc): 在 MPC 的 Nominal.U 注入重力和滚阻补偿，解决爬坡停车问题
+fix(bo): 下调 `q_omega` 搜索上限至 1.5，防止横向振荡
+
+### Context
+在闭环仿真测试时，AGV 运行到路径的复合区（有坡度）时 `e_v` 剧降至 -0.8m/s (速度归零)。经排查，由于 MPC 默认的 Nominal.U 为 0，当 AGV 上坡需要维持一定速度时耗费巨大驱动力 $u_1$，导致控制惩罚远超速度误差惩罚，内置优化器“为降低总代价”而选择停车摆烂。
+
+通过向 Nominal.U 注入稳态前馈补偿（重力分量 + 滚动阻力），使 MPC 明白爬坡发力不属于控制负担，彻底解决了长距离速度丢失问题。
+
+### Changes
+**src/mpc/Cost_Function.m**（用于 BO 评估端）：
+- 在计算 `Nominal.U` 处注入稳态补偿：`F_eq = m_agv * g * (sin(md) + c_r * cos(md))`
+- `Nominal.U(1) = F_eq`
+
+**UpdatePlantModel (Simulink 模块)**（用于 Simulink 仿真端）：
+- 取消上一版为了 Debug 的硬编码 `Q_manual` 覆盖，恢复读取 `maps_local`
+- 同样在返回的 `plant.U` 中注入 `F_eq` 稳态计算
+
+**src/bo/Bayesian_Optimization.m**：
+- `q_omega` 的搜索上界从 `4.0` 下调至 `1.5`，防止 Phase 1 优化出的角速度权重过高引发横向剧烈振荡（如前一次结果出现的 ±0.4 rad/s 高频抖动）。
+- `Np` 统一调整为 150 (1.5s)，`Nc` 统一调整为 50 (0.5s)，以匹配 Simulink 配置并适应大曲率 S 弯。
+
+### Files
+- [src/core/preloadfcn_v2.m](src/core/preloadfcn_v2.m)
+- [src/mpc/Cost_Function.m](src/mpc/Cost_Function.m)
+- Simulink/UpdatePlantModel
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-03-15 – Phase 1/2 参数搜索边界扩展
+
+
+### Subject
+fix(bo): q_y 上界 100→150，theta_threshold 上界 0.12→0.15
+
+### Context
+最新优化结果：
+- Phase 1 最优 `q_y=99.45`（打上界100），GP 代理模型自第67轮起预测值出现负数（GP崩溃），根因是 q_y 卡在边界导致搜索空间畸形
+- Phase 2 `theta_threshold=0.12`（打新上界），复合区实际坡度超过 6.88°，需要更大触发范围
+
+### Changes
+**src/bo/Bayesian_Optimization.m**：
+
+| 参数 | 阶段 | 旧范围 | 新范围 |
+|---|---|---|---|
+| `q_y` | Phase 1 | [10, 100] | **[10, 150]** |
+| `theta_threshold` | Phase 2 | [0.01, 0.12] | **[0.01, 0.15]** |
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-03-15 – Phase 2 参数搜索范围调整
+
+
+### Subject
+fix(bo): 调整 omega_threshold 下界和 theta_threshold 上界，防止伪最优
+
+### Context
+上次 Phase 2 结果：omega_threshold=0.031 rad/s（打下界 0.03），theta_threshold=0.163 rad（接近上界 0.18）。
+- omega_threshold 过低相当于"全程放大 q_y"，失去自适应意义，故提高下界
+- theta_threshold 上界 0.18 rad（≈10°）超过实际路径最大坡度，使参数无法有效触发，故收窄上界
+
+### Changes
+**src/bo/Bayesian_Optimization.m** — Phase 2 variables：
+
+| 参数 | 旧范围 | 新范围 | 原因 |
+|---|---|---|---|
+| omega_threshold | [0.03, 0.50] | **[0.08, 0.50]** | 下界太低导致全程触发，无自适应意义 |
+| theta_threshold | [0.01, 0.18] | **[0.01, 0.12]** | 实际坡度<10°，上界0.18永远达不到触发 |
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-03-15 – Phase 2 closure 权重置零
+
+
+### Subject
+fix(bo): Phase 2 closure 从 0.15 改为 0.00，同样原因于 Phase 1
+
+### Context
+Phase 2 所有 40 次迭代 J 全部锁死在 1.5e5±2（0.15×1e6=150000），BO 仍退化为随机搜索。同时注意最终参数中 `omega_threshold = 0.033 rad/s` 异常偏小（几乎任何转向都触发 q_y 增益放大），可能是 Phase 2 在噪声优化下的伪最优，应在下次重跑后重点关注此参数。
+
+### Changes
+**src/bo/start_bayesian.m** — Phase 2：
+
+| 场景 | 旧 | 新 |
+|---|---|---|
+| pure_slope | 0.30 | **0.35** |
+| composite | 0.30 | **0.40** |
+| closure | 0.15 | **0.00** |
+
+### Files
+- [src/bo/start_bayesian.m](src/bo/start_bayesian.m)
+
+---
+
+## 2026-03-15 – Phase 1 closure 权重回退为 0
+
+
+### Subject
+fix(bo): Phase 1 closure 改回 0.00，防止失败惩罚淹没优化信号
+
+### Context
+上次将 Phase 1 closure 设为 0.10 后，150 次评估的 J 值全部锁死在 1e5±2（closure 失败 1e6×0.1=100000 完全覆盖有效信号），BO 退化为随机搜索。Phase 1 宽参数搜索时 closure 极易 QP 不可行，应交由 Phase 2 处理。
+
+### Changes
+**src/bo/start_bayesian.m** — Phase 1：
+
+| 场景 | 旧 | 新 |
+|---|---|---|
+| pure_slope | 0.25 | **0.30** |
+| composite | 0.20 | **0.25** |
+| closure | 0.10 | **0.00** |
+
+### Files
+- [src/bo/start_bayesian.m](src/bo/start_bayesian.m)
+
+---
+
+## 2026-03-14 – Phase 2 场景权重调整（纳入闭环段）
+
+
+### Subject
+fix(bo): 调整 Phase 2 场景权重，纳入闭环段自适应参数优化
+
+### Changes
+**src/bo/start_bayesian.m** — Phase 2 scenes：
+
+| 场景 | 旧 | 新 |
+|---|---|---|
+| golden_test | 0.10 | **0.05** |
+| pure_turn | 0.20 | 0.20 |
+| pure_slope | 0.35 | **0.30** |
+| composite | 0.35 | **0.30** |
+| closure | 0.00 | **0.15** |
+
+### Files
+- [src/bo/start_bayesian.m](src/bo/start_bayesian.m)
+
+---
+
+## 2026-03-14 – Phase 1 场景权重调整（纳入闭环段）
+
+
+### Subject
+fix(bo): 调整 Phase 1 场景权重，将重心从直道转向复杂场景，并首次纳入闭环段
+
+### Changes
+**src/bo/start_bayesian.m** — Phase 1 scenes：
+
+| 场景 | 旧 | 新 | 说明 |
+|---|---|---|---|
+| golden_test | 0.35 | **0.10** | 直道易优化，减少主导 |
+| pure_turn | 0.40 | **0.35** | 仍最高，稍降 |
+| pure_slope | 0.15 | **0.25** | 坡度对 q_v/r_F 是关键约束，提权 |
+| composite | 0.10 | **0.20** | 最接近真实工况，提权 |
+| closure | 0.00 | **0.10** | 原为完全忽略，现纳入评分 |
+
+### Files
+- [src/bo/start_bayesian.m](src/bo/start_bayesian.m)
+
+---
+
+## 2026-03-14 – Cost_Function 与 Simulink 三项一致性修复
+
+
+### Subject
+fix(bo,mpc): 统一 Bayesian_Optimization/Cost_Function 与 Simulink 的 Np/Nc、dw_max、x0_delta
+
+### Context
+- BO 的目标函数 `Cost_Function` 与 Simulink 实际仿真在以下三点存在不一致，可能导致优化找到的参数在闭环仿真中退化：
+  1. **Np/Nc 不一致**：Cost_Function 默认走 `mpc_setup_single_interp` 的内置默认值（Np=160步/1.6s），而 preloadfcn_v2 的 Simulink 模型使用 Np=80（0.8s）。MPC 优化视域不同，权重含义不同。
+  2. **dw_max 偏旧**：Cost_Function 用 0.4 归一化角速度变化率代价，但实际 `MV.RateMax = 0.9`，导致平滑项 J_smooth 中角速度部分被高估约 2.25 倍，优化器过度惩罚 r_domega。
+  3. **x0_delta 强制为 0**：切片仿真开始时（尤其是弯道区），机器人的转向角实际上非零，直接置0会造成控制器需要"悟然重建"转向角的初始跳变，与 Simulink 连续仿真不符。
+
+### Changes
+1. **src/bo/Bayesian_Optimization.m**：
+   - `base_opts_main` 新增 `'Np', 80, 'Nc', 30`，与 `preloadfcn_v2.m` 的 `TARGET_NP=80, TARGET_NC=30` 对齐。
+
+2. **src/mpc/Cost_Function.m**：
+   - `dw_max` 默认值：`0.4` → **`0.9`**（与 `MV.RateMax = 0.9` 对齐）。
+   - 独立测试时默认 ctrl 创建：`mpc_setup_single_interp(db, struct())` → `mpc_setup_single_interp(db, struct('Np',80,'Nc',30))`。
+   - 切片初始状态 `x0_delta`：从硬编码 0 改为运动学估算 `atan(omega * L / v)`（`v < 0.05` 时回退为 0）。
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+- [src/mpc/Cost_Function.m](src/mpc/Cost_Function.m)
+
+---
+
+## 2026-03-13 – 贝叶斯优化目标函数随机性修复
+
+
+### Subject
+fix(bo): 将 base_ctrl 改为主进程预创建并通过 frozen 传递，消除并行 worker 初始化时序不确定性
+
+### Context
+- 上一轮 BO 监测到同一参数两次评估 J 值差异达 1 量级（5.35 → 4.27），根本原因是 `objective_wrapper` 中使用 `persistent base_ctrl`：
+  - 每个并行 worker 在首次被调用时各自独立执行 `mpc_setup_single_interp`，初始化时序不受控；
+  - 各 worker 产生的 MPC 对象内部状态（如扰动估计器默认值）不完全相同，导致同参数的仿真结果差异巨大。
+- `IsObjectiveDeterministic = false` 虽然让代理模型具备噪声感知能力，但不能消除根本噪声源。
+
+### Changes
+1. **src/bo/Bayesian_Optimization.m**（步骤1+2）：
+   - **步骤1**（主函数 `~line 221`）：在 `bayesopt` 调用前，主进程单线程执行 `mpc_setup_single_interp` 预创建 `base_ctrl_main`，写入 `frozen.base_ctrl`，随匿名函数 `obj` 自动序列化广播给所有 worker。
+   - **步骤2**（`objective_wrapper` `~line 468`）：删除 `persistent base_ctrl` 声明；将 `if isempty(base_ctrl)...end` 初始化块替换为 `base_ctrl = P.base_ctrl;`（即从 `frozen` 读取主进程预创建的唯一实例）。
+   - **预期效果**：同参数重复评估的 J 值差异从 ~1量级降至 ~0.01量级（仅剩数值积分微小误差）。
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-03-13 – 贝叶斯优化参数范围扩展与历史保存 Bug 修复
+
+
+### Subject
+fix(bo): 扩展四个触边界参数的搜索范围，降低 Phase 1 评估次数，修复历史目录路径拼接错误
+
+### Context
+- 上一轮 BO 结果中 `q_y`（79.46/80）、`log10_r_omega`（-1.50/-1.5）、`q_y_gain_max`（3.94/4.0）、`theta_threshold`（0.119/0.12）均贴近上界，搜索空间受限。
+- Phase 1 设置 300 次评估，但从第39次迭代之后改善有限，后 260 次提升极小，浪费计算资源。
+- `Bayesian_Optimization.m` 第430行将字符串变量 `results_dir` 当函数调用（`results_dir('bo/history')`），导致保存历史时报错。
+
+### Changes
+1. **src/bo/Bayesian_Optimization.m**（V2.12 内同步修复）：
+   - **Phase 1 参数范围**：
+     | 参数 | 旧上界 | 新上界 | 原因 |
+     |------|--------|--------|------|
+     | `q_y` | 80 | **100** | 前次最优 79.46 贴近上界 |
+     | `log10_r_omega` | -1.5 | **-1.0** | 前次最优 -1.50 贴近上界 |
+   - **Phase 2 参数范围**：
+     | 参数 | 旧上界 | 新上界 | 原因 |
+     |------|--------|--------|------|
+     | `q_y_gain_max` | 4.0 | **6.0** | 前次最优 3.945 贴近上界 |
+     | `theta_threshold` | 0.12 | **0.18** | 前次最优 0.119 贴近上界（约10°） |
+   - **历史保存 Bug 修复**（`~line 430`）：`results_dir('bo/history')` → `fullfile(results_dir, 'bo', 'history')`，并新增 `mkdir` 保护。
+
+2. **src/bo/start_bayesian.m**：
+   - `phase1_config.MaxObjectiveEvaluations`: **300 → 150**（第39次之后提升有限，节省约一半算力）
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+- [src/bo/start_bayesian.m](src/bo/start_bayesian.m)
+
+---
+
+## 2026-03-11 – 路径可跟踪性重构与 BO/MPC 一致性对齐（本轮对话汇总）
+
+
+### Subject
+feat(paths,bo,mpc): 平滑 industrial_lite 参考路径，统一闭环测试、LPV 工作流与贝叶斯优化的控制器参数来源及约束边界
+
+### Context
+- 本轮对话前半段的核心问题，已经从“单纯 MPC 权重不合适”转为“参考路径本身对 AGV 过于激进”，典型表现为：
+  - 闭环区与复合区的 omega_ref 偏高，omega_cmd 长时间贴边；
+  - v_ref 与曲率/坡度耦合过强，导致速度参考振荡，不利于真实车辆跟踪；
+  - 贝叶斯优化使用的控制器边界、回退 LPV 网格与实际部署脚本不完全一致，重新 BO 前存在配置漂移风险。
+- 用户要求在继续进行贝叶斯优化前，先把 F_cmd 和 omega_cmd 的限制与 mpc_setup_single_interp.m 保持一致，并总结本轮累计修改。
+- 本条记录按“**7 个核心流程脚本** + **1 个约束基准文件注释同步**”整理，便于和本轮对话中的修改范围对应。
+
+### Changes
+1. **src/paths/gen_agv_ref_path_v1.m**（参考路径主生成器）
+  - 版本更新到 **V4.0**。
+  - 重构 pure_turn / pure_slope / composite / closed_loop 四个关键区域，目标从“几何闭合”调整为“优先可跟踪”。
+  - 闭环区改为“单段平缓左转弧线 + 减速停车”，显著降低闭环段 omega_ref 峰值。
+  - 复合区的小转角由更激进方案下调为 **6° / 8° / 8° / 6°**，减少大约 120 s 左右的角速度尖峰。
+  - 速度调度软化：
+    - v_turn_coupling_gain: **0.45 → 0.25**
+    - v_slope_coupling_gain: **0.35 → 0.20**
+    - v_min_ratio: **0.45 → 0.55**
+    - v_coupling_tau: **0.6 → 1.5**
+  - 当前闭环主参数固定为：
+    - closure_turn_angle_deg = **50.0**
+    - closure_turn_end = **143.0**
+    - closure_speed_scale = **0.7**
+
+2. **src/paths/test_gen_paths_v1.m**（路径测试与落盘脚本）
+  - 同步使用新的 industrial_lite 参考路径生成逻辑与闭环参数。
+  - 保留将结果同时写入 path_industrial_lite.mat 与 path_industrial.mat 的兼容行为，确保 BO、闭环测试与离线检查共用同一条路径。
+
+3. **src/tests/test_simulink_closed_loop.m**（闭环仿真入口）
+  - 优先加载 **data/paths/path_industrial.mat**，避免闭环测试再次调用旧版实时生成逻辑。
+  - 新增参考路径一致性检查与分区诊断输出，便于定位 pure_turn / composite / closure 等区域的失配来源。
+  - 保证 sim 前重新把脚本内构造好的 ctrl / mpcobj / maps / ref 推送进模型工作区，避免被 PreLoadFcn 的旧值覆盖。
+
+4. **src/lpv/test_lpvmpc_workflow.m**（LPV 工作流脚本）
+  - 调整默认预测时域为 **0.8 s**，与本轮调参结论保持一致。
+  - 增加从 **data/models/maps_best.mat** 自动加载优化权重的逻辑，避免工作流仍使用老默认 Q/R/dR。
+
+5. **src/core/preloadfcn_v2.m**（模型预加载）
+  - 调整优化结果文件优先级为：
+    - maps_best.mat
+    - phase2_best.mat
+    - phase1_best.mat
+  - 目的：让 Simulink 模型默认优先拾取最新 BO 产物，降低“优化结果已存在但模型仍吃旧参数”的风险。
+
+6. **src/bo/Bayesian_Optimization.m**（BO 主流程）
+  - 在 objective_wrapper 使用的 base controller 中，显式写入与 mpc_setup_single_interp.m 一致的输入/输入增量约束：
+    - umin = **[-600; -1.2]**
+    - umax = **[600; 1.2]**
+    - dumin = **[-400; -0.9]**
+    - dumax = **[400; 0.9]**
+  - 将 BO 内部的回退 LPV 网格从较窄的 omega 范围扩展到：
+    - W_grid = **linspace(-1.2, 1.2, 7)'**
+  - 这样即使 BO 在无外部网格文件的分支下运行，也不会退回旧的窄约束设定。
+
+7. **src/bo/evaluate_bo_point.m**（BO 单点评估）
+  - 与 Bayesian_Optimization.m 同步，显式使用相同的 u/du 约束。
+  - 同步把回退 W_grid 扩展到 **[-1.2, 1.2]**。
+  - 目的：保证离线复评、BO 主流程、最终部署三者在控制器边界上完全一致，避免“优化时一个配置、复评时另一个配置”。
+
+8. **src/mpc/mpc_setup_single_interp.m**（MPC 基准配置）
+  - 本轮未改动其有效数值约束，但修正了文件头部与注释中的过时说明。
+  - 当前权威约束说明统一为：
+    - F_cmd ∈ **[-600, 600] N**
+    - omega_cmd ∈ **[-1.2, 1.2] rad/s**
+    - ΔF ∈ **[-400, 400] N/step**
+    - Δomega ∈ **[-0.9, 0.9] rad/s/step**
+  - 该文件现在被明确作为 BO 和在线部署的约束基准来源。
+
+### Result
+- 参考路径已从“可几何生成”调整为“更利于 AGV 闭环跟踪”的版本，重点压低了闭环区和复合区的角速度需求。
+- 闭环测试、LPV 工作流、PreLoadFcn、BO 主流程、BO 单点评估，现在在权重来源与约束边界上已基本对齐。
+- 新一轮贝叶斯优化可以在当前路径与当前控制器边界下重新执行，减少“优化结果与实际部署不一致”的风险。
+
+### Follow-up
+- Cost_Function.m 中用于代价归一化的 `dw_max = 0.4` 仍可能偏旧；若下一轮 BO 对角速度变化率惩罚较敏感，建议后续再与 **Δomega = 0.9** 做一次同步审查。
+
+### Files
+- 核心流程脚本：
+- [src/paths/gen_agv_ref_path_v1.m](src/paths/gen_agv_ref_path_v1.m)
+- [src/paths/test_gen_paths_v1.m](src/paths/test_gen_paths_v1.m)
+- [src/tests/test_simulink_closed_loop.m](src/tests/test_simulink_closed_loop.m)
+- [src/lpv/test_lpvmpc_workflow.m](src/lpv/test_lpvmpc_workflow.m)
+- [src/core/preloadfcn_v2.m](src/core/preloadfcn_v2.m)
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+- [src/bo/evaluate_bo_point.m](src/bo/evaluate_bo_point.m)
+- 约束基准文件注释同步：
+- [src/mpc/mpc_setup_single_interp.m](src/mpc/mpc_setup_single_interp.m)
+
+---
+
+## 2026-03-07 – 贝叶斯优化比较逻辑修复（问题4）
+
+### Subject
+fix(bo): 统一 Phase 1 与 LocalRefine 使用实际观测值比较，消除苹果/橘子混合对比
+
+### Context
+- 分析 Phase 2 新一轮优化日志发现：LocalRefine 仍然报"情况1"，原因是：
+  - Phase 1 最终 `bestJ_final = 4.288`（代理模型预测值）
+  - LocalRefine 实际采样最小 `min_objective_stage2 = 5.831`（真实仿真值）
+  - 判断条件 `5.831 < 4.288` 永远为 false → LocalRefine 永远无法触发"情况2"
+- 正确的比较应该是两个真实仿真值之间：
+  - `min_objective_stage1 = 5.636`（Phase 1 实际最优）
+  - `min_objective_stage2 = 5.831`（LocalRefine 实际最优）
+  - 比较结论：5.831 > 5.636 → 情况1，第一阶段更好（结论正确，但此前逻辑错误）
+
+### Changes
+1. **Bayesian_Optimization.m**（V2.11 → **V2.12**）：
+   - **Phase 1 选择逻辑**（`~line 261`）：移除原来的 `if/else` 条件判断，始终以 `min_row_stage1`（Phase 1 实际观测最优点）作为最终结果，`bestPoint` 预测值仅保留在日志中作参考。
+   - **LocalRefine 判断基准**（`~line 407`）：将比较条件从 `min_objective_stage2 < bestJ_final` 改为 `min_objective_stage2 < min_objective_stage1`，统一使用"实际仿真采样值对比实际仿真采样值"。
+   - 更新日志输出，情况1/2的打印数字全部改为实际观测值，避免误导。
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-03-06 – 贝叶斯优化 LocalRefine 中心点修复与搜索边界扩展
+
+### Subject
+fix(bo): LocalRefine 改以实际观测最优为中心，扩展三个触达边界的参数范围
+
+### Context
+- 分析 Phase 1/2 优化日志发现：
+  - **问题2**：LocalRefine 以代理模型预测的 `bestPoint` 为中心收缩，但因随机性问题该预测值严重偏离实际（Phase 1 预测J=3.58，实际最优J=4.50），导致精细搜索在错误区域展开，两次均报"情况1：未找到更好结果"。
+  - **问题3**：Phase 1 中 `q_y`（最优48.78/上界50）、`q_v`（最优31.61/上界35）、`log10_r_omega`（最优-2.46/上界-2.0）三个参数均触达边界，说明搜索空间受限，可能限制了性能上限。
+
+### Changes
+1. **Bayesian_Optimization.m**（V2.11 内同步修复）：
+   - **LocalRefine 中心点** (`~line 315`)：`bestRow` → `min_row_stage1`，确保以第一阶段实际观测最小代价点为中心展开局部搜索
+   - **Phase 1 搜索边界** (`~line 134–140`)：
+     | 参数 | 旧上界 | 新上界 | 原因 |
+     |------|--------|--------|------|
+     | `q_y` | 50 | **80** | 前次最优48.78触达边界 |
+     | `q_v` | 35 | **50** | 前次最优31.61触达边界 |
+     | `log10_r_omega` | -2.0 | **-1.5** | 前次最优-2.46触达边界 |
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-03-06 – 贝叶斯优化去除伪确定性声明
+
+### Subject
+fix(bo): 将 `IsObjectiveDeterministic` 从 `true` 改为 `false`
+
+### Context
+- Phase 1 / Phase 2 优化日志中均出现"验证结果与第一阶段不一致"警告：
+  - Phase 1: 同参数验证差值达 -0.207（约 4.6%）
+  - Phase 2: 同参数验证差值达 +0.071（约 1.7%）
+- 根本原因：并行模式（`UseParallel=true`）下各 worker 的 `persistent base_ctrl`
+  初始化时序不可控，导致相同参数的两次仿真结果有数值差异。
+- 原声明 `IsObjectiveDeterministic = true` 告知 bayesopt 函数是确定性的，
+  使代理模型（GP）在噪声数据上过度乐观拟合，`bestPoint` 预测值严重偏离实际。
+
+### Changes
+1. **Bayesian_Optimization.m**（V2.10 → **V2.11**）：
+   - `IsObjectiveDeterministic`: `true` → **`false`**
+   - 更新顶部备注，说明修改原因及预期效果
+   - 声明为 `false` 后 bayesopt 使用噪声感知高斯过程（Noisy GP），
+     对同一点的多次采样取期望而非单点拟合，`bestPoint` 更可靠，
+     `LocalRefine` 的搜索中心也随之更置信。
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-03-05 - 目标路径闭合段改为曲线回归（industrial_lite）
+
+### Subject
+feat(paths): 闭合段由“直线回归”重构为“多段曲线回归”，并缩小终点回归误差
+
+### Context
+- 用户反馈当前新目标路径闭环段是直线，且终点坐标距离起点偏大。
+- 目标是保持 150s 工业路径结构不变，在闭合区改成曲线回归，并尽可能接近起点。
+
+### Changes
+1. `src/paths/gen_agv_ref_path_v1.m`
+- 版本更新为 `V3.9`，闭环区描述更新为“曲线回归”。
+- 闭环区从“左转 + 长直线 + 减速”改为“左转定向 + 回归弧线1 + 回归弧线2 + 末端曲线减速”。
+- 新增闭环参数并写入 `ref.meta.params`：
+  - `closure_curve_mid_end`
+  - `closure_curve_predecel_end`
+  - `closure_curve1_angle_deg`
+  - `closure_curve2_angle_deg`
+  - `closure_curve3_angle_deg`
+- 默认闭环参数调优为：
+  - `closure_turn_angle_deg = 102.0`
+  - `closure_turn_end = 126.0`
+  - `closure_curve_mid_end = 136.5`
+  - `closure_curve_predecel_end = 145.0`
+  - `closure_curve1_angle_deg = 18.0`
+  - `closure_curve2_angle_deg = 56.0`
+  - `closure_curve3_angle_deg = 10.0`
+
+2. `src/paths/test_gen_paths_v1.m`
+- 同步使用上述闭环曲线参数，确保生成脚本与主生成器一致。
+- 保持输出 `path_industrial_lite.mat`，并兼容保存 `path_industrial.mat`。
+
+### Validation
+- 运行：`matlab -batch "addpath(genpath(pwd)); run('src/paths/test_gen_paths_v1.m');"`
+- 终点自检结果：
+  - `dX = -1.203 m`
+  - `dY = -3.699 m`
+  - `dist = 3.890 m`
+- 结论：闭合段已从直线改为曲线，且终点回归误差较此前明显缩小。
+
+### Files
+- `src/paths/gen_agv_ref_path_v1.m`
+- `src/paths/test_gen_paths_v1.m`
+
+---
+
+## 2026-01-24 – 工业参考路径生成平滑化（抑制 \omega/\theta 波纹）
+
+### Subject
+feat(paths): gen_agv_ref_path_v1.m 平滑化与闭环回归逻辑完善
+
+### Context
+- 用户用于自适应 MPC 的 industrial 参考轨迹中，\omega_ref 在分段切换（尤其是 S 弯正负切换与短段边界）处出现明显跳变/波纹，容易触发转向约束与跟踪误差放大。
+- 需要在不改变主功能区结构的前提下，让参考更“可跟踪”（信号更连续、更少高频切换）。
+- 同时需让闭环区回归到 $(-1,0)$，并采用“先回到 $y=0$ 再直行到终点”的几何约束。
+
+### Changes
+1. [src/paths/gen_agv_ref_path_v1.m](src/paths/gen_agv_ref_path_v1.m)
+  - 组合B参数落地：S 弯强度下调（turn_angle 84° → 75°），过渡时间延长（transition_time 1.2s → 1.5s）。
+  - 段首 + 段末余弦过渡：\omega 与 \theta 在段边界双向平滑，避免阶跃。
+  - 过渡时间按段自适应：新增每段 `seg_transition_time = min(transition_time, 0.4*seg_dur)`，降低短段过渡重叠导致的波纹。
+  - 补偿因子策略调整：长段补偿上限收敛（cap 到 1.3）；短段不做补偿（factor=1.0），避免把高频抖动放大。
+  - S 弯过渡延长：中间直行过渡扩至 1.0s，保持总时长不变。
+  - 角速度滤波：新增 `omega_filter_tau`（默认 0.5s），抑制 \omega_ref 尖峰且尽量不改变路径形状。
+  - 坡度二次平滑：`theta_filter_tau` 默认更新为 0.6s，对 \theta_ref 再做一阶滤波。
+  - 工业路径时长默认 150s，并调整各区域时间段匹配新闭环逻辑。
+  - 闭环回归重构：到 $y\approx -15$ 后前行、固定半径右转回到 $y=0$ 且车头向右，再直线到 $(-1,0)$，并增加微修正弧段与末端减速。
+2. [src/paths/test_gen_paths_v1.m](src/paths/test_gen_paths_v1.m)
+  - 生成与提示改为 150s 工业路径。
+
+### Files
+- [src/paths/gen_agv_ref_path_v1.m](src/paths/gen_agv_ref_path_v1.m)
+- [tools/tmp_plan_sim.py](tools/tmp_plan_sim.py)
+- [src/paths/test_gen_paths_v1.m](src/paths/test_gen_paths_v1.m)
+
+---
+
+## 2026-01-23 – test_lpvmpc_workflow.m 自动加载贝叶斯优权重
+
+### Subject
+fix(lpv): test_lpvmpc_workflow.m 预测时域改为 0.8s，自动加载 maps_best.mat 权重
+
+### Context
+- 用户发现运行 test_lpvmpc_workflow.m 后 MPC 参数不符合预期
+- 预测时域硬编码为 1.5s，权重硬编码为旧值
+- 需要与贝叶斯优化结果保持一致
+
+### Changes
+1. **test_lpvmpc_workflow.m**:
+   - 预测时域从 1.5s 改为 **0.8s**
+   - 新增：自动从 `data/models/maps_best.mat` 加载权重（如果存在）
+   - 如果文件不存在或格式不正确，回退到默认权重
+
+### Files
+- [src/lpv/test_lpvmpc_workflow.m](src/lpv/test_lpvmpc_workflow.m)
+
+---
+
+## 2026-01-23 – 闭环测试脚本加载 path_industrial.mat
+
+### Subject
+fix(tests): test_simulink_closed_loop.m 优先加载 path_industrial.mat
+
+### Context
+- 之前 industrial 场景通过 `gen_agv_ref_path_v1()` 实时生成路径，与贝叶斯优化时使用的 `path_industrial.mat` 可能不一致。
+- 修改后优先加载预生成的路径文件，确保闭环测试与优化使用完全相同的参考路径。
+
+### Changes
+1. **test_simulink_closed_loop.m**:
+   - industrial 场景：优先加载 `data/paths/path_industrial.mat`
+   - 如果文件不存在，则回退到实时生成
+
+### Files
+- [src/tests/test_simulink_closed_loop.m](src/tests/test_simulink_closed_loop.m)
+
+---
+
+## 2026-01-23 – PreLoadFcn 优先加载 maps_best.mat
+
+### Subject
+fix(core): preloadfcn_v2.m 现在优先加载 maps_best.mat
+
+### Context
+- 贝叶斯优化完成后将最优参数保存到 `data/models/maps_best.mat`，但 preloadfcn 之前没有搜索该文件。
+- 用户希望优先使用 `maps_best.mat` 作为权重来源。
+
+### Changes
+1. **preloadfcn_v2.m**:
+   - 优先级调整：`maps_best.mat` > `phase2_best.mat` > `phase1_best.mat`
+   - 更新提示信息以反映新的搜索顺序
+
+### Files
+- [src/core/preloadfcn_v2.m](src/core/preloadfcn_v2.m)
+
+---
+
+## 2026-01-23 – 贝叶斯优化局部搜索范围调整
+
+### Subject
+fix(bo): 增大 LocalRefine 阶段的 shrink 系数以扩大局部搜索范围
+
+### Context
+- 之前的局部精修过程中无法对全局探索的结果做进一步优化。
+- 用户指出 shrink=0.35 可能设置得太小，限制了局部搜索的潜力。
+
+### Changes
+1. **Bayesian_Optimization.m**:
+   - `local_refine.shrink`: 0.35 → **0.5**
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-01-22 – 闭环测试脚本加载贝叶斯优化权重
+
+### Subject
+fix(tests): test_simulink_closed_loop.m 现在从 maps_best.mat 加载优化权重
+
+### Context
+- 闭环测试脚本原本使用 `mpc_setup_single_interp` 的默认权重，未加载贝叶斯优化结果。
+- 导致闭环仿真中的 MPC 权重与 `maps_best.mat` 不一致。
+
+### Changes
+1. **test_simulink_closed_loop.m**:
+   - 新增 §2.1 加载贝叶斯优化权重
+   - 从 `data/models/maps_best.mat` 加载 `Q_range`, `R_range`, `dR_range`
+   - 取范围均值作为基准权重并应用到 `ctrl.mpcobj.Weights`
+   - 同步复制其他优化参数（如 `omega_threshold`, `q_y_gain_max` 等）
+
+### Files
+- [src/tests/test_simulink_closed_loop.m](src/tests/test_simulink_closed_loop.m)
+
+---
+
+## 2026-01-22 – 贝叶斯优化参数范围扩展（第二次优化后）
+
+### Subject
+fix(bo): 根据优化结果分析扩展 Phase 1/2 参数搜索范围
+
+### Context
+- 150 次 Phase 1 + 80 次 Phase 2 优化后，多个参数达到边界限制
+- `pure_turn` 场景控制失效（ey=0.63m, epsi=27°），需扩大参数搜索空间
+
+### Changes
+**Phase 1 (核心权重, 8变量):**
+| 参数 | 旧范围 | 新范围 | 原因 |
+|------|--------|--------|------|
+| `q_psi` | [15, 60] | **[15, 100]** | 最优值 59.6 达上界 |
+| `log10_r_F` | [-4, -1] | **[-4, -0.5]** | 最优值 -1.3 接近上界 |
+| `log10_r_omega` | [-4, -2] | **[-5, -2]** | 最优值 -3.95 达下界 |
+
+**Phase 2 (场景自适应, 5变量):**
+| 参数 | 旧范围 | 新范围 | 原因 |
+|------|--------|--------|------|
+| `omega_threshold` | [0.08, 0.40] | **[0.03, 0.50]** | 最优值 0.08 达下界 |
+| `q_y_gain_max` | [1.0, 3.0] | **[0.5, 4.0]** | 最优值 1.04≈1.0（自适应被关闭），扩展允许抑制 |
+| `theta_threshold` | [0.02, 0.08] | **[0.01, 0.12]** | 最优值 0.022 接近下界 |
+| `q_v_gain_max` | [1.2, 2.5] | **[1.0, 4.0]** | 最优值 2.49 达上界 |
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+
+## 2026-01-22 – 闭环测试脚本增强：分段分析与时序可视化
+
+### Subject
+feat(tests): 为 test_simulink_closed_loop.m 添加 pure_turn 区域分段分析和时序可视化功能
+
+### Context
+- 用于诊断 pure_turn 区域控制失败的根因：是 AGV 模型问题还是 S弯缓冲不足。
+- 通过分段分析可精确定位问题首次出现的时间段。
+
+### Changes
+**新增函数:**
+- `analyze_pure_turn_segments()`: 将 50-70s 区域分为6段单独分析 RMSE
+- `plot_industrial_timeseries()`: 绘制 ey/epsi/omega_ref 时序曲线，标注关键时间点
+
+**诊断逻辑:**
+- 如果第一个右转(50-54s)就失败 → AGV 模型问题
+- 如果 S弯右转(61s)才失败 → ω符号切换缓冲不足问题
+- 检测 t=61s 处误差跳变比
+
+### Files
+- [src/tests/test_simulink_closed_loop.m](src/tests/test_simulink_closed_loop.m)
+
+---
+
+## 2026-01-22 – 贝叶斯优化参数搜索区间调整
+
+### Subject
+fix(bo): 根据边界命中分析调整 Bayesian_Optimization.m 中的参数边界
+
+### Context
+- 通过 `analyze_bo_results.m` 分析优化历史，发现多个参数在搜索过程中频繁命中边界。
+- 边界命中率 > 20% 表明搜索空间可能过于受限。
+
+### Changes
+**Phase 1:**
+- `q_y`: [20, 50] → **[10, 50]**（28%命中下界）
+- `q_v`: [3, 20] → **[3, 35]**（31%命中上界）
+- `log10_rdF`: [-2.5, -1] → **[-2.5, 0]**（37%命中上界）
+
+**Phase 2:**
+- `q_y_gain_max`: [1.2, 3.0] → **[1.0, 3.0]**（22%命中下界）
+
+### Files
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+
+---
+## 2026-01-21 – 开环物理验证结果复核与路径适配结论
+
+### Subject
+docs/tests: 复核 AGV 开环验证输出，确认通过并给出新参考路径适配判断
+
+### Context
+- 用户运行“AGV 模型开环物理验证脚本 (V2.0 优化版)”并给出控制台输出，希望确认关键参数是否在预期范围、所有类型测试是否通过，以及能否据此判断模型可适配新的参考路径。
+
+### Findings
+- A–G 全部标记为 **[PASS]**，数值表现与物理预期一致。
+- 关键一致性校验：坡度切换测试中 `gyro_y` 峰值 8.7266 rad/s，符合 5° 阶跃在 Ts=0.01s 下的变化率 $0.087266/0.01=8.7266$。
+
+### Conclusion
+- 基于当前开环结果：模型动力学与新增输出接口已具备“适配新参考路径”的基础。
+- 仍建议在闭环中补充验证：曲率/速度变化导致的控制饱和率、约束可行性与跟踪误差指标（开环通过不等价于闭环路径跟踪必然达标）。
+
+### References
+- [src/tests/test_agv_open_loop.m](src/tests/test_agv_open_loop.m)
+
+## 2026-01-21 – 贝叶斯优化支持加载外部路径文件 (Loading Mode)
+
+### Subject
+feat(bo): 贝叶斯优化脚本群支持加载 path_industrial.mat 进行分段评估
+
+### Context
+- 原有 MPC 优化流程依赖实时生成单一场景路径，无法直接利用已生成的 `path_industrial.mat` 复杂工业路径。
+- 用户需要基于长路径的不同时间段（zones）分别评估控制器性能。
+
+### Changes
+1. **Cost_Function.m**：
+   - 重构核心逻辑：不再强制调用 `gen_agv_ref_path`。
+   - 新增加载模式：若 `cfg.path_file` 存在，则加载文件并根据 `cfg.zones` 和 `scenes` 权重提取对应时间切片。
+   - 优化初始化：使用切片起点的参考状态初始化 `x_plant`。
+
+2. **Bayesian_Optimization.m**：
+   - `objective_wrapper` 增加参数透传逻辑，将 `frozen` 中的 `path_file` 和 `zones` 传递给 `Cost_Function`。
+   - 允许通过 `options` 结构体传入上述配置。
+
+3. **start_bayesian.m**：
+   - 新增配置：指向 `data/paths/path_industrial.mat`。
+   - 定义 6 个时间分区（startup, golden_test, pure_turn, pure_slope, composite, closure）对应工业路径的时间段。
+
+### Files
+- [src/mpc/Cost_Function.m](src/mpc/Cost_Function.m)
+- [src/bo/Bayesian_Optimization.m](src/bo/Bayesian_Optimization.m)
+- [src/bo/start_bayesian.m](src/bo/start_bayesian.m)
+
+---
+## 2026-01-21 – 修复贝叶斯优化结果显示字段名错误
+
+### Subject
+fix(bo): 修复 start_bayesian.m 中访问不存在的 `report.zone` 字段
+
+### Context
+- `Cost_Function.m` 返回的 `report` 结构体使用 `.scene` 字段存储各场景结果
+- `start_bayesian.m` 第225-234行错误地尝试访问 `.zone` 字段，导致运行时报错
+
+### Changes
+1. **start_bayesian.m**：将 `zone` 相关字段名替换为 `scene`
+   - `zone_names` → `scene_names`
+   - `zn` → `sn`
+   - `best.report.zone` → `best.report.scene`
+
+### Files
+- [src/bo/start_bayesian.m](src/bo/start_bayesian.m)
+
+---
+
+## 2026-01-20 – 同步 MPC 预测时域
+
+### Subject
+chore(mpc): 统一预测时域为约 1.5s
+
+### Context
+- 为与文档与闭环脚本一致，统一测试脚本中的预测时域配置
+
+### Changes
+1. **test_lpvmpc_workflow.m**：将 `Np=50` 改为 `round(1.5 / params.Ts)`
+
+### Files
+- [src/lpv/test_lpvmpc_workflow.m](src/lpv/test_lpvmpc_workflow.m)
+
+## 2026-01-20 – 新增独立参考路径生成脚本 V3.6
+
+### Subject
+feat(paths): gen_agv_ref_path_v1.m 减速区改为小角度右转（V3.5→V3.6）
+
+### Context
+- 减速区(110-120s)从纯直线减速改为小角度右转(15°)+减速
+- 更新头部注释，区域6 从 '闭环区/减速区' 改为 '减速转向区'
+- **Fix**: 修正 `AGV模型修改意见.md` 中关于转弯半径的描述 (R约2m -> R约2.7-3.6m)，以匹配实际计算值
+- 新增一套独立的参考路径生成脚本，用于生成 120s 非闭环工业训练路径
+- 与原有 `gen_agv_ref_path.m` 并存，支持不同的路径生成需求
+
+### Changes
+1. **gen_agv_ref_path_v1.m**（V3.4→V3.5）：
+   - 函数名从 `gen_agv_ref_path` 改为 `gen_agv_ref_path_v1`（与文件名一致）
+   - 移除闭环相关代码（`end_offset`、`closure_error_m`、`decel_turn` 类型）
+   - 区域6 从"闭环区-右转减速返回"改为"减速区-减速停车"
+   - `meta.zones.closure` 改为 `meta.zones.decel`
+   - **V3.5新增**：实现对称过渡+中段补偿方案
+     - 段首/段末双向 S曲线过渡
+     - 补偿因子：`compensation_factor = seg_dur / (seg_dur - transition_time)`
+     - 确保总转角积分等于设定的 `turn_angle`
+     - 短段落（`seg_dur < 2*transition_time`）限制最大补偿因子为 2.0
+
+2. **test_gen_paths_v1.m**（V2.0）：
+   - 更新函数调用：`gen_agv_ref_path` → `gen_agv_ref_path_v1`
+   - 更新依赖注释：`gen_agv_ref_path.m (V2.0)` → `gen_agv_ref_path_v1.m (V3.5)`
+   - 移除闭环误差输出和可视化显示
+
+### 路径段落设计（6区域，120s）
+| 时间段 | 功能区 | 形状 | 状态 |
+|--------|--------|------|------|
+| 0-10s | 启动区 | 直线 | 加速 |
+| 10-50s | 黄金测试区 | 直行向右 | ω=0, θ=0 |
+| 50-70s | 纯转弯区 | S弯向下 | 右转→隔离→S弯 |
+| 70-90s | 纯坡度区 | 坡度直线向左 | 上坡→过渡→下坡 |
+| 90-110s | 复合区 | 直线向左 | 坡度+转弯耦合 |
+| 110-120s | 减速区 | 直线 | 减速停车 |
+
+### Files
+- [src/paths/gen_agv_ref_path_v1.m](src/paths/gen_agv_ref_path_v1.m)
+- [src/paths/test_gen_paths_v1.m](src/paths/test_gen_paths_v1.m)
+
+---
+
+## 2026-01-20 – AGV 输出方程 Mamba 适配 (V4.3)
+
+### Subject
+feat(core): 为 Mamba 算法适配扩展 output_eq_ref.m 输出向量
+
+### Context
+- 按照 `docs/AGV模型修改意见.md` 的修改建议对 AGV 输出方程进行修改
+- 目标：为 Mamba 算法提供 deployable（可落地）的特征输出
+
+### Changes
+1. **P0-1: 新增纵向滑移率**
+   - 新增 `slip_ratio_lf` 和 `slip_ratio_rr`（y32-33）
+   - 公式：`(omega_wheel * r - v_x) / max(|v_x|, low_speed_thresh)`
+   - 添加限幅保护 `[-1.0, 1.0]`
+
+2. **P0-2: 修订 gyro_y_meas**
+   - 从 `0 + noise` 改为基于坡度角变化率计算
+   - 使用 `persistent` 变量保存上一时刻的 `theta_ground`
+   - 公式：`(theta_ground - theta_ground_prev) / Ts + noise`
+
+3. **P0-3: 新增横向加速度**
+   - 新增 `accel_y_meas`（y34）
+   - 公式：`(Fy_f + Fy_r) / m + noise`
+
+4. **6.4-1: 统一低速阈值**
+   - 将硬编码的 `1e-3` 改为 `low_speed_thresh`（0.05）
+   - 影响范围：v_x 计算、alpha_f/alpha_r 计算
+
+5. **输出维度**：31 → 34
+
+### Files
+- [src/core/output_eq_ref.m](src/core/output_eq_ref.m)
+
+### Reference
+- [docs/AGV模型修改意见.md](docs/AGV模型修改意见.md)
+
+---
+
+## 2026-01-20 – S-function 与测试脚本 Mamba 适配
+
+### Subject
+feat(core/tests): 同步更新 S-function 输出维度，增强测试脚本验证能力
+
+### Context
+- `output_eq_ref.m` 输出维度从 31 扩展到 34 后，需同步更新 S-function 的端口配置
+- 为验证 Mamba 新增变量（slip_ratio, gyro_y, accel_y）在开环/闭环场景的正确性，增强测试脚本
+
+### Changes
+
+#### 1. agv_model_sfunc.m
+- 输出端口维度：`31 → 34`
+- 更新注释标注为 V4.3 Mamba 适配
+
+#### 2. test_agv_open_loop.m
+- 新增 **[F] Mamba 新增输出变量验证** 测试节
+- 包含 3 个场景：
+  - F1: 平地直行（验证 slip_ratio, gyro_y, accel_y ≈ 0）
+  - F2: 平地转弯（验证 accel_y 有响应）
+  - F3: 坡度切换（验证 gyro_y 在切换时有脉冲）
+- 新增辅助函数 `simulate_core_with_outputs` 和 `simulate_core_with_slope_switch`
+
+#### 3. test_simulink_closed_loop.m
+- 新增读取 `y_agv`（34 维输出）信号
+- 新增验证指标：
+  - 速度误差 e_v RMSE/Peak
+  - 角速度误差 e_ω RMSE/Peak
+  - 控制输入统计 F_cmd/ω_cmd 均值与范围
+  - Mamba V4.3 变量统计（gyro_y, slip_lf/rr, accel_y 峰值/均值）
+
+### Test Results
+
+#### 开环测试 (test_agv_open_loop.m)
+| 场景 | 结果 | 说明 |
+|------|------|------|
+| F1 平地直行 | PASS | slip_ratio≈0, gyro_y≈0, accel_y≈0 |
+| F2 平地转弯 | PASS | accel_y=0.09 m/s²（有响应） |
+| F3 坡度切换 | PASS | gyro_y 峰值=8.73 rad/s（脉冲） |
+
+#### 闭环测试 (test_simulink_closed_loop.m)
+| 场景 | e_y RMSE | slip_ratio 峰值 | accel_y 峰值 | gyro_y 峰值 |
+|------|----------|-----------------|--------------|-------------|
+| straight | 0.0000 m | 0.000 | 0.000 m/s² | 0.000 rad/s |
+| straight_left_turn | 0.1107 m | 0.050 | 0.047 m/s² | 0.000 rad/s |
+| slope | 0.0000 m | 0.000 | 0.000 m/s² | 8.73 rad/s |
+
+### Files
+- [src/core/agv_model_sfunc.m](src/core/agv_model_sfunc.m)
+- [src/tests/test_agv_open_loop.m](src/tests/test_agv_open_loop.m)
+- [src/tests/test_simulink_closed_loop.m](src/tests/test_simulink_closed_loop.m)
+
+---
+
+## 2026-01-19 – 仿真步长更新
+
+### Subject
+feat(core): 将全局仿真步长从 0.05s 更新为 0.01s
+
+### Context
+- 为了提高仿真精度和控制器的响应能力，将系统采样时间 `Ts` 调整为 0.01s。
+- 此次修改不涉及 GRU 相关的训练数据生成和预处理逻辑（保持 0.05s 配置或需后续独立处理）。
+
+### Changes
+1. **parameters.m**：`params.Ts` 更新为 `0.01`。
+2. **Gemini_test_3.m**：默认 `Ts` 更新为 `0.01`，同步更新注释。
+
+### Files
+- [src/core/parameters.m](src/core/parameters.m)
+- [src/tests/dev/Gemini_test_3.m](src/tests/dev/Gemini_test_3.m)
+
+## 2026-01-19 – 仿真时长更新
+
+### Subject
+feat(config): 将全局默认仿真时长从 20s 更新为 120s
+
+### Context
+- 为了支持长时稳定性测试（Long-term Stability Test），将默认仿真结束时间 `T_end` / `StopTime` 延长至 120s。
+- **排除项**: GRU 训练数据生成脚本仍保持 20s 配置，避免生成不必要的超长训练序列。
+
+### Changes
+1. **gen_agv_ref_path.m**: 默认 `T_end` 更新为 `120.0`。
+2. **Cost_Function.m**: 评估时生成参考轨迹长度更新为 `120`。
+3. **run_controller_comparison_batch.m**: 默认 `cfg.stop_time` 更新为 `120`。
+
+### Files
+- [src/paths/gen_agv_ref_path.m](src/paths/gen_agv_ref_path.m)
+- [src/mpc/Cost_Function.m](src/mpc/Cost_Function.m)
+- [src/tests/run_controller_comparison_batch.m](src/tests/run_controller_comparison_batch.m)
+
+## 2026-01-19 – AGV 质量更新
+
+### Subject
+feat(core): 将 AGV 车辆总质量从 100kg 更新为 200kg
+
+### Context
+- 更新 AGV 质量以反映新的硬件规格。
+
+### Changes
+1. **parameters.m**: `params.mass` 更新为 `200.0`。
+
+### Files
+- [src/core/parameters.m](src/core/parameters.m)
+
+## 2026-01-19 – AGV 模型与控制器验证脚本创建
+
+## 2026-01-20 – 创建 Simulink 闭环验证脚本与诊断增强
+
+### Subject
+feat(test): 新增基于 Simulink 的闭环验证脚本，增强开环测试诊断输出
+
+### Context
+- 之前手写的 `test_mpc_closed_loop.m` 存在 MPC 调用逻辑错误（误差符号、前馈处理等），导致转弯场景失败。
+- 为避免手动复现复杂的 MPC 调用逻辑，改用 Simulink 模型 `test_closed_loop.slx` 进行闭环验证。
+
+### Changes
+1. **test_simulink_closed_loop.m**: [NEW] 基于 Simulink 的闭环验证脚本。自动加载路径、运行仿真、读取 `logsout` 信号、计算 RMSE/Peak 并输出 PASS/FAIL。
+2. **test_agv_open_loop.m**: 增强转向测试诊断输出，显示 `v`, `ω`, `δ_lf`, `δ_rr`, `β` 及跟踪率。
+3. **omega_tracking_analysis.md**: [NEW] 角速度跟踪不足问题分析报告。
+4. **test_mpc_closed_loop.m**: [DELETED] 因逻辑错误导致结果不可靠，已删除。
+
+### Test Results
+使用 `test_simulink_closed_loop.m` 验证：
+| 场景 | e_y RMSE | 判定 |
+|------|----------|------|
+| straight | 0.0000 m | PASS |
+| straight_left_turn | 0.1107 m | PASS |
+| slope | 0.0000 m | PASS |
+
+### Files
+- [NEW] [src/tests/test_simulink_closed_loop.m](src/tests/test_simulink_closed_loop.m)
+- [NEW] [src/tests/omega_tracking_analysis.md](src/tests/omega_tracking_analysis.md)
+- [MODIFIED] [src/tests/test_agv_open_loop.m](src/tests/test_agv_open_loop.m)
+- [DELETED] src/tests/test_mpc_closed_loop.m
+
+---
+
+### Subject
+feat(test): 创建开环与闭环验证脚本以支持参数更新后的验证
+
+### Context
+- 由于 AGV 质量 (200kg)、步长 (0.01s) 和仿真时长 (120s) 发生了重大变更，需要可靠的脚本验证系统的底层物理一致性和控制性能。
+
+### Changes
+1. **test_agv_open_loop.m**: 新增。验证静态平衡、加速、转向及坡度响应。
+2. **test_mpc_closed_loop.m**: 新增。基于 `Cost_Function.m` 指标验证 MPC 闭环性能。
+3. **func.md**: 更新了新脚本的说明。
+
+### Files
+- [src/tests/test_agv_open_loop.m](src/tests/test_agv_open_loop.m)
+- [src/tests/test_mpc_closed_loop.m](src/tests/test_mpc_closed_loop.m)
+- [func.md](func.md)
+
+## 2026-01-19 – 优化验证脚本：修复物理一致性与 MPC 调用逻辑
+
+### Subject
+fix(test): 优化开环与闭环验证脚本的计算精度与逻辑完整性
+
+### Context
+- 初始版本的开环脚本在转向测试时速度衰减过快，导致半径计算失真。
+- 闭环脚本未包含 LPV 权重/模型插值逻辑，且 API 调用不符合 `mpcmoveAdaptive` 规范。
+
+### Changes
+1. **test_agv_open_loop.m**: 重建。在转向测试中增加平衡力维持速度；加速度/减速度计算加入空气阻力项；使用线性回归提高加速度计算稳定性。
+2. **test_mpc_closed_loop.m**: 优化。注入 `mpc_update_from_rho`实现在线模型/权重插值；修复 `mpcstate` 变量冲突；采用正确的 `plant_model` 和 `Nominal` 结构体调用 `mpcmoveAdaptive`。
+
+### Files
+- [src/tests/test_agv_open_loop.m](src/tests/test_agv_open_loop.m)
+- [src/tests/test_mpc_closed_loop.m](src/tests/test_mpc_closed_loop.m)
+
+## 2026-01-19 – 优化横摆控制参数：提高角速度跟踪率
+
+### Subject
+fix(dynamics): 调整横摆阻尼与控制增益，改善角速度跟踪性能
+
+### Context
+- 开环测试显示转向测试 C1-C4 跟踪率仅为 75-80%，根因分析为 `C_damping` 过大导致控制力矩被过度抵消。
+
+### Changes
+1. **state_eq_ref.m L194**: `K_omega_p` 100 → 120（偏航控制增益提升 20%）
+2. **state_eq_ref.m L379**: `C_damping` 400 → 250（横摆阻尼降低 37.5%）
+
+### Expected Effect
+- 角速度跟踪率从约 80% 提升至约 92%
+- 转向测试 C1-C4 预计全部 PASS
+
+### Files
+- [src/core/state_eq_ref.m](src/core/state_eq_ref.m)
+
+### Reference
+- [omega_tracking_analysis.md](src/tests/omega_tracking_analysis.md)
+
+---
 ## 2026-01-07 – GRU 坡度数据分布修复：生成/预处理/训练评估链路补强
 
 ### Subject

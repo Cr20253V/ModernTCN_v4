@@ -8,7 +8,7 @@ function y = output_eq_ref(x, u, theta_ground, params)
 %   theta_ground: 地面坡度角 (标量)
 %   params: 参数结构体
 % 输出参数：
-%   y: 输出向量 (31×1) - V4.2扩展版本
+%   y: 输出向量 (34×1) - V4.3扩展版本（Mamba适配）
 %      [1-8]   基本状态变量：X, Y, psi, v, omega, delta_lf, delta_rr, beta
 %      [9-11]  IMU测量：accel_x_meas, gyro_y_meas, gyro_z_meas
 %      [12-13] 电流估计：I_meas_lf, I_meas_rr
@@ -17,6 +17,7 @@ function y = output_eq_ref(x, u, theta_ground, params)
 %      [17-18] 轮速：omega_wheel_lf, omega_wheel_rr
 %      [19-27] AI算法专用输出：载荷信息、轮胎利用率、运动状态（含前后侧偏角）
 %      [28-31] 扩展诊断信息：slip_flag, stall_flag, N_lf, N_rr
+%      [32-34] Mamba专用输出：slip_ratio_lf, slip_ratio_rr, accel_y_meas
 % =============================
 
 %% 提取状态变量
@@ -124,9 +125,9 @@ F_cmd_eff = sat_sym(F_cmd, F_cmd_max_total);
 % 轮侧偏角近似：alpha_f = delta_lf - (v_y + Lf*omega)/v_x ≈ delta_lf - (beta + Lf*omega/v)
 %               alpha_r = - (beta - Lr*omega/v)
 Lf = L/2; Lr = L/2; % 对称
-v_x = max(v * cos(beta), 1e-3);
-alpha_f = (beta + Lf*omega/max(v,1e-3)) - delta_lf;
-alpha_r = (beta - Lr*omega/max(v,1e-3)) - delta_rr; % 对角式双舵轮，后轮也有转向
+v_x = max(v * cos(beta), low_speed_thresh);  % 6.4-1: 统一使用 low_speed_thresh
+alpha_f = (beta + Lf*omega/max(v,low_speed_thresh)) - delta_lf;
+alpha_r = (beta - Lr*omega/max(v,low_speed_thresh)) - delta_rr; % 对角式双舵轮，后轮也有转向
 
 % 线性侧偏刚度 + 软饱和（限幅到μN）
 Fy_f_lin = -C_af * alpha_f;
@@ -196,7 +197,16 @@ m_eff_total = m + 2*(wheel_inertia + motor_inertia*n^2)/(r^2);
 % [9-11] IMU测量（添加噪声）
 accel_x_base = (F_drive_total - F_drag - F_slope) / max(m_eff_total,1e-6);
 accel_x_meas = accel_x_base + noise_factor * 0.1 * randn;
-gyro_y_meas = 0 + noise_factor * 0.01 * randn; % 俯仰角速度（添加小噪声）
+
+% P0-2: gyro_y_meas 基于坡度角变化率计算（需要 persistent 变量）
+persistent theta_ground_prev;
+if isempty(theta_ground_prev)
+    theta_ground_prev = theta_ground;
+end
+gyro_y_base = (theta_ground - theta_ground_prev) / Ts;  % 俯仰角速度 ≈ 坡度角变化率
+gyro_y_meas = gyro_y_base + noise_factor * 0.01 * randn;
+theta_ground_prev = theta_ground;  % 更新上一时刻的坡度角
+
 gyro_z_meas = omega + noise_factor * 0.02 * randn;
 
 % [17-18] 轮速（基于ICR几何/低速保护）
@@ -253,7 +263,19 @@ total_current = I_meas_lf + I_meas_rr;
 motor_current_limit_total = 2 * current_limit;
 stall_flag = double(v < low_speed_thresh && total_current > 0.8 * motor_current_limit_total); % 堵转标志
 
-%% 汇总输出（31×1）- 为AI算法提供丰富信息
+% P0-1: 纵向滑移率（量化打滑程度）
+% 公式: slip_ratio = (omega_wheel * r - v_x) / max(|v_x|, threshold)
+% 正值表示驱动轮空转（加速打滑），负值表示抱死（制动打滑）
+slip_ratio_lf_raw = (omega_wheel_lf * r - v_x) / max(abs(v_x), low_speed_thresh);
+slip_ratio_rr_raw = (omega_wheel_rr * r - v_x) / max(abs(v_x), low_speed_thresh);
+slip_ratio_lf = sat(slip_ratio_lf_raw, -1.0, 1.0);  % 限幅保护
+slip_ratio_rr = sat(slip_ratio_rr_raw, -1.0, 1.0);
+
+% P0-3: 横向加速度（基于侧向力计算）
+accel_y_base = (Fy_f + Fy_r) / max(m, 1e-6);  % 横向加速度 [m/s²]
+accel_y_meas = accel_y_base + noise_factor * 0.1 * randn;  % 与 accel_x 相同噪声水平
+
+%% 汇总输出（34×1）- 为AI算法提供丰富信息（V4.3 Mamba适配）
 y = [
     % [1-8] 基本状态变量
     X; Y; psi; v; omega; delta_lf; delta_rr; beta;
@@ -267,13 +289,16 @@ y = [
     theta_ground;
     % [17-18] 轮速
     omega_wheel_lf; omega_wheel_rr;
-    % [19-26] AI算法专用输出
+    % [19-27] AI算法专用输出
     load_ratio_front; load_ratio_rear; load_transfer_lateral;  % 载荷信息
     tire_utilization_lf; tire_utilization_rr;                 % 轮胎利用率
     lateral_accel; slip_angle_front; slip_angle_rear; drive_force_asymmetry; % 运动状态
     % [28-31] 扩展诊断信息
     slip_flag; stall_flag;                                     % 二元状态标志
-    N_lf; N_rr                                                 % 法向载荷 (Fz)
+    N_lf; N_rr;                                                % 法向载荷 (Fz)
+    % [32-34] Mamba专用输出（P0-1, P0-3）
+    slip_ratio_lf; slip_ratio_rr;                             % 纵向滑移率
+    accel_y_meas                                               % 横向加速度
 ];
 
 end
@@ -317,10 +342,11 @@ a_long = sat(F_cmd/m, -accel_limit, accel_limit) - g*sin(theta_g);
 Delta_long = m * a_long * (h_cg/L); % 前后轴载荷转移
 
 % 横向加速度（用 omega,v 估）
-if abs(v) > 1e-3
-    R_est = max(v/max(omega,1e-6), 1e-3);
-    a_lat = (v^2) / R_est;
-    Delta_lat = m * a_lat * (h_cg/W);
+% RF/LR 为万向支撑轮，只参与垂向支撑；侧向/偏航动力主要由 LF/RR 舵驱轮承担。
+% 载荷转移幅值取 |v*omega|，方向由 sign(omega) 单独决定，避免右转时被夹到近零。
+if abs(v) > 1e-3 && abs(omega) > 1e-6
+    a_lat = abs(v * omega);
+    Delta_lat = m * a_lat * (h_cg/max(W,1e-6));
 else
     Delta_lat = 0;
 end

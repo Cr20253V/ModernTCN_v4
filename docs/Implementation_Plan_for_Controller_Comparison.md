@@ -1,415 +1,416 @@
-# 控制器对比测试实现计划（LPVMPC+GRU vs LPVMPC+IMU vs 非线性MPC）
+﻿# 鎺у埗鍣ㄥ姣旀祴璇曞疄鐜拌鍒掞紙LPVMPC+GRU vs LPVMPC+IMU vs 闈炵嚎鎬PC锛?
 
-日期：2026-01-02
+鏃ユ湡锛?026-01-02
 
-## 0.1 实验取向声明（对比公平性与目标）
-本对比实验的主要目标是凸显 **LPVMPC+GRU** 在坡度/工况估计与闭环控制表现上的优势。因此：
+## 0.1 瀹為獙鍙栧悜澹版槑锛堝姣斿叕骞虫€т笌鐩爣锛?
+鏈姣斿疄楠岀殑涓昏鐩爣鏄嚫鏄?**LPVMPC+GRU** 鍦ㄥ潯搴?宸ュ喌浼拌涓庨棴鐜帶鍒惰〃鐜颁笂鐨勪紭鍔裤€傚洜姝わ細
 
-- **IMU 分支将采用“弱基线”实现**：使用最小工程量、可运行且可解释的单 IMU 方案，而非追求最优的姿态融合/多传感器融合。
-- **原因需要在报告中明确标注**：IMU 估计理论上可以做得更完善（例如加入更完整的姿态融合/漂移抑制），但本实验选择弱基线是为了突出 GRU 的优势与工程价值。
-- **边界条件**：弱基线不应被做成“明显不合理/无法运行”的稻草人；应保证同一组路径下能稳定闭环，并输出完整日志契约。
+- **IMU 鍒嗘敮灏嗛噰鐢ㄢ€滃急鍩虹嚎鈥濆疄鐜?*锛氫娇鐢ㄦ渶灏忓伐绋嬮噺銆佸彲杩愯涓斿彲瑙ｉ噴鐨勫崟 IMU 鏂规锛岃€岄潪杩芥眰鏈€浼樼殑濮挎€佽瀺鍚?澶氫紶鎰熷櫒铻嶅悎銆?
+- **鍘熷洜闇€瑕佸湪鎶ュ憡涓槑纭爣娉?*锛欼MU 浼拌鐞嗚涓婂彲浠ュ仛寰楁洿瀹屽杽锛堜緥濡傚姞鍏ユ洿瀹屾暣鐨勫Э鎬佽瀺鍚?婕傜Щ鎶戝埗锛夛紝浣嗘湰瀹為獙閫夋嫨寮卞熀绾挎槸涓轰簡绐佸嚭 GRU 鐨勪紭鍔夸笌宸ョ▼浠峰€笺€?
+- **杈圭晫鏉′欢**锛氬急鍩虹嚎涓嶅簲琚仛鎴愨€滄槑鏄句笉鍚堢悊/鏃犳硶杩愯鈥濈殑绋昏崏浜猴紱搴斾繚璇佸悓涓€缁勮矾寰勪笅鑳界ǔ瀹氶棴鐜紝骞惰緭鍑哄畬鏁存棩蹇楀绾︺€?
 
-该声明将用于解释：IMU 分支可能存在累计漂移等局限性，这属于预期现象，不作为实现缺陷。
+璇ュ０鏄庡皢鐢ㄤ簬瑙ｉ噴锛欼MU 鍒嗘敮鍙兘瀛樺湪绱婕傜Щ绛夊眬闄愭€э紝杩欏睘浜庨鏈熺幇璞★紝涓嶄綔涓哄疄鐜扮己闄枫€?
 
-## 0. 背景与目标
-当前工程已实现 **LPV-MPC + GRU** 用于 AGV 路径跟踪与坡度角估计/调度（Simulink 模型：`simulink/LPVMPC_AGV_simulink.slx`）。后续需要引入：
+## 0. 鑳屾櫙涓庣洰鏍?
+褰撳墠宸ョ▼宸插疄鐜?**LPV-MPC + GRU** 鐢ㄤ簬 AGV 璺緞璺熻釜涓庡潯搴﹁浼拌/璋冨害锛圫imulink 妯″瀷锛歚simulink/LPVMPC_AGV_simulink._GRU.slx`锛夈€傚悗缁渶瑕佸紩鍏ワ細
 
-- **LPVMPC + 单IMU**（用 IMU 估计坡度/工况，替代 GRU 输出的 `theta_hat`）
-- **非线性MPC（NMPC）** 控制器
+- **LPVMPC + 鍗旾MU**锛堢敤 IMU 浼拌鍧″害/宸ュ喌锛屾浛浠?GRU 杈撳嚭鐨?`theta_hat`锛?
+- **闈炵嚎鎬PC锛圢MPC锛?* 鎺у埗鍣?
 
-并要求：
+骞惰姹傦細
 
-- 在 **相同目标路径** 下，对比三种控制方式的 **性能指标**
-- 对比过程 **可复现**、**可批量运行**、**可扩展**（未来再加控制器不重写评估框架）
-
-
-## 1. 现有工程可复用基础
-工程已具备“批量闭环仿真 + 指标解析”的入口：
-
-- 闭环评估入口脚本：`src/tests/test_closed_loop_performance.m`
-  - 能按场景/路径批量仿真并从 `logsout` 中抽取指标
-  - 当前用于“对比不同 GRU 或控制配置”
-- GRU 在线推理封装：`src/gru/GRU_state_classifier.m`
-  - 能从 plant 输出 `y_raw (31×1)` 估计 `theta_hat`、`label_main`、`label_turn`
-- MPC 创建：`src/mpc/mpc_setup_single_interp.m`
-  - 创建 Adaptive MPC 控制器（含可选 MD 通道 theta）
-
-因此，本计划的关键不是“从零写评估”，而是：
-
-1) **采用“三模型分叉”**：为三种控制策略各自维护一个仿真模型（减少耦合、便于独立调参/调试）
-2) **统一日志信号契约**：三个模型必须输出同名 `logsout` 信号，保证指标解析脚本可复用
-3) **统一批量运行入口**：用一个 MATLAB 脚本驱动 model × scenario × repeat 的批量仿真，并产出统一 summary
+- 鍦?**鐩稿悓鐩爣璺緞** 涓嬶紝瀵规瘮涓夌鎺у埗鏂瑰紡鐨?**鎬ц兘鎸囨爣**
+- 瀵规瘮杩囩▼ **鍙鐜?*銆?*鍙壒閲忚繍琛?*銆?*鍙墿灞?*锛堟湭鏉ュ啀鍔犳帶鍒跺櫒涓嶉噸鍐欒瘎浼版鏋讹級
 
 
-## 2. 对比测试的总体架构（推荐：模型三分叉）
-建议把对比测试拆成三层：
+## 1. 鐜版湁宸ョ▼鍙鐢ㄥ熀纭€
+宸ョ▼宸插叿澶団€滄壒閲忛棴鐜豢鐪?+ 鎸囨爣瑙ｆ瀽鈥濈殑鍏ュ彛锛?
 
-### 2.1 模型层（Simulink：三分叉）
-目标：为三种控制策略分别维护 3 个仿真模型（入口、日志契约一致）：
+- 闂幆璇勪及鍏ュ彛鑴氭湰锛歚src/tests/test_closed_loop_performance.m`
+  - 鑳芥寜鍦烘櫙/璺緞鎵归噺浠跨湡骞朵粠 `logsout` 涓娊鍙栨寚鏍?
+  - 褰撳墠鐢ㄤ簬鈥滃姣斾笉鍚?GRU 鎴栨帶鍒堕厤缃€?
+- GRU 鍦ㄧ嚎鎺ㄧ悊灏佽锛歚src/gru/GRU_state_classifier.m`
+  - 鑳戒粠 plant 杈撳嚭 `y_raw (31脳1)` 浼拌 `theta_hat`銆乣label_main`銆乣label_turn`
+- MPC 鍒涘缓锛歚src/mpc/mpc_setup_single_interp.m`
+  - 鍒涘缓 Adaptive MPC 鎺у埗鍣紙鍚彲閫?MD 閫氶亾 theta锛?
 
-- `LPVMPC_AGV_simulink_GRU.slx`：LPVMPC + GRU（基线）
-- `LPVMPC_AGV_simulink_IMU.slx`：LPVMPC + 单IMU（仅替换坡度估计链路）
-- `LPVMPC_AGV_simulink_NMPC.slx`：非线性MPC（独立控制器子系统）
+鍥犳锛屾湰璁″垝鐨勫叧閿笉鏄€滀粠闆跺啓璇勪及鈥濓紝鑰屾槸锛?
 
-> 命名建议：以上为建议命名；你也可以保留原模型名，用 `_GRU/_IMU/_NMPC` 后缀建立副本。
-
-关键要求（决定对比能否自动化）：
-- 三个模型必须输出 **同名** 的信号到 `logsout`（详见第3节“日志信号契约”）
-- 三个模型必须支持同一套仿真注入参数：路径变量 `ref`/`agv_ref_path`、StopTime、噪声开关、随机种子等
-
-可选（非必须）：
-- 未来如果维护成本过高，可再回收为单模型 Variant/Switch；但首期以三分叉为主，降低耦合风险。
+1) **閲囩敤鈥滀笁妯″瀷鍒嗗弶鈥?*锛氫负涓夌鎺у埗绛栫暐鍚勮嚜缁存姢涓€涓豢鐪熸ā鍨嬶紙鍑忓皯鑰﹀悎銆佷究浜庣嫭绔嬭皟鍙?璋冭瘯锛?
+2) **缁熶竴鏃ュ織淇″彿濂戠害**锛氫笁涓ā鍨嬪繀椤昏緭鍑哄悓鍚?`logsout` 淇″彿锛屼繚璇佹寚鏍囪В鏋愯剼鏈彲澶嶇敤
+3) **缁熶竴鎵归噺杩愯鍏ュ彛**锛氱敤涓€涓?MATLAB 鑴氭湰椹卞姩 model 脳 scenario 脳 repeat 鐨勬壒閲忎豢鐪燂紝骞朵骇鍑虹粺涓€ summary
 
 
-### 2.2 运行层（MATLAB 脚本：统一驱动三模型）
-目标：提供统一入口，一键跑完：
+## 2. 瀵规瘮娴嬭瘯鐨勬€讳綋鏋舵瀯锛堟帹鑽愶細妯″瀷涓夊垎鍙夛級
+寤鸿鎶婂姣旀祴璇曟媶鎴愪笁灞傦細
 
-- 模型集合（建议用 map 管理）：
+### 2.1 妯″瀷灞傦紙Simulink锛氫笁鍒嗗弶锛?
+鐩爣锛氫负涓夌鎺у埗绛栫暐鍒嗗埆缁存姢 3 涓豢鐪熸ā鍨嬶紙鍏ュ彛銆佹棩蹇楀绾︿竴鑷达級锛?
+
+- `LPVMPC_AGV_simulink._GRU.slx`锛歀PVMPC + GRU锛堝熀绾匡級
+- `LPVMPC_AGV_simulink_IMU.slx`锛歀PVMPC + 鍗旾MU锛堜粎鏇挎崲鍧″害浼拌閾捐矾锛?
+- `LPVMPC_AGV_simulink_NMPC.slx`锛氶潪绾挎€PC锛堢嫭绔嬫帶鍒跺櫒瀛愮郴缁燂級
+
+> 鍛藉悕寤鸿锛氫互涓婁负寤鸿鍛藉悕锛涗綘涔熷彲浠ヤ繚鐣欏師妯″瀷鍚嶏紝鐢?`_GRU/_IMU/_NMPC` 鍚庣紑寤虹珛鍓湰銆?
+
+鍏抽敭瑕佹眰锛堝喅瀹氬姣旇兘鍚﹁嚜鍔ㄥ寲锛夛細
+- 涓変釜妯″瀷蹇呴』杈撳嚭 **鍚屽悕** 鐨勪俊鍙峰埌 `logsout`锛堣瑙佺3鑺傗€滄棩蹇椾俊鍙峰绾︹€濓級
+- 涓変釜妯″瀷蹇呴』鏀寔鍚屼竴濂椾豢鐪熸敞鍏ュ弬鏁帮細璺緞鍙橀噺 `ref`/`agv_ref_path`銆丼topTime銆佸櫔澹板紑鍏炽€侀殢鏈虹瀛愮瓑
+
+鍙€夛紙闈炲繀椤伙級锛?
+- 鏈潵濡傛灉缁存姢鎴愭湰杩囬珮锛屽彲鍐嶅洖鏀朵负鍗曟ā鍨?Variant/Switch锛涗絾棣栨湡浠ヤ笁鍒嗗弶涓轰富锛岄檷浣庤€﹀悎椋庨櫓銆?
+
+
+### 2.2 杩愯灞傦紙MATLAB 鑴氭湰锛氱粺涓€椹卞姩涓夋ā鍨嬶級
+鐩爣锛氭彁渚涚粺涓€鍏ュ彛锛屼竴閿窇瀹岋細
+
+- 妯″瀷闆嗗悎锛堝缓璁敤 map 绠＄悊锛夛細
   - `lpvmpc_gru  -> simulink/LPVMPC_AGV_simulink_GRU`
   - `lpvmpc_imu  -> simulink/LPVMPC_AGV_simulink_IMU`
   - `nmpc        -> simulink/LPVMPC_AGV_simulink_NMPC`
-- 路径集合：来自 `data/paths/path_*.mat` 或自定义
-- 每条路径重复次数 N（用于统计均值/方差）
+- 璺緞闆嗗悎锛氭潵鑷?`data/paths/path_*.mat` 鎴栬嚜瀹氫箟
+- 姣忔潯璺緞閲嶅娆℃暟 N锛堢敤浜庣粺璁″潎鍊?鏂瑰樊锛?
 
-并保存：
-- 每次仿真的 `timeseries_*.mat`（可选）
-- 一份可对比的 `summary.mat`（带 controller 维度）
+骞朵繚瀛橈細
+- 姣忔浠跨湡鐨?`timeseries_*.mat`锛堝彲閫夛級
+- 涓€浠藉彲瀵规瘮鐨?`summary.mat`锛堝甫 controller 缁村害锛?
 
-实现建议（与现状脚本关系）：
-- 不直接在 `src/tests/test_closed_loop_performance.m` 上“硬改到底”，而是以它为基础新建一个脚本（例如 `src/tests/run_controller_comparison_batch.m`），只保留可复用的信号抽取与结果结构。
-- `test_closed_loop_performance.m` 作为参考/回归脚本保留，避免影响既有流程。
-
-
-### 2.3 评估/报告层（后处理脚本）
-目标：读取一个或多个 `summary.mat`，生成：
-
-- 指标对比表（每条路径 × 每种控制器）
-- 汇总统计（均值/方差/最差值）
-- 关键曲线对比图（同路径叠加）
+瀹炵幇寤鸿锛堜笌鐜扮姸鑴氭湰鍏崇郴锛夛細
+- 涓嶇洿鎺ュ湪 `src/tests/test_closed_loop_performance.m` 涓娾€滅‖鏀瑰埌搴曗€濓紝鑰屾槸浠ュ畠涓哄熀纭€鏂板缓涓€涓剼鏈紙渚嬪 `src/tests/run_controller_comparison_batch.m`锛夛紝鍙繚鐣欏彲澶嶇敤鐨勪俊鍙锋娊鍙栦笌缁撴灉缁撴瀯銆?
+- `test_closed_loop_performance.m` 浣滀负鍙傝€?鍥炲綊鑴氭湰淇濈暀锛岄伩鍏嶅奖鍝嶆棦鏈夋祦绋嬨€?
 
 
-## 3. 统一“日志信号契约”（必须先冻结）
-要做到自动对比，最关键的是：三种控制方式输出同一套 `logsout` 信号名。
+### 2.3 璇勪及/鎶ュ憡灞傦紙鍚庡鐞嗚剼鏈級
+鐩爣锛氳鍙栦竴涓垨澶氫釜 `summary.mat`锛岀敓鎴愶細
 
-现有 `test_closed_loop_performance.m` 内部已通过 `signal_names` 映射做了解析；后续要把它提升为**项目级契约**。
-
-本项目选择：**在 `logsout` 中统一记录 `diag.*` 命名空间信号**（即信号名带 `diag.` 前缀）。
-
-这样做的原因：
-- 你当前已按 `diag.X/diag.e_y/...` 的方式添加日志，沿用可减少后续反复改名
-- 诊断信号集中在同一命名空间，便于脚本批量抽取与版本演进
-
-建议统一至少包含：
-
-### 3.1 跟踪相关
-- `diag.X, diag.Y, diag.psi, diag.v, diag.omega`（实际状态）
-- `diag.X_ref, diag.Y_ref, diag.psi_ref, diag.v_ref, diag.omega_ref`（参考）
-- `diag.e_y, diag.e_psi, diag.e_v, diag.e_omega`（误差向量，统一来自 Global2PathError）
-
-信号来源建议（与当前 LPVMPC+GRU 模型对齐）：
-- `diag.X, diag.Y, diag.psi, diag.v, diag.omega`：来自 plant 输出总线 `C`，其顺序固定为 `C=[X, Y, psi, v, omega]`
-- `diag.e_y, diag.e_psi, diag.e_v, diag.e_omega`：统一来自 `Global2PathError` 输出（当前实现为 4 维）
-
-### 3.2 控制相关
-- `diag.F_cmd, diag.omega_cmd`（控制器输出）
-- `du` 或 `dF_cmd/domega_cmd`（若有）
-- `sat_flag` 或饱和比例（若能记录）
-
-### 3.3 估计/调度相关
-- `diag.theta_ground`（真值；用于分析，不一定给控制器用）
-- `diag.theta_hat`（控制器最终使用的坡度估计；无论来自 GRU 还是 IMU，都叫 `theta_hat`）
-- `diag.rho_f`（调度滤波输出；当前模型为 `rho_f=[v_f; omega_f; theta_f]`）
-- `diag.rho_n`（可选，仅监控/调试用的归一化量；不参与 UpdatePlantModel）
-- `diag.y_wt, diag.u_wt, diag.du_wt, diag.umin, diag.umax`（可选：在线权重/约束调度输出；用于解释性能差异）
-- `diag.F_limit`（力限幅，供饱和占比计算；若上下限不对称，建议同时记录正负限或取绝对最大值）
-
-### 3.4 计算性能
-- `diag.solve_time_ms`（控制器求解耗时；尽量接近优化器时间）
-- `diag.total_step_time_ms`（可选：每步总耗时/墙钟时间；包含模型与 GRU 的额外开销，用于解释整体实时性）
-
-> 说明：
-> - 对于 NMPC：需要输出 `diag.solve_time_ms`；若可行也输出 `diag.total_step_time_ms`。
-> - 对于 LPVMPC：若暂时无法从 Adaptive MPC Controller 块直接拿到求解耗时，可先在脚本侧测量并写入结果结构；但 `diag.total_step_time_ms` 仍可作为“端到端耗时”先行记录。
+- 鎸囨爣瀵规瘮琛紙姣忔潯璺緞 脳 姣忕鎺у埗鍣級
+- 姹囨€荤粺璁★紙鍧囧€?鏂瑰樊/鏈€宸€硷級
+- 鍏抽敭鏇茬嚎瀵规瘮鍥撅紙鍚岃矾寰勫彔鍔狅級
 
 
-## 4. 指标体系（建议首版必选 + 可选扩展）
-为避免指标爆炸，建议分两层。
+## 3. 缁熶竴鈥滄棩蹇椾俊鍙峰绾︹€濓紙蹇呴』鍏堝喕缁擄級
+瑕佸仛鍒拌嚜鍔ㄥ姣旓紝鏈€鍏抽敭鐨勬槸锛氫笁绉嶆帶鍒舵柟寮忚緭鍑哄悓涓€濂?`logsout` 淇″彿鍚嶃€?
 
-### 4.1 首版必选（建议对比最小集合）
-**跟踪精度**
-- 横向误差 `e_y`：RMS、峰值（Peak）、稳态均值（最后 10% 时间窗）
-- 航向误差 `e_psi`：RMS、峰值
-- 速度误差 `v_ref - v`：RMS、峰值
+鐜版湁 `test_closed_loop_performance.m` 鍐呴儴宸查€氳繃 `signal_names` 鏄犲皠鍋氫簡瑙ｆ瀽锛涘悗缁鎶婂畠鎻愬崌涓?*椤圭洰绾у绾?*銆?
 
-**控制代价/平顺性**
-- `|F_cmd|` 峰值
-- `|omega_cmd|` 峰值
-- 控制变化率 RMS（例如 `diff(F_cmd)/Ts`、`diff(omega_cmd)/Ts`）
+鏈」鐩€夋嫨锛?*鍦?`logsout` 涓粺涓€璁板綍 `diag.*` 鍛藉悕绌洪棿淇″彿**锛堝嵆淇″彿鍚嶅甫 `diag.` 鍓嶇紑锛夈€?
 
-**约束/鲁棒性**
-- 饱和占比：`|F_cmd| > 0.95*F_limit` 的时间比例
-- 仿真失败/求解失败次数（feasible/optimal 以外视为失败）
+杩欐牱鍋氱殑鍘熷洜锛?
+- 浣犲綋鍓嶅凡鎸?`diag.X/diag.e_y/...` 鐨勬柟寮忔坊鍔犳棩蹇楋紝娌跨敤鍙噺灏戝悗缁弽澶嶆敼鍚?
+- 璇婃柇淇″彿闆嗕腑鍦ㄥ悓涓€鍛藉悕绌洪棿锛屼究浜庤剼鏈壒閲忔娊鍙栦笌鐗堟湰婕旇繘
 
-**计算复杂度**
-- 求解耗时均值、95分位、最大值
+寤鸿缁熶竴鑷冲皯鍖呭惈锛?
 
-### 4.2 可选扩展（第二阶段再加）
-- 能耗/力功：`∫ |F_cmd * v| dt` 或近似功耗
-- jerk/舒适性：`d²u/dt²` 的统计
-- 工况识别准确率（对 GRU/IMU 的 label 也可对比，但这属于“识别系统”评估）
+### 3.1 璺熻釜鐩稿叧
+- `diag.X, diag.Y, diag.psi, diag.v, diag.omega`锛堝疄闄呯姸鎬侊級
+- `diag.X_ref, diag.Y_ref, diag.psi_ref, diag.v_ref, diag.omega_ref`锛堝弬鑰冿級
+- `diag.e_y, diag.e_psi, diag.e_v, diag.e_omega`锛堣宸悜閲忥紝缁熶竴鏉ヨ嚜 Global2PathError锛?
 
+淇″彿鏉ユ簮寤鸿锛堜笌褰撳墠 LPVMPC+GRU 妯″瀷瀵归綈锛夛細
+- `diag.X, diag.Y, diag.psi, diag.v, diag.omega`锛氭潵鑷?plant 杈撳嚭鎬荤嚎 `C`锛屽叾椤哄簭鍥哄畾涓?`C=[X, Y, psi, v, omega]`
+- `diag.e_y, diag.e_psi, diag.e_v, diag.e_omega`锛氱粺涓€鏉ヨ嚜 `Global2PathError` 杈撳嚭锛堝綋鍓嶅疄鐜颁负 4 缁达級
 
-## 5. 三种控制方式的实现落点
+### 3.2 鎺у埗鐩稿叧
+- `diag.F_cmd, diag.omega_cmd`锛堟帶鍒跺櫒杈撳嚭锛?
+- `du` 鎴?`dF_cmd/domega_cmd`锛堣嫢鏈夛級
+- `sat_flag` 鎴栭ケ鍜屾瘮渚嬶紙鑻ヨ兘璁板綍锛?
 
-### 5.1 LPVMPC + GRU（已存在）
-- GRU 输出：`theta_hat`（来自 `GRU_State_Classifier` 块）
-- MPC 使用：`md = theta_hat`，`rho=[v,omega,theta_hat]`（或其滤波版本）
+### 3.3 浼拌/璋冨害鐩稿叧
+- `diag.theta_ground`锛堢湡鍊硷紱鐢ㄤ簬鍒嗘瀽锛屼笉涓€瀹氱粰鎺у埗鍣ㄧ敤锛?
+- `diag.theta_hat`锛堟帶鍒跺櫒鏈€缁堜娇鐢ㄧ殑鍧″害浼拌锛涙棤璁烘潵鑷?GRU 杩樻槸 IMU锛岄兘鍙?`theta_hat`锛?
+- `diag.rho_f`锛堣皟搴︽护娉㈣緭鍑猴紱褰撳墠妯″瀷涓?`rho_f=[v_f; omega_f; theta_f]`锛?
+- `diag.rho_n`锛堝彲閫夛紝浠呯洃鎺?璋冭瘯鐢ㄧ殑褰掍竴鍖栭噺锛涗笉鍙備笌 UpdatePlantModel锛?
+- `diag.y_wt, diag.u_wt, diag.du_wt, diag.umin, diag.umax`锛堝彲閫夛細鍦ㄧ嚎鏉冮噸/绾︽潫璋冨害杈撳嚭锛涚敤浜庤В閲婃€ц兘宸紓锛?
+- `diag.F_limit`锛堝姏闄愬箙锛屼緵楗卞拰鍗犳瘮璁＄畻锛涜嫢涓婁笅闄愪笉瀵圭О锛屽缓璁悓鏃惰褰曟璐熼檺鎴栧彇缁濆鏈€澶у€硷級
 
-这个作为基线，不建议大改。
+### 3.4 璁＄畻鎬ц兘
+- `diag.solve_time_ms`锛堟帶鍒跺櫒姹傝В鑰楁椂锛涘敖閲忔帴杩戜紭鍖栧櫒鏃堕棿锛?
+- `diag.total_step_time_ms`锛堝彲閫夛細姣忔鎬昏€楁椂/澧欓挓鏃堕棿锛涘寘鍚ā鍨嬩笌 GRU 鐨勯澶栧紑閿€锛岀敤浜庤В閲婃暣浣撳疄鏃舵€э級
 
-#### 5.1.1 基线模型“关键模块接口”（基于你提供的接线图/代码，建议写入对比契约）
-为保证 IMU/NMPC 分叉模型能做到“最小改动 + 完全可比”，建议把下列接口约定显式写入本计划，并在三个模型中尽量保持一致。
-
-**(1) RhoFilter（调度变量滤波）**
-- 函数签名：`[rho_f, rho_n] = RhoFilter(v_in, omega_in, theta_in, Ts, tau)`
-- 输出：`rho_f=[v_f; w_f; t_f]`，其中 `v_f=max(v_in,0)`（速度负值被截断），`rho_n` 仅用于监控
-- 当前接线确认：`theta_in` 使用 `theta_hat`（来自 GRU 在线估计输出），因此 `rho_f` 的第三维是 `theta_hat` 的一阶滤波值
-- 对比建议：
-  - 三个模型统一记录 `rho_f`（以及可选 `rho_n`），方便解释权重/约束调度差异
-  - 若未来存在倒车/负速度场景，需要评估 `max(v_in,0)` 是否会引入不可比性（当前对比路径若都为前进，可先不改）
-
-**(2) UpdatePlantModel（LPV 在线插值 + 权重/约束调度输出）**
-- 函数签名：`[plant, y_wt, u_wt, du_wt, ecr_wt, umin, umax] = UpdatePlantModel(rho, db_rt, MPC_idx, ff_rt, v_ff_nom)`
-- 关键行为：
-  - `plant.B=[Bmv,Bmd]`，把坡度作为 1 个 MD 通道（`nd=1`）
-  - 同时输出 `y_wt/u_wt/du_wt` 与 `umin/umax` 供 Adaptive MPC 使用
-- 风险/优化点（会影响“对比公平性”）：
-  - 你当前代码里 `maps_local` 是函数内部硬编码（`enable_weight_interp=true`，以及固定 range/scale）。而 PreLoadFcn 又加载了 `maps_best` 并写入 `ctrl.maps`。
-  - 建议在计划中明确：对比版本要么“统一用 maps_best→ctrl.maps→mpc_update_from_rho 的调度”，要么“统一用 UpdatePlantModel 内置 maps_local”。避免 GRU/IMU/NMPC 三套逻辑不一致导致不可比。
-  - 建议把 `y_wt/u_wt/du_wt/umin/umax` 纳入 `logsout`（至少保存统计量或关键时刻），用于复盘“性能差异来自估计还是来自调度范围”。
-
-**(3) Global2PathError（误差向量）**
-- 你提供的实现实际输出为 4 维：`y_e=[e_y; e_psi; e_v; e_omega]`（代码注释里提到 `e_s`，但当前未输出）
-- 对比建议：
-  - 统一把 `e_y/e_psi/e_v/e_omega` 作为日志契约的误差来源（不要在不同模型里重复实现不同误差定义）
-  - 若后续确实需要 `e_s`（进度误差），应在三模型同步增加并纳入契约
-
-**(4) GRU_State_Classifier（在线坡度/工况识别）**
-- 当前 MATLAB Function 通过 `coder.extrinsic + evalin/assignin` 与基础工作区交互（每步写 `gru_out_temp` 再读字段）。
-- 风险/优化点（对批量仿真影响很大）：
-  - **并行仿真不安全**：`assignin('base',...)` 会导致不同 worker/不同 run 之间相互覆盖，基本无法用 `parsim` 做并行。
-  - **仿真性能开销**：频繁 `evalin/assignin` 会显著拖慢仿真，影响“计算耗时”指标的公平对比。
-  - 计划建议：
-    - 首版对比若只做串行 batch，可先保留现状，但要在报告里说明“GRU 分支包含额外 MATLAB 工作区开销”。
-    - 若要做公平的计算耗时对比，建议把 GRU block 改为“无 base workspace 副作用”的输出路径（例如直接从 `out` 结构体提取数值，或将推理封装到不依赖 base ws 的函数接口），这样才能启用 `parsim` 并减少额外开销。
-
-**(5) PreLoadFcn（初始化/数据加载）**
-- 当前 PreLoadFcn 负责：`init_project()`、加载 `params/db_rt/ctrl/maps_best/gru_model`、创建 `MPCPlantBus`。
-- 对比建议：
-  - 三分叉模型要保持“相同的初始化语义”（尤其 `db_rt/ctrl/maps_best`），否则出现“模型A用的是旧数据库/旧权重”的不可复现问题。
-  - 批量仿真脚本建议采用：`load_system` 一次 + 尽可能使用 Fast Restart（前提是模型结构不变且变量注入方式稳定）。
+> 璇存槑锛?
+> - 瀵逛簬 NMPC锛氶渶瑕佽緭鍑?`diag.solve_time_ms`锛涜嫢鍙涔熻緭鍑?`diag.total_step_time_ms`銆?
+> - 瀵逛簬 LPVMPC锛氳嫢鏆傛椂鏃犳硶浠?Adaptive MPC Controller 鍧楃洿鎺ユ嬁鍒版眰瑙ｈ€楁椂锛屽彲鍏堝湪鑴氭湰渚ф祴閲忓苟鍐欏叆缁撴灉缁撴瀯锛涗絾 `diag.total_step_time_ms` 浠嶅彲浣滀负鈥滅鍒扮鑰楁椂鈥濆厛琛岃褰曘€?
 
 
-### 5.2 LPVMPC + 单IMU（推荐作为第一步新增）
-目标：仅替换 `theta_hat` 来源，使对比尽可能“控制变量法”。
+## 4. 鎸囨爣浣撶郴锛堝缓璁鐗堝繀閫?+ 鍙€夋墿灞曪級
+涓洪伩鍏嶆寚鏍囩垎鐐革紝寤鸿鍒嗕袱灞傘€?
 
-**做法建议（弱基线，最小可行）**：
-- 采用“陀螺积分 + 轻微泄漏/低通”的最简 IMU 估计（刻意不引入更完整的姿态融合），以凸显 GRU 的优势。
-- 具体形式可沿用工程中已有思路（示意）：
-  - `theta_hat = (1-α)*theta_hat_prev + α*(theta_hat_prev + gyro_y*Ts)`
-  - 或 `theta_hat = λ*theta_hat_prev + gyro_y*Ts`（带泄漏项 λ<1）
-  - 其中 `gyro_y` 来自 `y_raw(10)`（工程已有定义）
-- 在 Simulink IMU 分叉模型内新增轻量 `IMU_Theta_Estimator`（MATLAB Function）输出：
-  - `theta_hat`（单位 rad；命名保持与 GRU 分支一致，便于复用 UpdatePlantModel/RhoFilter/日志契约）
+### 4.1 棣栫増蹇呴€夛紙寤鸿瀵规瘮鏈€灏忛泦鍚堬級
+**璺熻釜绮惧害**
+- 妯悜璇樊 `e_y`锛歊MS銆佸嘲鍊硷紙Peak锛夈€佺ǔ鎬佸潎鍊硷紙鏈€鍚?10% 鏃堕棿绐楋級
+- 鑸悜璇樊 `e_psi`锛歊MS銆佸嘲鍊?
+- 閫熷害璇樊 `v_ref - v`锛歊MS銆佸嘲鍊?
 
-**预期局限性（需在报告中标注原因）**：
-- 仅陀螺积分会存在累计漂移；本实验接受该现象，因为目标是突出 GRU 的优势。
-- 若漂移导致闭环不稳定，可引入“最小必要的工程性约束”（仍保持弱基线定位）：
-  - `theta_hat` 限幅（例如 ±10° 或按模型实际坡度范围设定）
-  - 起始/分段重置策略（例如每条路径 run 初始重置为 0）
-  - 可选：非常弱的回零项（避免无界漂移），但不做复杂融合
+**鎺у埗浠ｄ环/骞抽『鎬?*
+- `|F_cmd|` 宄板€?
+- `|omega_cmd|` 宄板€?
+- 鎺у埗鍙樺寲鐜?RMS锛堜緥濡?`diff(F_cmd)/Ts`銆乣diff(omega_cmd)/Ts`锛?
 
-重要约束：
-- 对比时保持 MPC 参数（Q/R/dR/约束等）一致，避免把“估计差异”和“控制器调参差异”混在一起。
+**绾︽潫/椴佹鎬?*
+- 楗卞拰鍗犳瘮锛歚|F_cmd| > 0.95*F_limit` 鐨勬椂闂存瘮渚?
+- 浠跨湡澶辫触/姹傝В澶辫触娆℃暟锛坒easible/optimal 浠ュ瑙嗕负澶辫触锛?
 
+**璁＄畻澶嶆潅搴?*
+- 姹傝В鑰楁椂鍧囧€笺€?5鍒嗕綅銆佹渶澶у€?
 
-### 5.3 非线性MPC（实现路线取决于工具箱）
-这里分两条路线，建议先确认你本机是否有 Nonlinear MPC Toolbox：
-
-**路线A：有 Nonlinear MPC Toolbox（首选）**
-- 在 Simulink 中使用 Nonlinear MPC Controller 块或 MATLAB 中 `nlmpc` 对象
-- 状态模型用工程现有的 `state_eq.m`（或 `state_eq_ref.m`）
-- 输出/参考与约束映射到 `F_cmd, omega_cmd`
-
-**路线B：无工具箱（MVP 方案）**
-- 先在 MATLAB 脚本层实现“离线/仿真式 NMPC”（每步 `fmincon` 求解）
-- 生成同样格式的 `sim_out` 或至少生成指标所需时序
-- 待可用后，再决定是否集成回 Simulink
-
-无论哪条路线，必须满足：
-- 统一日志：输出 `F_cmd, omega_cmd, solve_time_ms, e_y, e_psi, v` 等
-- 统一约束：输入限幅、变化率限幅（尽量对齐 LPVMPC）
+### 4.2 鍙€夋墿灞曪紙绗簩闃舵鍐嶅姞锛?
+- 鑳借€?鍔涘姛锛歚鈭?|F_cmd * v| dt` 鎴栬繎浼煎姛鑰?
+- jerk/鑸掗€傛€э細`d虏u/dt虏` 鐨勭粺璁?
+- 宸ュ喌璇嗗埆鍑嗙‘鐜囷紙瀵?GRU/IMU 鐨?label 涔熷彲瀵规瘮锛屼絾杩欏睘浜庘€滆瘑鍒郴缁熲€濊瘎浼帮級
 
 
-## 6. 批量对比脚本的改造方案
-建议以 `src/tests/test_closed_loop_performance.m` 为基础，新建脚本实现“多模型驱动”的批量评估入口（避免影响现有脚本的历史用途）。
+## 5. 涓夌鎺у埗鏂瑰紡鐨勫疄鐜拌惤鐐?
 
-建议脚本名：`src/tests/run_controller_comparison_batch.m`（可调整）
+### 5.1 LPVMPC + GRU锛堝凡瀛樺湪锛?
+- GRU 杈撳嚭锛歚theta_hat`锛堟潵鑷?`GRU_State_Classifier` 鍧楋級
+- MPC 浣跨敤锛歚md = theta_hat`锛宍rho=[v,omega,theta_hat]`锛堟垨鍏舵护娉㈢増鏈級
 
-### 6.1 cfg 结构体扩展
-新增字段建议：
-- `cfg.controller_variants`：例如 `{'lpvmpc_gru','lpvmpc_imu','nmpc'}`（逻辑标签，用于索引模型与结果）
-- `cfg.model_map`：例如 `struct('lpvmpc_gru','LPVMPC_AGV_simulink_GRU', 'lpvmpc_imu','LPVMPC_AGV_simulink_IMU', 'nmpc','LPVMPC_AGV_simulink_NMPC')`
-- `cfg.seed`：随机种子（保证噪声一致）
-- `cfg.enable_noise`：是否启用测量噪声
-- `cfg.save_timeseries`：每次仿真是否保存完整 `sim_out`
+杩欎釜浣滀负鍩虹嚎锛屼笉寤鸿澶ф敼銆?
 
-并建议新增（用于可复现与公平对比）：
-- `cfg.rng_policy`：随机种子策略（固定/派生；见第9节）
-- `cfg.metrics_window.steady_ratio`：稳态窗口比例（默认 0.10）
-- `cfg.metrics.enable_core_tracking_metrics`：是否计算 `e_y/e_psi` 等核心指标（默认 true）
+#### 5.1.1 鍩虹嚎妯″瀷鈥滃叧閿ā鍧楁帴鍙ｂ€濓紙鍩轰簬浣犳彁渚涚殑鎺ョ嚎鍥?浠ｇ爜锛屽缓璁啓鍏ュ姣斿绾︼級
+涓轰繚璇?IMU/NMPC 鍒嗗弶妯″瀷鑳藉仛鍒扳€滄渶灏忔敼鍔?+ 瀹屽叏鍙瘮鈥濓紝寤鸿鎶婁笅鍒楁帴鍙ｇ害瀹氭樉寮忓啓鍏ユ湰璁″垝锛屽苟鍦ㄤ笁涓ā鍨嬩腑灏介噺淇濇寔涓€鑷淬€?
 
-### 6.2 外层循环改为 model(controller) × scenario
-现状：只循环 scenarios（且只面向单模型）。
-改造后：
-1) 循环 controller（标签）
-2) 由 `cfg.model_map(controller)` 解析出对应的 **Simulink 模型名**，分别调用 `sim()`
-3) 循环 scenario（含重复次数）
-4) 每次仿真前注入 base workspace 变量（统一注入，三模型都要兼容），例如：
-  - `ref` / `agv_ref_path`（参考路径结构体）
-  - `params.enable_noise`（或单独的 `enable_noise`）
-  - `rng(cfg.seed)`（或每次 run 固定 seed 派生）
-  - GRU 模型：确保 `gru_model` 已加载；IMU/NMPC 模型可忽略该变量但不应报错
+**(1) RhoFilter锛堣皟搴﹀彉閲忔护娉級**
+- 鍑芥暟绛惧悕锛歚[rho_f, rho_n] = RhoFilter(v_in, omega_in, theta_in, Ts, tau)`
+- 杈撳嚭锛歚rho_f=[v_f; w_f; t_f]`锛屽叾涓?`v_f=max(v_in,0)`锛堥€熷害璐熷€艰鎴柇锛夛紝`rho_n` 浠呯敤浜庣洃鎺?
+- 褰撳墠鎺ョ嚎纭锛歚theta_in` 浣跨敤 `theta_hat`锛堟潵鑷?GRU 鍦ㄧ嚎浼拌杈撳嚭锛夛紝鍥犳 `rho_f` 鐨勭涓夌淮鏄?`theta_hat` 鐨勪竴闃舵护娉㈠€?
+- 瀵规瘮寤鸿锛?
+  - 涓変釜妯″瀷缁熶竴璁板綍 `rho_f`锛堜互鍙婂彲閫?`rho_n`锛夛紝鏂逛究瑙ｉ噴鏉冮噸/绾︽潫璋冨害宸紓
+  - 鑻ユ湭鏉ュ瓨鍦ㄥ€掕溅/璐熼€熷害鍦烘櫙锛岄渶瑕佽瘎浼?`max(v_in,0)` 鏄惁浼氬紩鍏ヤ笉鍙瘮鎬э紙褰撳墠瀵规瘮璺緞鑻ラ兘涓哄墠杩涳紝鍙厛涓嶆敼锛?
 
-补充建议（与当前 GRU block 实现相关）：
-- 如果未来希望启用 `parsim` 并行：尽量避免在模型运行过程中对 base workspace 做 `assignin/evalin`（至少要把 GRU/IMU 的在线估计链路改为“无副作用”）。
-- 若先采用串行 batch：建议明确 `cfg.run_mode='serial'`，并将“GRU分支的额外 MATLAB 开销”与“控制器求解耗时”区分记录（例如同时记录 `mpc_solve_time_ms` 与 `total_step_time_ms`）。
+**(2) UpdatePlantModel锛圠PV 鍦ㄧ嚎鎻掑€?+ 鏉冮噸/绾︽潫璋冨害杈撳嚭锛?*
+- 鍑芥暟绛惧悕锛歚[plant, y_wt, u_wt, du_wt, ecr_wt, umin, umax] = UpdatePlantModel(rho, db_rt, MPC_idx, ff_rt, v_ff_nom)`
+- 鍏抽敭琛屼负锛?
+  - `plant.B=[Bmv,Bmd]`锛屾妸鍧″害浣滀负 1 涓?MD 閫氶亾锛坄nd=1`锛?
+  - 鍚屾椂杈撳嚭 `y_wt/u_wt/du_wt` 涓?`umin/umax` 渚?Adaptive MPC 浣跨敤
+- 椋庨櫓/浼樺寲鐐癸紙浼氬奖鍝嶁€滃姣斿叕骞虫€р€濓級锛?
+  - 浣犲綋鍓嶄唬鐮侀噷 `maps_local` 鏄嚱鏁板唴閮ㄧ‖缂栫爜锛坄enable_weight_interp=true`锛屼互鍙婂浐瀹?range/scale锛夈€傝€?PreLoadFcn 鍙堝姞杞戒簡 `maps_best` 骞跺啓鍏?`ctrl.maps`銆?
+  - 寤鸿鍦ㄨ鍒掍腑鏄庣‘锛氬姣旂増鏈涔堚€滅粺涓€鐢?maps_best鈫抍trl.maps鈫抦pc_update_from_rho 鐨勮皟搴︹€濓紝瑕佷箞鈥滅粺涓€鐢?UpdatePlantModel 鍐呯疆 maps_local鈥濄€傞伩鍏?GRU/IMU/NMPC 涓夊閫昏緫涓嶄竴鑷村鑷翠笉鍙瘮銆?
+  - 寤鸿鎶?`y_wt/u_wt/du_wt/umin/umax` 绾冲叆 `logsout`锛堣嚦灏戜繚瀛樼粺璁￠噺鎴栧叧閿椂鍒伙級锛岀敤浜庡鐩樷€滄€ц兘宸紓鏉ヨ嚜浼拌杩樻槸鏉ヨ嚜璋冨害鑼冨洿鈥濄€?
 
-### 6.3 结果结构统一
-建议 summary 的核心结构：
+**(3) Global2PathError锛堣宸悜閲忥級**
+- 浣犳彁渚涚殑瀹炵幇瀹為檯杈撳嚭涓?4 缁达細`y_e=[e_y; e_psi; e_v; e_omega]`锛堜唬鐮佹敞閲婇噷鎻愬埌 `e_s`锛屼絾褰撳墠鏈緭鍑猴級
+- 瀵规瘮寤鸿锛?
+  - 缁熶竴鎶?`e_y/e_psi/e_v/e_omega` 浣滀负鏃ュ織濂戠害鐨勮宸潵婧愶紙涓嶈鍦ㄤ笉鍚屾ā鍨嬮噷閲嶅瀹炵幇涓嶅悓璇樊瀹氫箟锛?
+  - 鑻ュ悗缁‘瀹為渶瑕?`e_s`锛堣繘搴﹁宸級锛屽簲鍦ㄤ笁妯″瀷鍚屾澧炲姞骞剁撼鍏ュ绾?
+
+**(4) GRU_State_Classifier锛堝湪绾垮潯搴?宸ュ喌璇嗗埆锛?*
+- 褰撳墠 MATLAB Function 閫氳繃 `coder.extrinsic + evalin/assignin` 涓庡熀纭€宸ヤ綔鍖轰氦浜掞紙姣忔鍐?`gru_out_temp` 鍐嶈瀛楁锛夈€?
+- 椋庨櫓/浼樺寲鐐癸紙瀵规壒閲忎豢鐪熷奖鍝嶅緢澶э級锛?
+  - **骞惰浠跨湡涓嶅畨鍏?*锛歚assignin('base',...)` 浼氬鑷翠笉鍚?worker/涓嶅悓 run 涔嬮棿鐩镐簰瑕嗙洊锛屽熀鏈棤娉曠敤 `parsim` 鍋氬苟琛屻€?
+  - **浠跨湡鎬ц兘寮€閿€**锛氶绻?`evalin/assignin` 浼氭樉钁楁嫋鎱豢鐪燂紝褰卞搷鈥滆绠楄€楁椂鈥濇寚鏍囩殑鍏钩瀵规瘮銆?
+  - 璁″垝寤鸿锛?
+    - 棣栫増瀵规瘮鑻ュ彧鍋氫覆琛?batch锛屽彲鍏堜繚鐣欑幇鐘讹紝浣嗚鍦ㄦ姤鍛婇噷璇存槑鈥淕RU 鍒嗘敮鍖呭惈棰濆 MATLAB 宸ヤ綔鍖哄紑閿€鈥濄€?
+    - 鑻ヨ鍋氬叕骞崇殑璁＄畻鑰楁椂瀵规瘮锛屽缓璁妸 GRU block 鏀逛负鈥滄棤 base workspace 鍓綔鐢ㄢ€濈殑杈撳嚭璺緞锛堜緥濡傜洿鎺ヤ粠 `out` 缁撴瀯浣撴彁鍙栨暟鍊硷紝鎴栧皢鎺ㄧ悊灏佽鍒颁笉渚濊禆 base ws 鐨勫嚱鏁版帴鍙ｏ級锛岃繖鏍锋墠鑳藉惎鐢?`parsim` 骞跺噺灏戦澶栧紑閿€銆?
+
+**(5) PreLoadFcn锛堝垵濮嬪寲/鏁版嵁鍔犺浇锛?*
+- 褰撳墠 PreLoadFcn 璐熻矗锛歚init_project()`銆佸姞杞?`params/db_rt/ctrl/maps_best/gru_model`銆佸垱寤?`MPCPlantBus`銆?
+- 瀵规瘮寤鸿锛?
+  - 涓夊垎鍙夋ā鍨嬭淇濇寔鈥滅浉鍚岀殑鍒濆鍖栬涔夆€濓紙灏ゅ叾 `db_rt/ctrl/maps_best`锛夛紝鍚﹀垯鍑虹幇鈥滄ā鍨婣鐢ㄧ殑鏄棫鏁版嵁搴?鏃ф潈閲嶁€濈殑涓嶅彲澶嶇幇闂銆?
+  - 鎵归噺浠跨湡鑴氭湰寤鸿閲囩敤锛歚load_system` 涓€娆?+ 灏藉彲鑳戒娇鐢?Fast Restart锛堝墠鎻愭槸妯″瀷缁撴瀯涓嶅彉涓斿彉閲忔敞鍏ユ柟寮忕ǔ瀹氾級銆?
+
+
+### 5.2 LPVMPC + 鍗旾MU锛堟帹鑽愪綔涓虹涓€姝ユ柊澧烇級
+鐩爣锛氫粎鏇挎崲 `theta_hat` 鏉ユ簮锛屼娇瀵规瘮灏藉彲鑳解€滄帶鍒跺彉閲忔硶鈥濄€?
+
+**鍋氭硶寤鸿锛堝急鍩虹嚎锛屾渶灏忓彲琛岋級**锛?
+- 閲囩敤鈥滈檧铻虹Н鍒?+ 杞诲井娉勬紡/浣庨€氣€濈殑鏈€绠€ IMU 浼拌锛堝埢鎰忎笉寮曞叆鏇村畬鏁寸殑濮挎€佽瀺鍚堬級锛屼互鍑告樉 GRU 鐨勪紭鍔裤€?
+- 鍏蜂綋褰㈠紡鍙部鐢ㄥ伐绋嬩腑宸叉湁鎬濊矾锛堢ず鎰忥級锛?
+  - `theta_hat = (1-伪)*theta_hat_prev + 伪*(theta_hat_prev + gyro_y*Ts)`
+  - 鎴?`theta_hat = 位*theta_hat_prev + gyro_y*Ts`锛堝甫娉勬紡椤?位<1锛?
+  - 鍏朵腑 `gyro_y` 鏉ヨ嚜 `y_raw(10)`锛堝伐绋嬪凡鏈夊畾涔夛級
+- 鍦?Simulink IMU 鍒嗗弶妯″瀷鍐呮柊澧炶交閲?`IMU_Theta_Estimator`锛圡ATLAB Function锛夎緭鍑猴細
+  - `theta_hat`锛堝崟浣?rad锛涘懡鍚嶄繚鎸佷笌 GRU 鍒嗘敮涓€鑷达紝渚夸簬澶嶇敤 UpdatePlantModel/RhoFilter/鏃ュ織濂戠害锛?
+
+**棰勬湡灞€闄愭€э紙闇€鍦ㄦ姤鍛婁腑鏍囨敞鍘熷洜锛?*锛?
+- 浠呴檧铻虹Н鍒嗕細瀛樺湪绱婕傜Щ锛涙湰瀹為獙鎺ュ彈璇ョ幇璞★紝鍥犱负鐩爣鏄獊鍑?GRU 鐨勪紭鍔裤€?
+- 鑻ユ紓绉诲鑷撮棴鐜笉绋冲畾锛屽彲寮曞叆鈥滄渶灏忓繀瑕佺殑宸ョ▼鎬х害鏉熲€濓紙浠嶄繚鎸佸急鍩虹嚎瀹氫綅锛夛細
+  - `theta_hat` 闄愬箙锛堜緥濡?卤10掳 鎴栨寜妯″瀷瀹為檯鍧″害鑼冨洿璁惧畾锛?
+  - 璧峰/鍒嗘閲嶇疆绛栫暐锛堜緥濡傛瘡鏉¤矾寰?run 鍒濆閲嶇疆涓?0锛?
+  - 鍙€夛細闈炲父寮辩殑鍥為浂椤癸紙閬垮厤鏃犵晫婕傜Щ锛夛紝浣嗕笉鍋氬鏉傝瀺鍚?
+
+閲嶈绾︽潫锛?
+- 瀵规瘮鏃朵繚鎸?MPC 鍙傛暟锛圦/R/dR/绾︽潫绛夛級涓€鑷达紝閬垮厤鎶娾€滀及璁″樊寮傗€濆拰鈥滄帶鍒跺櫒璋冨弬宸紓鈥濇贩鍦ㄤ竴璧枫€?
+
+
+### 5.3 闈炵嚎鎬PC锛堝疄鐜拌矾绾垮彇鍐充簬宸ュ叿绠憋級
+杩欓噷鍒嗕袱鏉¤矾绾匡紝寤鸿鍏堢‘璁や綘鏈満鏄惁鏈?Nonlinear MPC Toolbox锛?
+
+**璺嚎A锛氭湁 Nonlinear MPC Toolbox锛堥閫夛級**
+- 鍦?Simulink 涓娇鐢?Nonlinear MPC Controller 鍧楁垨 MATLAB 涓?`nlmpc` 瀵硅薄
+- 鐘舵€佹ā鍨嬬敤宸ョ▼鐜版湁鐨?`state_eq.m`锛堟垨 `state_eq_ref.m`锛?
+- 杈撳嚭/鍙傝€冧笌绾︽潫鏄犲皠鍒?`F_cmd, omega_cmd`
+
+**璺嚎B锛氭棤宸ュ叿绠憋紙MVP 鏂规锛?*
+- 鍏堝湪 MATLAB 鑴氭湰灞傚疄鐜扳€滅绾?浠跨湡寮?NMPC鈥濓紙姣忔 `fmincon` 姹傝В锛?
+- 鐢熸垚鍚屾牱鏍煎紡鐨?`sim_out` 鎴栬嚦灏戠敓鎴愭寚鏍囨墍闇€鏃跺簭
+- 寰呭彲鐢ㄥ悗锛屽啀鍐冲畾鏄惁闆嗘垚鍥?Simulink
+
+鏃犺鍝潯璺嚎锛屽繀椤绘弧瓒筹細
+- 缁熶竴鏃ュ織锛氳緭鍑?`F_cmd, omega_cmd, solve_time_ms, e_y, e_psi, v` 绛?
+- 缁熶竴绾︽潫锛氳緭鍏ラ檺骞呫€佸彉鍖栫巼闄愬箙锛堝敖閲忓榻?LPVMPC锛?
+
+
+## 6. 鎵归噺瀵规瘮鑴氭湰鐨勬敼閫犳柟妗?
+寤鸿浠?`src/tests/test_closed_loop_performance.m` 涓哄熀纭€锛屾柊寤鸿剼鏈疄鐜扳€滃妯″瀷椹卞姩鈥濈殑鎵归噺璇勪及鍏ュ彛锛堥伩鍏嶅奖鍝嶇幇鏈夎剼鏈殑鍘嗗彶鐢ㄩ€旓級銆?
+
+寤鸿鑴氭湰鍚嶏細`src/tests/run_controller_comparison_batch.m`锛堝彲璋冩暣锛?
+
+### 6.1 cfg 缁撴瀯浣撴墿灞?
+鏂板瀛楁寤鸿锛?
+- `cfg.controller_variants`锛氫緥濡?`{'lpvmpc_gru','lpvmpc_imu','nmpc'}`锛堥€昏緫鏍囩锛岀敤浜庣储寮曟ā鍨嬩笌缁撴灉锛?
+- `cfg.model_map`锛氫緥濡?`struct('lpvmpc_gru','LPVMPC_AGV_simulink_GRU', 'lpvmpc_imu','LPVMPC_AGV_simulink_IMU', 'nmpc','LPVMPC_AGV_simulink_NMPC')`
+- `cfg.seed`锛氶殢鏈虹瀛愶紙淇濊瘉鍣０涓€鑷达級
+- `cfg.enable_noise`锛氭槸鍚﹀惎鐢ㄦ祴閲忓櫔澹?
+- `cfg.save_timeseries`锛氭瘡娆′豢鐪熸槸鍚︿繚瀛樺畬鏁?`sim_out`
+
+骞跺缓璁柊澧烇紙鐢ㄤ簬鍙鐜颁笌鍏钩瀵规瘮锛夛細
+- `cfg.rng_policy`锛氶殢鏈虹瀛愮瓥鐣ワ紙鍥哄畾/娲剧敓锛涜绗?鑺傦級
+- `cfg.metrics_window.steady_ratio`锛氱ǔ鎬佺獥鍙ｆ瘮渚嬶紙榛樿 0.10锛?
+- `cfg.metrics.enable_core_tracking_metrics`锛氭槸鍚﹁绠?`e_y/e_psi` 绛夋牳蹇冩寚鏍囷紙榛樿 true锛?
+
+### 6.2 澶栧眰寰幆鏀逛负 model(controller) 脳 scenario
+鐜扮姸锛氬彧寰幆 scenarios锛堜笖鍙潰鍚戝崟妯″瀷锛夈€?
+鏀归€犲悗锛?
+1) 寰幆 controller锛堟爣绛撅級
+2) 鐢?`cfg.model_map(controller)` 瑙ｆ瀽鍑哄搴旂殑 **Simulink 妯″瀷鍚?*锛屽垎鍒皟鐢?`sim()`
+3) 寰幆 scenario锛堝惈閲嶅娆℃暟锛?
+4) 姣忔浠跨湡鍓嶆敞鍏?base workspace 鍙橀噺锛堢粺涓€娉ㄥ叆锛屼笁妯″瀷閮借鍏煎锛夛紝渚嬪锛?
+  - `ref` / `agv_ref_path`锛堝弬鑰冭矾寰勭粨鏋勪綋锛?
+  - `params.enable_noise`锛堟垨鍗曠嫭鐨?`enable_noise`锛?
+  - `rng(cfg.seed)`锛堟垨姣忔 run 鍥哄畾 seed 娲剧敓锛?
+  - GRU 妯″瀷锛氱‘淇?`gru_model` 宸插姞杞斤紱IMU/NMPC 妯″瀷鍙拷鐣ヨ鍙橀噺浣嗕笉搴旀姤閿?
+
+琛ュ厖寤鸿锛堜笌褰撳墠 GRU block 瀹炵幇鐩稿叧锛夛細
+- 濡傛灉鏈潵甯屾湜鍚敤 `parsim` 骞惰锛氬敖閲忛伩鍏嶅湪妯″瀷杩愯杩囩▼涓 base workspace 鍋?`assignin/evalin`锛堣嚦灏戣鎶?GRU/IMU 鐨勫湪绾夸及璁￠摼璺敼涓衡€滄棤鍓綔鐢ㄢ€濓級銆?
+- 鑻ュ厛閲囩敤涓茶 batch锛氬缓璁槑纭?`cfg.run_mode='serial'`锛屽苟灏嗏€淕RU鍒嗘敮鐨勯澶?MATLAB 寮€閿€鈥濅笌鈥滄帶鍒跺櫒姹傝В鑰楁椂鈥濆尯鍒嗚褰曪紙渚嬪鍚屾椂璁板綍 `mpc_solve_time_ms` 涓?`total_step_time_ms`锛夈€?
+
+### 6.3 缁撴灉缁撴瀯缁熶竴
+寤鸿 summary 鐨勬牳蹇冪粨鏋勶細
 - `summary.controllers(i).name`
-- `summary.controllers(i).reports{j}`（每条路径/重复一次的 report）
-- `summary.controllers(i).stats`（对每条路径与总体的聚合统计）
+- `summary.controllers(i).reports{j}`锛堟瘡鏉¤矾寰?閲嶅涓€娆＄殑 report锛?
+- `summary.controllers(i).stats`锛堝姣忔潯璺緞涓庢€讳綋鐨勮仛鍚堢粺璁★級
 
-这样后处理脚本只需要遍历 `summary.controllers`。
-
-
-## 7. 报告脚本（compare_controller_performance.m）
-建议新增：`src/tests/compare_controller_performance.m`，职责：
-
-- 输入：一个或多个 `closed_loop_summary_*.mat`
-- 输出：
-  - 对比表（.mat + .csv）
-  - 曲线图（.png）
-  - 汇总说明（.md 或 .txt）
-
-推荐保存目录：`results/compare/<timestamp>/`。
+杩欐牱鍚庡鐞嗚剼鏈彧闇€瑕侀亶鍘?`summary.controllers`銆?
 
 
-## 8. 里程碑与验收标准（强烈建议按此推进）
+## 7. 鎶ュ憡鑴氭湰锛坈ompare_controller_performance.m锛?
+寤鸿鏂板锛歚src/tests/compare_controller_performance.m`锛岃亴璐ｏ細
 
-### M0：工具箱与路线确认（0.1天）
-- 目的：提前锁定 NMPC 路线，避免后期计划大改
-- 建议执行：
+- 杈撳叆锛氫竴涓垨澶氫釜 `closed_loop_summary_*.mat`
+- 杈撳嚭锛?
+  - 瀵规瘮琛紙.mat + .csv锛?
+  - 鏇茬嚎鍥撅紙.png锛?
+  - 姹囨€昏鏄庯紙.md 鎴?.txt锛?
+
+鎺ㄨ崘淇濆瓨鐩綍锛歚results/compare/<timestamp>/`銆?
+
+
+## 8. 閲岀▼纰戜笌楠屾敹鏍囧噯锛堝己鐑堝缓璁寜姝ゆ帹杩涳級
+
+### M0锛氬伐鍏风涓庤矾绾跨‘璁わ紙0.1澶╋級
+- 鐩殑锛氭彁鍓嶉攣瀹?NMPC 璺嚎锛岄伩鍏嶅悗鏈熻鍒掑ぇ鏀?
+- 寤鸿鎵ц锛?
   - `ver('mpc')`
-  - `exist('nlmpc','file')` 或 `which nlmpc`（检查 `nlmpc` 函数是否可用）
-- 验收：明确是否具备 Nonlinear MPC Toolbox；若缺失则直接采用路线B并在计划中调整 M5 工期预期
+  - `exist('nlmpc','file')` 鎴?`which nlmpc`锛堟鏌?`nlmpc` 鍑芥暟鏄惁鍙敤锛?
+- 楠屾敹锛氭槑纭槸鍚﹀叿澶?Nonlinear MPC Toolbox锛涜嫢缂哄け鍒欑洿鎺ラ噰鐢ㄨ矾绾緽骞跺湪璁″垝涓皟鏁?M5 宸ユ湡棰勬湡
 
-### M1：冻结日志契约（1天）
-- 验收：基线 `lpvmpc_gru` 能输出契约内全部 `logsout` 信号
+### M1锛氬喕缁撴棩蹇楀绾︼紙1澶╋級
+- 楠屾敹锛氬熀绾?`lpvmpc_gru` 鑳借緭鍑哄绾﹀唴鍏ㄩ儴 `logsout` 淇″彿
 
-并行推进（建议同 M1 完成）：
-- 指标计算函数同步补齐核心跟踪指标：`e_y_rms/e_y_peak/e_psi_rms`，以及控制变化率 RMS（`diff(F_cmd)/Ts`、`diff(omega_cmd)/Ts`）
-- 明确随机种子机制并落到 `cfg` 与 `summary`（见第9节）
+骞惰鎺ㄨ繘锛堝缓璁悓 M1 瀹屾垚锛夛細
+- 鎸囨爣璁＄畻鍑芥暟鍚屾琛ラ綈鏍稿績璺熻釜鎸囨爣锛歚e_y_rms/e_y_peak/e_psi_rms`锛屼互鍙婃帶鍒跺彉鍖栫巼 RMS锛坄diff(F_cmd)/Ts`銆乣diff(omega_cmd)/Ts`锛?
+- 鏄庣‘闅忔満绉嶅瓙鏈哄埗骞惰惤鍒?`cfg` 涓?`summary`锛堣绗?鑺傦級
 
-### M2：创建三分叉模型骨架（0.5~1天）
-- 验收：三个模型都能加载同一路径并跑通到结束；三者 `logsout` 至少包含契约中“首版必需”的信号集合
+### M2锛氬垱寤轰笁鍒嗗弶妯″瀷楠ㄦ灦锛?.5~1澶╋級
+- 楠屾敹锛氫笁涓ā鍨嬮兘鑳藉姞杞藉悓涓€璺緞骞惰窇閫氬埌缁撴潫锛涗笁鑰?`logsout` 鑷冲皯鍖呭惈濂戠害涓€滈鐗堝繀闇€鈥濈殑淇″彿闆嗗悎
 
-### M3：实现 LPVMPC+IMU（0.5~1天）
-- 验收：IMU 分叉模型在同一路径下能跑通，并输出同名 `theta_hat`
+### M3锛氬疄鐜?LPVMPC+IMU锛?.5~1澶╋級
+- 楠屾敹锛欼MU 鍒嗗弶妯″瀷鍦ㄥ悓涓€璺緞涓嬭兘璺戦€氾紝骞惰緭鍑哄悓鍚?`theta_hat`
 
-### M4：扩展批量仿真脚本为三控制器（1天）
-- 验收：一条命令可跑完 controllers×scenarios×repeat，并输出 summary
+### M4锛氭墿灞曟壒閲忎豢鐪熻剼鏈负涓夋帶鍒跺櫒锛?澶╋級
+- 楠屾敹锛氫竴鏉″懡浠ゅ彲璺戝畬 controllers脳scenarios脳repeat锛屽苟杈撳嚭 summary
 
-### M5：引入 NMPC（2~5天，取决于工具箱与求解稳定性）
-- 验收：NMPC 在至少 straight + turn 两类路径上稳定运行，且耗时统计可输出
+### M5锛氬紩鍏?NMPC锛?~5澶╋紝鍙栧喅浜庡伐鍏风涓庢眰瑙ｇǔ瀹氭€э級
+- 楠屾敹锛歂MPC 鍦ㄨ嚦灏?straight + turn 涓ょ被璺緞涓婄ǔ瀹氳繍琛岋紝涓旇€楁椂缁熻鍙緭鍑?
 
-### M6：报告与快测（1天）
-- 验收：自动生成对比表与图；提供 quick config（短StopTime、少路径）可快速回归
-
-
-## 9. 已确定参数 vs 待确定参数（先写死框架，便于后续落地）
-
-### 9.1 已确定（当前信息足够，可直接写入实现）
-- **plant 输出顺序**：`C=[X, Y, psi, v, omega]`
-- **调度变量滤波输入**：`RhoFilter.theta_in = theta_hat`
-- **误差定义来源**：`Global2PathError` 输出 `y_e=[e_y; e_psi; e_v; e_omega]`
-- **模型初始化入口**：PreLoadFcn 负责加载 `params/db_rt/ctrl/maps_best/gru_model` 与创建 `MPCPlantBus`
-
-### 9.2 待确定（需要你后续给出数值/策略，但现在先把字段写进计划与 cfg）
-- **IMU 弱基线参数**：
-  - 泄漏/低通系数：`λ` 或 `α`（默认 TBD）
-  - 限幅范围：`theta_hat` 的最小/最大值（默认 TBD，建议与数据集/工况范围一致）
-  - 重置策略：每个 run 初始化是否强制 `theta_hat=0`（默认 TBD）
-- **噪声参数**：
-  - `cfg.enable_noise`、噪声强度（默认 TBD；但必须同 seed 绑定并记录）
-- **随机种子机制（必须冻结）**：
-  - `cfg.seed_base`（默认 TBD）
-  - seed 派生规则：建议 `seed = seed_base + hash(controller,scenario,repeat)` 或可复现的整数映射（默认 TBD）
-  - `summary` 必须记录每次 run 的 seed 与噪声开关
-- **指标计算窗口**：
-  - 稳态窗口比例 `steady_ratio`（建议默认 0.10，若你有偏好可改）
-- **计算耗时口径**：
-  - 记录 `mpc_solve_time_ms`（控制器求解耗时）与可选 `total_step_time_ms`（含模型/GRU 开销）是否都需要（默认 TBD）
+### M6锛氭姤鍛婁笌蹇祴锛?澶╋級
+- 楠屾敹锛氳嚜鍔ㄧ敓鎴愬姣旇〃涓庡浘锛涙彁渚?quick config锛堢煭StopTime銆佸皯璺緞锛夊彲蹇€熷洖褰?
 
 
-## 9. 风险与对策
-- **NMPC 求解耗时/不可行**：先做短预测域、保守约束、设置超时与失败惩罚；优先跑 straight 再扩展。
-- **日志信号不齐导致脚本报错**：先冻结契约再开发控制器，缺失信号必须在模型内补齐并保持同名。
-- **公平性问题（调参差异）**：第一阶段强制使用同一套输入限幅/变化率限幅；NMPC 若需要不同权重，必须在报告中注明。
-- **随机噪声影响可复现**：统一设置 `rng(cfg.seed)`，并在 summary 中记录 seed 与噪声开关。
+## 9. 宸茬‘瀹氬弬鏁?vs 寰呯‘瀹氬弬鏁帮紙鍏堝啓姝绘鏋讹紝渚夸簬鍚庣画钀藉湴锛?
+
+### 9.1 宸茬‘瀹氾紙褰撳墠淇℃伅瓒冲锛屽彲鐩存帴鍐欏叆瀹炵幇锛?
+- **plant 杈撳嚭椤哄簭**锛歚C=[X, Y, psi, v, omega]`
+- **璋冨害鍙橀噺婊ゆ尝杈撳叆**锛歚RhoFilter.theta_in = theta_hat`
+- **璇樊瀹氫箟鏉ユ簮**锛歚Global2PathError` 杈撳嚭 `y_e=[e_y; e_psi; e_v; e_omega]`
+- **妯″瀷鍒濆鍖栧叆鍙?*锛歅reLoadFcn 璐熻矗鍔犺浇 `params/db_rt/ctrl/maps_best/gru_model` 涓庡垱寤?`MPCPlantBus`
+
+### 9.2 寰呯‘瀹氾紙闇€瑕佷綘鍚庣画缁欏嚭鏁板€?绛栫暐锛屼絾鐜板湪鍏堟妸瀛楁鍐欒繘璁″垝涓?cfg锛?
+- **IMU 寮卞熀绾垮弬鏁?*锛?
+  - 娉勬紡/浣庨€氱郴鏁帮細`位` 鎴?`伪`锛堥粯璁?TBD锛?
+  - 闄愬箙鑼冨洿锛歚theta_hat` 鐨勬渶灏?鏈€澶у€硷紙榛樿 TBD锛屽缓璁笌鏁版嵁闆?宸ュ喌鑼冨洿涓€鑷达級
+  - 閲嶇疆绛栫暐锛氭瘡涓?run 鍒濆鍖栨槸鍚﹀己鍒?`theta_hat=0`锛堥粯璁?TBD锛?
+- **鍣０鍙傛暟**锛?
+  - `cfg.enable_noise`銆佸櫔澹板己搴︼紙榛樿 TBD锛涗絾蹇呴』鍚?seed 缁戝畾骞惰褰曪級
+- **闅忔満绉嶅瓙鏈哄埗锛堝繀椤诲喕缁擄級**锛?
+  - `cfg.seed_base`锛堥粯璁?TBD锛?
+  - seed 娲剧敓瑙勫垯锛氬缓璁?`seed = seed_base + hash(controller,scenario,repeat)` 鎴栧彲澶嶇幇鐨勬暣鏁版槧灏勶紙榛樿 TBD锛?
+  - `summary` 蹇呴』璁板綍姣忔 run 鐨?seed 涓庡櫔澹板紑鍏?
+- **鎸囨爣璁＄畻绐楀彛**锛?
+  - 绋虫€佺獥鍙ｆ瘮渚?`steady_ratio`锛堝缓璁粯璁?0.10锛岃嫢浣犳湁鍋忓ソ鍙敼锛?
+- **璁＄畻鑰楁椂鍙ｅ緞**锛?
+  - 璁板綍 `mpc_solve_time_ms`锛堟帶鍒跺櫒姹傝В鑰楁椂锛変笌鍙€?`total_step_time_ms`锛堝惈妯″瀷/GRU 寮€閿€锛夋槸鍚﹂兘闇€瑕侊紙榛樿 TBD锛?
 
 
-## 10. 建议的下一步（最小可跑版本）
-优先做：
-1) 复制现有模型形成三分叉：`*_GRU / *_IMU / *_NMPC`（先保持其余部分一致）
-2) 在三个模型中对齐并验证“日志信号契约”（先覆盖首版必选信号）
-3) 在新脚本 `run_controller_comparison_batch.m` 中实现 `cfg.model_map`，按 controller 选择不同模型批量运行
-4) 先跑 `straight`、repeat=1，验证三模型都能产出可解析的 summary
+## 9. 椋庨櫓涓庡绛?
+- **NMPC 姹傝В鑰楁椂/涓嶅彲琛?*锛氬厛鍋氱煭棰勬祴鍩熴€佷繚瀹堢害鏉熴€佽缃秴鏃朵笌澶辫触鎯╃綒锛涗紭鍏堣窇 straight 鍐嶆墿灞曘€?
+- **鏃ュ織淇″彿涓嶉綈瀵艰嚧鑴氭湰鎶ラ敊**锛氬厛鍐荤粨濂戠害鍐嶅紑鍙戞帶鍒跺櫒锛岀己澶变俊鍙峰繀椤诲湪妯″瀷鍐呰ˉ榻愬苟淇濇寔鍚屽悕銆?
+- **鍏钩鎬ч棶棰橈紙璋冨弬宸紓锛?*锛氱涓€闃舵寮哄埗浣跨敤鍚屼竴濂楄緭鍏ラ檺骞?鍙樺寲鐜囬檺骞咃紱NMPC 鑻ラ渶瑕佷笉鍚屾潈閲嶏紝蹇呴』鍦ㄦ姤鍛婁腑娉ㄦ槑銆?
+- **闅忔満鍣０褰卞搷鍙鐜?*锛氱粺涓€璁剧疆 `rng(cfg.seed)`锛屽苟鍦?summary 涓褰?seed 涓庡櫔澹板紑鍏炽€?
 
-跑通后再引入 NMPC。
+
+## 10. 寤鸿鐨勪笅涓€姝ワ紙鏈€灏忓彲璺戠増鏈級
+浼樺厛鍋氾細
+1) 澶嶅埗鐜版湁妯″瀷褰㈡垚涓夊垎鍙夛細`*_GRU / *_IMU / *_NMPC`锛堝厛淇濇寔鍏朵綑閮ㄥ垎涓€鑷达級
+2) 鍦ㄤ笁涓ā鍨嬩腑瀵归綈骞堕獙璇佲€滄棩蹇椾俊鍙峰绾︹€濓紙鍏堣鐩栭鐗堝繀閫変俊鍙凤級
+3) 鍦ㄦ柊鑴氭湰 `run_controller_comparison_batch.m` 涓疄鐜?`cfg.model_map`锛屾寜 controller 閫夋嫨涓嶅悓妯″瀷鎵归噺杩愯
+4) 鍏堣窇 `straight`銆乺epeat=1锛岄獙璇佷笁妯″瀷閮借兘浜у嚭鍙В鏋愮殑 summary
+
+璺戦€氬悗鍐嶅紩鍏?NMPC銆?
 
 ---
 
-## 附录：实施进度日志
+## 闄勫綍锛氬疄鏂借繘搴︽棩蹇?
 
 ### 2026-01-03
 
-#### M0：工具箱与路线确认 ✅
-- [x] 检查 MPC Toolbox 可用性 — **可用**
-- [x] 检查 Nonlinear MPC 可用性（`nlmpc` 函数存在性/可调用性）— **可用**
-- [x] 确定 NMPC 实现路线 — **路线A（工具箱）**
+#### M0锛氬伐鍏风涓庤矾绾跨‘璁?鉁?
+- [x] 妫€鏌?MPC Toolbox 鍙敤鎬?鈥?**鍙敤**
+- [x] 妫€鏌?Nonlinear MPC 鍙敤鎬э紙`nlmpc` 鍑芥暟瀛樺湪鎬?鍙皟鐢ㄦ€э級鈥?**鍙敤**
+- [x] 纭畾 NMPC 瀹炵幇璺嚎 鈥?**璺嚎A锛堝伐鍏风锛?*
 
-#### M1：冻结日志契约（进行中）
+#### M1锛氬喕缁撴棩蹇楀绾︼紙杩涜涓級
 
-**差距分析完成**：
-- 现有 `test_closed_loop_performance.m` 的 `default_signal_names()` 仅映射 **7 个**信号：
+**宸窛鍒嗘瀽瀹屾垚**锛?
+- 鐜版湁 `test_closed_loop_performance.m` 鐨?`default_signal_names()` 浠呮槧灏?**7 涓?*淇″彿锛?
   - `v`, `v_ref`, `theta_hat`, `theta_ground`, `theta_ref`, `label_main`, `F_cmd`
-- 对比计划契约需补齐约 **15 个**信号
+- 瀵规瘮璁″垝濂戠害闇€琛ラ綈绾?**15 涓?*淇″彿
 
-**Simulink 信号日志已添加**：
-- [x] 跟踪状态：`diag.X`, `diag.Y`, `diag.psi`, `diag.v`, `diag.omega`
-- [x] 路径误差：`diag.e_y`, `diag.e_psi`, `diag.e_v`, `diag.e_omega`
-- [x] 参考值：`diag.X_ref`, `diag.Y_ref`, `diag.psi_ref`, `diag.v_ref`, `diag.omega_ref`
-- [x] 控制输出：`diag.F_cmd`, `diag.omega_cmd`
-- [x] 估计/调度：`diag.theta_hat`, `diag.theta_ground`, `diag.label_main`
-- [ ] 求解耗时：`diag.solve_time_ms` — **暂未实现**（优先在脚本层面测量/记录）
-- [ ] 每步总耗时：`diag.total_step_time_ms` — **暂未实现**（脚本层面更易先行实现，用于端到端实时性对比）
+**Simulink 淇″彿鏃ュ織宸叉坊鍔?*锛?
+- [x] 璺熻釜鐘舵€侊細`diag.X`, `diag.Y`, `diag.psi`, `diag.v`, `diag.omega`
+- [x] 璺緞璇樊锛歚diag.e_y`, `diag.e_psi`, `diag.e_v`, `diag.e_omega`
+- [x] 鍙傝€冨€硷細`diag.X_ref`, `diag.Y_ref`, `diag.psi_ref`, `diag.v_ref`, `diag.omega_ref`
+- [x] 鎺у埗杈撳嚭锛歚diag.F_cmd`, `diag.omega_cmd`
+- [x] 浼拌/璋冨害锛歚diag.theta_hat`, `diag.theta_ground`, `diag.label_main`
+- [ ] 姹傝В鑰楁椂锛歚diag.solve_time_ms` 鈥?**鏆傛湭瀹炵幇**锛堜紭鍏堝湪鑴氭湰灞傞潰娴嬮噺/璁板綍锛?
+- [ ] 姣忔鎬昏€楁椂锛歚diag.total_step_time_ms` 鈥?**鏆傛湭瀹炵幇**锛堣剼鏈眰闈㈡洿鏄撳厛琛屽疄鐜帮紝鐢ㄤ簬绔埌绔疄鏃舵€у姣旓級
 
-**待完成**：
-- [ ] 新建 `run_controller_comparison_batch.m`（含新的 `default_signal_names()` 和 `analyze_results`）
-- [ ] 扩展指标计算支持 `e_y_rms`, `e_psi_rms`, 控制变化率 RMS
+**寰呭畬鎴?*锛?
+- [ ] 鏂板缓 `run_controller_comparison_batch.m`锛堝惈鏂扮殑 `default_signal_names()` 鍜?`analyze_results`锛?
+- [ ] 鎵╁睍鎸囨爣璁＄畻鏀寔 `e_y_rms`, `e_psi_rms`, 鎺у埗鍙樺寲鐜?RMS
 
-**技术决策记录**：
-1. 按计划 2.2 节，新建独立脚本而非修改 `test_closed_loop_performance.m`
-2. 求解耗时首版设为可选，等三种控制器跑通后再统一补充
+**鎶€鏈喅绛栬褰?*锛?
+1. 鎸夎鍒?2.2 鑺傦紝鏂板缓鐙珛鑴氭湰鑰岄潪淇敼 `test_closed_loop_performance.m`
+2. 姹傝В鑰楁椂棣栫増璁句负鍙€夛紝绛変笁绉嶆帶鍒跺櫒璺戦€氬悗鍐嶇粺涓€琛ュ厖
+

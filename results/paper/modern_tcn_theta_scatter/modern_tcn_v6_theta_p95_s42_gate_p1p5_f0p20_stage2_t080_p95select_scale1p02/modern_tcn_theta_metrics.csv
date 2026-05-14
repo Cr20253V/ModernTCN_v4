@@ -1,0 +1,11 @@
+metric,value
+n,1840
+mae_deg,0.250743190662
+rmse_deg,0.539397941649
+p95_abs_err_deg,0.986479223951
+peak_abs_err_deg,4.5478402419
+bias_deg,-0.0197885379006
+fit_slope,0.982334627886
+fit_intercept_deg,-0.0150992323997
+pearson_r,0.979892355499
+r2_identity,0.959623925212

@@ -42,7 +42,12 @@ if ~isfield(cfg,'epsi_max'), cfg.epsi_max = 0.5; end          % 放宽以匹配 
 if ~isfield(cfg,'ev_max'), cfg.ev_max = 0.5; end
 if ~isfield(cfg,'eomega_max'), cfg.eomega_max = 0.3; end
 if ~isfield(cfg,'dF_max'), cfg.dF_max = 400; end
-if ~isfield(cfg,'dw_max'), cfg.dw_max = 0.4; end
+if ~isfield(cfg,'dw_max'), cfg.dw_max = 0.9; end  % 与实际 Δω 约束上界对齐（MV.RateMax=0.9，之前0.4高估平滑惩罚2.25倍）
+if ~isfield(cfg,'w_ev'), cfg.w_ev = 0.45; end     % 上坡优先保速：提高速度误差项权重
+if ~isfield(cfg,'stall_theta_th'), cfg.stall_theta_th = 0.03; end
+if ~isfield(cfg,'stall_vref_th'), cfg.stall_vref_th = 0.30; end
+if ~isfield(cfg,'stall_ratio_w'), cfg.stall_ratio_w = 2.0; end
+if ~isfield(cfg,'stall_lowrate_w'), cfg.stall_lowrate_w = 1.5; end
 if ~isfield(cfg,'debug'), cfg.debug = false; end
 
 % 安全范围（log10 映射防止负权重）
@@ -64,7 +69,8 @@ if isfield(cfg, 'ctrl') && ~isempty(cfg.ctrl)
     ctrl = cfg.ctrl;
 else
     % 创建默认控制器（独立测试时）
-    ctrl = mpc_setup_single_interp(db, struct());
+    % 为确保与 Simulink（preloadfcn_v2 TARGET_NP/NC）一致，显式指定 Np=150、Nc=50 (1.5s/0.5s)
+    ctrl = mpc_setup_single_interp(db, struct('Np',150,'Nc',50));
 end
 
 % 提取 mpcobj（注意：这是引用，后续修改会影响 ctrl.mpcobj）
@@ -92,29 +98,113 @@ rho_min = [db.grid.V(1); db.grid.W(1); db.grid.T(1)];
 rho_max = [db.grid.V(end); db.grid.W(end); db.grid.T(end)];
 
 %% 场景列表（共 5 个场景）
-scene_order = {'straight_left_turn','straight_right_turn','slope','bumpy','straight'};
+%% 场景遍历（根据 scenes 结构体的键）
+scene_names = fieldnames(scenes);
+scene_count = numel(scene_names);
 
 J_total = 0;
 report = struct();
 report.scene = struct();
 report.fail_count = 0;
-report.scene_order = scene_order;
+report.scene_order = scene_names;
 
-for s = 1:numel(scene_order)
-    name = scene_order{s};
-    if ~isfield(scenes,name), continue; end
+% 若启用加载模式，预先加载完整路径
+ref_full = [];
+if isfield(cfg, 'path_file') && ~isempty(cfg.path_file)
+    if exist(cfg.path_file, 'file')
+        loaded_data = load(cfg.path_file);
+        if isfield(loaded_data, 'ref')
+            ref_full = loaded_data.ref;
+            % 确保 ref_full 包含 rho (v, omega, theta)
+            if ~isfield(ref_full, 'rho')
+                % 兼容旧数据：尝试构建 rho
+                ref_full.rho = [ref_full.v_ref, ref_full.omega_ref, ref_full.theta_ref];
+            end
+        else
+            error('Cost_Function:InvalidFile', '路径文件 %s 中未找到 ref 变量', cfg.path_file);
+        end
+    else
+        error('Cost_Function:FileNotFound', '未找到路径文件: %s', cfg.path_file);
+    end
+end
+
+for s = 1:scene_count
+    name = scene_names{s};
     weight_s = scenes.(name);
+    
+    % 跳过权重为0的场景（节省计算）
+    if weight_s <= 0
+        continue;
+    end
 
     try
-        % 生成参考（使用 gen_agv_ref_path 的默认参数，包括 bumpy_amp=deg2rad(5) 和 6s 延迟）
-        ref = gen_agv_ref_path(name, params, struct('T_end',20));
-        N = numel(ref.t);
-
-        % 初始状态：8维 [X Y psi v omega delta_lf delta_rr beta]
-        x_plant = [params.initial_x; params.initial_y; params.initial_heading; ...
+        % === 路径获取逻辑 ===
+        if ~isempty(ref_full)
+            % [加载模式] 从完整路径切片
+            if isfield(cfg, 'zones') && isfield(cfg.zones, name)
+                t_range = cfg.zones.(name); % [t_start, t_end]
+                
+                % 找到时间索引
+                idx_mask = (ref_full.t >= t_range(1)) & (ref_full.t < t_range(2));
+                if ~any(idx_mask)
+                    error('Cost_Function:InvalidZone', '场景 %s 的时间范围 [%.1f, %.1f] 在路径中无数据', ...
+                        name, t_range(1), t_range(2));
+                end
+                
+                % 切片函数（本地实现或内联）
+                ref = struct();
+                fields = fieldnames(ref_full);
+                for f = 1:length(fields)
+                    fn = fields{f};
+                    val = ref_full.(fn);
+                    if size(val,1) == length(ref_full.t)
+                        ref.(fn) = val(idx_mask, :);
+                    else
+                        ref.(fn) = val; % 元数据等不切片
+                    end
+                end
+                
+                % 重置时间向量从0开始（可选，但为了绘图对应可能更好保留绝对时间？）
+                % MPC控制器只关心 dt，绝对时间不影响逻辑
+                % 但为了 debug，保留绝对时间 t
+                
+            else
+                error('Cost_Function:ZoneNotDefined', '加载模式下未定义场景 %s 的时间范围(cfg.zones)', name);
+            end
+            
+            % [关键] 初始化状态 x0
+            % 使用切片起点的参考值初始化 (假设完美跟踪)
+            % x_plant = [X Y psi v omega delta_lf delta_rr beta]
+            % 注意：path文件通常不包含 delta/beta，设为0或基于运动学估算
+            x0_X = ref.X_ref(1);
+            x0_Y = ref.Y_ref(1);
+            x0_psi = ref.psi_ref(1);
+            x0_v = ref.v_ref(1);
+            x0_omega = ref.omega_ref(1);
+            
+            % 运动学估算转向角 delta = atan(omega * L / max(v, 0.05))
+            % 原来直接置0将导致转弯区切片仓真开始时控制器需要悟然建立转向角而产生初始跳变
+            if isfield(params,'L') && abs(x0_v) > 0.05
+                x0_delta = atan(x0_omega * params.L / x0_v);
+            else
+                x0_delta = 0;
+            end
+            x0_beta = 0;  % 质心角不含在路径文件中，保持为0
+            
+            x_plant = [x0_X; x0_Y; x0_psi; x0_v; x0_omega; x0_delta; x0_delta; x0_beta];
+            
+        else
+            % [生成模式] (Legacy) 调用生成函数
+            ref = gen_agv_ref_path(name, params, struct('T_end',120));
+            
+            % 默认初始状态 (0时刻)
+            x_plant = [params.initial_x; params.initial_y; params.initial_heading; ...
                    params.initial_velocity; params.initial_angular_velocity; ...
                    params.initial_front_steering; params.initial_rear_steering; ...
                    params.initial_sideslip];
+        end
+        
+        N = numel(ref.t);
 
         % MPC状态初始化
         xmpc = mpcstate(mpcobj);
@@ -122,6 +212,7 @@ for s = 1:numel(scene_order)
         % 统计量
         ey = zeros(N,1); epsi = zeros(N,1); ev = zeros(N,1); eomega = zeros(N,1);
         u_hist = zeros(N,2); du_hist = zeros(N,2);
+        sat_omega = false(N,1);
         solve_ms = zeros(N,1);
         cons_violation = zeros(N,1);
 
@@ -175,9 +266,15 @@ for s = 1:numel(scene_order)
             % 构造 Nominal 结构体（工作点，所有为零 = 误差坐标系）
             Nominal = struct();
             Nominal.X = zeros(4,1);   % 状态工作点
-            Nominal.U = zeros(3,1);   % 输入工作点（2 MV + 1 MD）
             Nominal.Y = zeros(4,1);   % 输出工作点
             Nominal.DX = zeros(4,1);  % 状态导数工作点
+            
+            % 输入工作点：重力/滚阻补偿 (让 MPC 知道爬坡基础力不是额外负担)
+            m_agv = 200.0; c_r = 0.015; g = 9.81;
+            F_eq = m_agv * g * (sin(md) + c_r * cos(md)); 
+            
+            Nominal.U = zeros(3,1);   % （2 MV + 1 MD）
+            Nominal.U(1) = F_eq;      % [关键修改]
             
             % 更新权重（通过修改 mpcobj 属性）
             mpcobj.Weights.OutputVariables = upd.Q;
@@ -231,6 +328,7 @@ for s = 1:numel(scene_order)
             % MV约束（检查是否命中边界）
             if abs(u(1)) > abs(mpcobj.MV(1).Max) + 1e-6, cons_viol = cons_viol + abs(u(1)) - abs(mpcobj.MV(1).Max); end
             if abs(u(2)) > abs(mpcobj.MV(2).Max) + 1e-6, cons_viol = cons_viol + abs(u(2)) - abs(mpcobj.MV(2).Max); end
+            sat_omega(k) = abs(u(2)) >= (abs(mpcobj.MV(2).Max) - 1e-6);
             
             %% 10. 推进Plant状态（使用state_eq_ref）
             x_plant = state_eq_ref(x_plant, u, theta_meas, params);
@@ -252,8 +350,28 @@ for s = 1:numel(scene_order)
 
         % 代价计算
         RMSE = @(z) sqrt(mean(z.^2)); RMS = @(z) sqrt(mean(z.^2));
-        J_trk = 1.1*RMSE(ey)/cfg.ey_max + 1.0*RMSE(epsi)/cfg.epsi_max + 0.2*RMSE(eomega)/cfg.eomega_max + 0.1*RMSE(ev)/cfg.ev_max;
+        J_trk = 1.1*RMSE(ey)/cfg.ey_max + 1.0*RMSE(epsi)/cfg.epsi_max + 0.2*RMSE(eomega)/cfg.eomega_max + cfg.w_ev*RMSE(ev)/cfg.ev_max;
         J_smooth = 0.08*RMS(du_hist(:,1))/cfg.dF_max + 0.07*RMS(du_hist(:,2))/cfg.dw_max;
+
+        % 上坡防停车惩罚：抑制“少出力换低R代价”的伪最优
+        theta_seg = ref.theta_ref(1:N);
+        v_ref_seg = ref.v_ref(1:N);
+        v_act_seg = ev + v_ref_seg;
+        uphill_mask = (theta_seg > cfg.stall_theta_th) & (v_ref_seg > cfg.stall_vref_th);
+        if any(uphill_mask)
+            v_ref_up = v_ref_seg(uphill_mask);
+            v_act_up = v_act_seg(uphill_mask);
+            stall_ratio = mean(max(0, v_ref_up - v_act_up) ./ max(v_ref_up, 0.2));
+            low_speed_rate = mean(v_act_up < 0.5 * v_ref_up);
+        else
+            stall_ratio = 0.0;
+            low_speed_rate = 0.0;
+        end
+        J_stall = cfg.stall_ratio_w * stall_ratio + cfg.stall_lowrate_w * low_speed_rate;
+
+        % 转向饱和率惩罚（鼓励减少omega_cmd打限）
+        sat_rate = mean(sat_omega);
+        J_sat = 8.0 * sat_rate;
 
         % 约束惩罚（L1/L∞ 混合）
         L1 = mean(abs(cons_violation)); Linf = max(abs(cons_violation));
@@ -263,7 +381,7 @@ for s = 1:numel(scene_order)
         avg_ms = mean(solve_ms); max_ms = max(solve_ms);
         J_rt = max(0, (avg_ms - 5.0)/5.0) + (max_ms > 10.0)*0.5;
 
-        J_scene = J_trk + J_smooth + J_cons + J_rt;
+        J_scene = J_trk + J_smooth + J_cons + J_rt + J_sat + J_stall;
 
         if fail_scene
             J_scene = 1e6; report.fail_count = report.fail_count + 1; end
@@ -275,6 +393,8 @@ for s = 1:numel(scene_order)
         rep.RMSE = struct('ey',RMSE(ey),'epsi',RMSE(epsi),'ev',RMSE(ev),'eomega',RMSE(eomega));
         rep.RMS_du = struct('dF',RMS(du_hist(:,1)),'dw',RMS(du_hist(:,2)));
         rep.cons = struct('L1',L1,'Linf',Linf);
+        rep.sat = struct('omega_rate',sat_rate);
+        rep.stall = struct('ratio',stall_ratio,'low_speed_rate',low_speed_rate,'J_stall',J_stall);
         rep.solve_ms = struct('avg',avg_ms,'max',max_ms);
         rep.failed = fail_scene;
         report.scene.(name) = rep;

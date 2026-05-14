@@ -1,0 +1,30 @@
+[ModernTCN] 第一阶段训练开始
+  seed=73, device=cpu, out=E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73
+  dataset=E:\Matlab\Simulink\S-Function_16\data\tcn\TCN_dataset_v3_transition_rich.mat
+  train/val/test=15819/3280/3316
+  model channels=64, blocks=5, kernel=31
+  epoch 001 | train=0.5826 val=0.2222 main=0.9338 turnT=0.3766 theta=2.4707 score=0.8078
+  epoch 005 | train=0.0773 val=0.1554 main=0.9607 turnT=0.5447 theta=1.3526 score=0.4970
+  epoch 010 | train=0.0504 val=0.1204 main=0.9619 turnT=0.5426 theta=1.3421 score=0.4550
+  epoch 015 | train=0.0381 val=0.1474 main=0.9625 turnT=0.5809 theta=0.9897 score=0.4253
+  epoch 020 | train=0.0340 val=0.1539 main=0.9534 turnT=0.6064 theta=0.7265 score=0.4070
+  epoch 025 | train=0.0251 val=0.1695 main=0.9668 turnT=0.6426 theta=0.7991 score=0.3688
+  epoch 030 | train=0.0273 val=0.1822 main=0.9649 turnT=0.6447 theta=0.9578 score=0.3829
+  epoch 035 | train=0.0232 val=0.1886 main=0.9677 turnT=0.6447 theta=0.5882 score=0.3780
+  epoch 040 | train=0.0226 val=0.1839 main=0.9668 turnT=0.6277 theta=0.6179 score=0.3909
+  epoch 045 | train=0.0203 val=0.2254 main=0.9610 turnT=0.6574 theta=0.4762 score=0.4021
+  epoch 050 | train=0.0190 val=0.2459 main=0.9616 turnT=0.6872 theta=0.5893 score=0.3964
+  epoch 055 | train=0.0169 val=0.2196 main=0.9649 turnT=0.6723 theta=0.4696 score=0.3765
+[ModernTCN] 早停：epoch=59, best_epoch=34
+[ModernTCN] 训练完成
+  checkpoint: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73.pt
+  summary: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73_summary.csv
+  report: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\ModernTCN_train_report.md
+  test main=0.9632, turnT=0.7076, theta=0.5015, flat=0.9563, slope=0.9893
+[ModernTCN ONNX] 导出完成
+  onnx: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73.onnx
+  sample: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73_pytorch_reference.mat
+  meta: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73_onnx_export.json
+[ModernTCN ONNXRuntime] pass=1
+  json: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73_onnxruntime_consistency.json
+  report: E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73_onnxruntime_consistency.md

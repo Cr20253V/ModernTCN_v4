@@ -1,0 +1,2 @@
+model,seed,best_epoch,n_windows,elapsed_seconds,acc_main,acc_turn,acc_turn_pure,acc_turn_transition,theta_mae_deg,flat_recall,stall_recall,slope_recall,uphill_recall,downhill_recall,onnx_file
+ModernTCN-small v1 MATLAB,73,34,3316,49.4687669,0.963208685162847,0.898069963811821,0.931022285107888,0.707566462167689,0.50151362615966,0.956294846705806,0.861209964412811,0.989347536617843,0.98590021691974,0.994827586206897,E:\Matlab\Simulink\S-Function_16\results\modern_tcn\transition_rich_v3_seed73\modern_tcn_seed73.onnx

@@ -1,0 +1,31 @@
+# GRU 自动实验流水线报告
+
+- 生成时间: 2026-04-26 23:29:25
+- 输出 CSV: `E:\Matlab\Simulink\S-Function_16\results\gru\experiments\gru_fair_v1\GRU_auto_experiment_pipeline_summary.csv`
+
+| model | case | seed | main | turn | turn pure | turn trans | theta deg | flat | stall | slope | uphill | downhill | model file |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| GRU | h96_l2_turn0p05_last_mean_inputstats | NaN | 0.9483 | 0.8831 | 0.9134 | 0.5854 | 0.4156 | 0.9623 | 0.6667 | 0.9568 | 0.9774 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l2_turn0p05_last_mean_inputstats.mat` |
+| GRU | h64_l2_turn0p10_last_mean_inputstats | NaN | 0.9461 | 0.8787 | 0.9059 | 0.6098 | 0.5629 | 0.9623 | 0.6667 | 0.9506 | 0.9699 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l2_turn0p10_last_mean_inputstats.mat` |
+| GRU | h64_l1_turn0p10_last_mean_inputstats | NaN | 0.9438 | 0.8652 | 0.8985 | 0.5366 | 0.4977 | 0.9547 | 0.7222 | 0.9506 | 0.9774 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l1_turn0p10_last_mean_inputstats.mat` |
+| GRU | h64_l1_turn0p20_last_mean_inputstats | NaN | 0.9416 | 0.8652 | 0.8985 | 0.5366 | 0.4716 | 0.9547 | 0.7222 | 0.9444 | 0.9699 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l1_turn0p20_last_mean_inputstats.mat` |
+| GRU | h64_l1_turn0p05_last_mean_inputstats | NaN | 0.9416 | 0.8629 | 0.8960 | 0.5366 | 0.5263 | 0.9585 | 0.6667 | 0.9444 | 0.9699 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l1_turn0p05_last_mean_inputstats.mat` |
+| GRU | h96_l1_turn0p20_last_mean_inputstats | NaN | 0.9461 | 0.8719 | 0.8985 | 0.6098 | 0.9362 | 0.9547 | 0.7778 | 0.9506 | 0.9699 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l1_turn0p20_last_mean_inputstats.mat` |
+| GRU | h96_l1_turn0p05_last_mean_inputstats | NaN | 0.9438 | 0.8742 | 0.9010 | 0.6098 | 0.8871 | 0.9509 | 0.7778 | 0.9506 | 0.9699 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l1_turn0p05_last_mean_inputstats.mat` |
+| GRU | h96_l1_turn0p10_last_mean_inputstats | NaN | 0.9416 | 0.8674 | 0.8985 | 0.5610 | 0.7176 | 0.9547 | 0.7778 | 0.9383 | 0.9624 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l1_turn0p10_last_mean_inputstats.mat` |
+| GRU | h96_l2_turn0p10_last_mean_inputstats | NaN | 0.9371 | 0.8562 | 0.8911 | 0.5122 | 0.6749 | 0.9547 | 0.6667 | 0.9383 | 0.9624 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l2_turn0p10_last_mean_inputstats.mat` |
+| GRU | h96_l1_turn0p10_last_mean | NaN | 0.9438 | 0.7933 | 0.8391 | 0.3415 | 0.7392 | 0.9623 | 0.6111 | 0.9506 | 0.9774 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l1_turn0p10_last_mean.mat` |
+| GRU | h96_l2_turn0p05_last_mean | NaN | 0.9461 | 0.7798 | 0.8267 | 0.3171 | 0.8758 | 0.9660 | 0.6667 | 0.9444 | 0.9624 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l2_turn0p05_last_mean.mat` |
+| GRU | h64_l2_turn0p05_last_mean_inputstats | NaN | 0.9213 | 0.8539 | 0.8936 | 0.4634 | 0.6186 | 0.9321 | 0.6667 | 0.9321 | 0.9549 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l2_turn0p05_last_mean_inputstats.mat` |
+| GRU | h64_l2_turn0p20_last_mean | NaN | 0.9461 | 0.7910 | 0.8366 | 0.3415 | 1.0633 | 0.9660 | 0.5556 | 0.9568 | 0.9774 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l2_turn0p20_last_mean.mat` |
+| GRU | h64_l2_turn0p20_last_mean_inputstats | NaN | 0.9191 | 0.8539 | 0.8936 | 0.4634 | 0.6646 | 0.9283 | 0.6667 | 0.9321 | 0.9549 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l2_turn0p20_last_mean_inputstats.mat` |
+| GRU | h96_l2_turn0p20_last_mean_inputstats | NaN | 0.9303 | 0.8404 | 0.8787 | 0.4634 | 0.9082 | 0.9434 | 0.6667 | 0.9383 | 0.9624 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l2_turn0p20_last_mean_inputstats.mat` |
+| GRU | h96_l1_turn0p05_last_mean | NaN | 0.9348 | 0.7798 | 0.8292 | 0.2927 | 0.7599 | 0.9472 | 0.6111 | 0.9506 | 0.9774 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l1_turn0p05_last_mean.mat` |
+| GRU | h64_l1_turn0p05_last_mean | NaN | 0.9371 | 0.7618 | 0.8094 | 0.2927 | 0.8347 | 0.9472 | 0.6667 | 0.9506 | 0.9699 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l1_turn0p05_last_mean.mat` |
+| GRU | h96_l1_turn0p20_last_mean | NaN | 0.9281 | 0.7865 | 0.8317 | 0.3415 | 0.6917 | 0.9396 | 0.6111 | 0.9444 | 0.9699 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l1_turn0p20_last_mean.mat` |
+| GRU | h96_l2_turn0p20_last_mean | NaN | 0.9281 | 0.7888 | 0.8366 | 0.3171 | 0.9267 | 0.9321 | 0.6111 | 0.9568 | 0.9774 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l2_turn0p20_last_mean.mat` |
+| GRU | h96_l2_turn0p10_last_mean | NaN | 0.9326 | 0.7843 | 0.8342 | 0.2927 | 0.9751 | 0.9434 | 0.6111 | 0.9506 | 0.9774 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h96_l2_turn0p10_last_mean.mat` |
+| GRU | h64_l2_turn0p10_last_mean | NaN | 0.9348 | 0.7775 | 0.8218 | 0.3415 | 1.5316 | 0.9472 | 0.7222 | 0.9383 | 0.9549 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l2_turn0p10_last_mean.mat` |
+| GRU | h64_l1_turn0p10_last_mean | NaN | 0.9191 | 0.7753 | 0.8218 | 0.3171 | 0.8910 | 0.9245 | 0.6111 | 0.9444 | 0.9699 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l1_turn0p10_last_mean.mat` |
+| GRU | h64_l2_turn0p05_last_mean | NaN | 0.9303 | 0.7551 | 0.7995 | 0.3171 | 1.2175 | 0.9434 | 0.6111 | 0.9444 | 0.9624 | 0.8621 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l2_turn0p05_last_mean.mat` |
+| GRU | h64_l1_turn0p20_last_mean | NaN | 0.9169 | 0.7775 | 0.8292 | 0.2683 | 0.8734 | 0.9170 | 0.6111 | 0.9506 | 0.9774 | 0.8276 | `E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_gru_fair_v1_h64_l1_turn0p20_last_mean.mat` |

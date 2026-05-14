@@ -38,17 +38,18 @@ fprintf('  轴距 L = %.2f m\n\n', params.L);
 %% 第2步：定义线性化网格
 fprintf('【步骤2/5】定义线性化网格...\n');
 
-% 网格定义（5×5×5密集网格，共125点）
-grid = struct();
-grid.V_grid = linspace(0.8, 1.2, 5)';    % 速度 [m/s]，5个点
-grid.W_grid = linspace(-0.2, 0.2, 5)';   % 角速度（有符号）[rad/s]，5个点
-grid.T_grid = linspace(-0.2, 0.2, 5)';   % 坡度角 [rad]，5个点
 
-fprintf('  速度网格: [%.2f → %.2f] m/s，%d点\n', grid.V_grid(1), grid.V_grid(end), length(grid.V_grid));
-fprintf('  角速度网格: [%.3f → %.3f] rad/s（有符号），%d点\n', grid.W_grid(1), grid.W_grid(end), length(grid.W_grid));
-fprintf('  坡度网格: [%.2f° → %.2f°]，%d点\n', rad2deg(grid.T_grid(1)), rad2deg(grid.T_grid(end)), length(grid.T_grid));
-fprintf('  总网格点数: %d × %d × %d = %d\n\n', length(grid.V_grid), length(grid.W_grid), length(grid.T_grid), ...
-    length(grid.V_grid) * length(grid.W_grid) * length(grid.T_grid));
+% 网格定义（非均匀速度网格，兼顾启停与巡航）
+lin_grid = struct();
+lin_grid.V_grid = [0.02 0.04 0.06 0.08 0.10 0.14 0.20 0.35 0.60 1.00 1.20]';  % 速度 [m/s]
+lin_grid.W_grid = linspace(-1.20, 1.20, 15)';  % 角速度 [rad/s]，覆盖诊断性放宽后的 omega_cmd 约束
+lin_grid.T_grid = deg2rad((-12:1:12)');   % 坡度角 [rad]，±12°，每1°一个点
+
+fprintf('  速度网格: [%.2f → %.2f] m/s，%d点\n', lin_grid.V_grid(1), lin_grid.V_grid(end), length(lin_grid.V_grid));
+fprintf('  角速度网格: [%.3f → %.3f] rad/s（有符号），%d点\n', lin_grid.W_grid(1), lin_grid.W_grid(end), length(lin_grid.W_grid));
+fprintf('  坡度网格: [%.2f° → %.2f°]，%d点\n', rad2deg(lin_grid.T_grid(1)), rad2deg(lin_grid.T_grid(end)), length(lin_grid.T_grid));
+fprintf('  总网格点数: %d × %d × %d = %d\n\n', length(lin_grid.V_grid), length(lin_grid.W_grid), length(lin_grid.T_grid), ...
+    length(lin_grid.V_grid) * length(lin_grid.W_grid) * length(lin_grid.T_grid));
 
 %% 第3步：执行网格线性化
 fprintf('【步骤3/5】执行网格线性化...\n');
@@ -62,7 +63,7 @@ lin_opts.export_mat = fullfile(data_models_dir, 'plant_grid_test.mat');
 
 % 执行线性化
 try
-    db = lin_agv_grid(params, grid, lin_opts);
+    db = lin_agv_grid(params, lin_grid, lin_opts);
     fprintf('  线性化完成！\n');
     fprintf('  数据库维度: A(%d×%d×%d×%d×%d)\n', ...
         db.Nv, db.Nw, db.Nt, db.nx, db.nx);
@@ -86,16 +87,41 @@ fprintf('【步骤4/5】创建MPC控制器...\n');
 
 % MPC设计选项
 mpc_opts = struct();
-mpc_opts.Np = 50;  % 预测时域（步数）
-mpc_opts.Nc = 12;  % 控制时域（步数）
-mpc_opts.Q = [15.1924, 28.2259, 5.0984, 2.5793];  % 输出权重 [e_y, e_psi, e_v, e_omega]
-mpc_opts.R = [0.001837, 0.002424];  % 输入权重 [F_cmd, omega_cmd]
-mpc_opts.dR = [0.028222, 0.023107]; % 输入变化率权重
+mpc_opts.Np = round(1.5 / params.Ts);  % 预测时域（步数），约1.5s
+mpc_opts.Nc = round(0.5 / params.Ts);  % 控制时域（步数），约0.5s
+
+% 尝试加载贝叶斯优化权重，否则使用默认值
+maps_best_path = fullfile(data_models_dir, 'maps_best.mat');
+if exist(maps_best_path, 'file')
+    Tm = load(maps_best_path);
+    if isfield(Tm, 'maps_best') && all(isfield(Tm.maps_best, {'Q_range', 'R_range', 'dR_range'}))
+        maps_best = Tm.maps_best;
+        mpc_opts.Q = mean(maps_best.Q_range, 1);  % 从范围中取中值
+        mpc_opts.R = mean(maps_best.R_range, 1);
+        mpc_opts.dR = mean(maps_best.dR_range, 1);
+        fprintf('  ✓ 已加载贝叶斯优化权重 (maps_best.mat)\n');
+    else
+        % 使用默认权重
+        mpc_opts.Q = [15.1924, 28.2259, 5.0984, 2.5793];
+        mpc_opts.R = [0.001837, 0.002424];
+        mpc_opts.dR = [0.028222, 0.023107];
+        fprintf('  ⚠ maps_best.mat 格式不正确，使用默认权重\n');
+    end
+else
+    % 使用默认权重
+    mpc_opts.Q = [15.1924, 28.2259, 5.0984, 2.5793];
+    mpc_opts.R = [0.001837, 0.002424];
+    mpc_opts.dR = [0.028222, 0.023107];
+    fprintf('  ⚠ 未找到 maps_best.mat，使用默认权重\n');
+end
+
 mpc_opts.soft_weight_pos = 1e4;  % 位置误差软约束惩罚
 mpc_opts.soft_weight_yaw = 1.5e4; % 航向误差软约束惩罚（更重要）
 
 try
     ctrl = mpc_setup_single_interp(db, mpc_opts);
+    ctrl_path = fullfile(data_models_dir, 'ctrl.mat');
+    save(ctrl_path, 'ctrl');
     % Hook: print average solver time if available from base workspace
     avg_ms = NaN;
     try
@@ -111,6 +137,7 @@ try
     fprintf('  MPC控制器创建完成！\n');
     fprintf('  预测时域: %.2f s\n', ctrl.meta.prediction_horizon_sec);
     fprintf('  控制时域: %.2f s\n\n', ctrl.meta.control_horizon_sec);
+    fprintf('  √ ctrl.mat 已保存: %s\n\n', ctrl_path);
 catch ME
     fprintf('  错误: MPC创建失败\n');
     fprintf('  %s\n\n', ME.message);
@@ -222,4 +249,3 @@ fprintf('  - 调整网格密度以提高精度\n');
 fprintf('  - 使用贝叶斯优化调整权重\n');
 fprintf('  - 集成到完整的Simulink仿真\n');
 fprintf('========================================\n');
-

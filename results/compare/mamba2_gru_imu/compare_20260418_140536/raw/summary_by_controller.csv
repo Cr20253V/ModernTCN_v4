@@ -1,0 +1,2 @@
+controller,n_cases,ey_rmse_mean,ey_rmse_std,ey_rmse_median,epsi_rmse_mean,epsi_rmse_std,epsi_rmse_median,ev_rmse_mean,ev_rmse_std,ev_rmse_median,eomega_rmse_mean,eomega_rmse_std,eomega_rmse_median,j_du_mean,j_du_std,j_du_median,viol_rate_mean,viol_rate_std,viol_rate_median
+GRU,3,0,0,0,0,0,0,0.610861930605841,0.00485334714342047,0.610896325735584,0,0,0,7173130.95802215,32810.0129799966,7173024.43645258,0.0849673202614379,0.0299514751304303,0.0784313725490196

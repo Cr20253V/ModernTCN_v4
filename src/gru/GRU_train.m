@@ -1,1472 +1,1365 @@
-% =============================
-% 文件名：GRU_train.m
-% 版本号：V1.7（简化主分类：3类，移除 slip）
-% 最后修改时间：2025-12-30
-% 作者：LPV-MPC Project
-% 功能描述：
-%   GRU多任务学习训练脚本（主分类+转弯分类+坡度回归）
-%   1. 加载预处理数据集（GRU_dataset_processed.mat）
-%   2. 构建三头GRU网络（主分类头+转弯分类头+坡度回归头）
-%   3. 训练模型（自定义训练循环，混合损失函数，类别权重平衡）
-%   4. 保存训练好的模型
+function [model, meta] = GRU_train(cfg)
+%GRU_TRAIN 训练 AGV 状态估计与 LPV-MPC 调度用的多任务 GRU。
 %
-% 使用方法：
-%   直接运行此脚本：run('GRU_train.m') 或 GRU_train
-%   修改下方"配置区域"来调整参数
+% 功能说明：
+%   读取 TCN_prepare_dataset.m 生成的共享窗口化数据集，训练多任务
+%   GRU。模型面向 AGV 路径跟踪中的在线状态估计和 LPV-MPC 调度，可
+%   输出主工况、转弯方向、坡度角以及动态扰动辅助标签。
+%
+% 训练任务：
+%   1. 主工况分类：flat / stall / slope，对应标签 1 / 2 / 3。
+%   2. 转弯分类：right / straight / left，对应标签 -1 / 0 / 1。
+%   3. 坡度角回归：theta_ground，单位 rad。
+%   4. 可选辅助二分类：slip、stall、load_change，用于兼容 TCN 数据字段。
+%
+% 物理引导设计：
+%   - 按 dataset.mask_theta 计算主要坡度回归损失。
+%   - 仅对 true-zero / very-near-zero 样本增加 theta=0 约束，避免把小坡度 flat
+%     样本强行压成 0。
+%   - 新数据集默认正/负坡度对称加权；旧数据集仍可通过 cfg 覆盖权重。
+%   - 分类/回归头默认使用 last + mean + max 时间池化读出，保留窗口内统计线索。
+%   - 可选 focal loss，用于强化 flat/slope 和少数 stall 样本的学习权重。
+%   - pitch consistency 可选，默认关闭，避免 IMU 积分偏置主导回归头。
+%
+% 关键 cfg：
+%   cfg.input_file   : 默认 data/tcn/TCN_dataset_processed.mat。
+%   cfg.model_file   : 默认 data/models/GRU_model.mat。
+%   cfg.meta_file    : 默认 data/models/GRU_meta.mat。
+%   cfg.mode         : 'physics_guided' 或 'vanilla'。
+%   cfg.best_metric  : 'composite' / 'turn_priority' / 'loss'，默认 composite。
 %
 % 输出：
-%   - GRU_model.mat: 训练好的模型（包含 dlnetwork 对象）
-%   - GRU_meta.mat: 训练元数据（超参数、训练历史）
-%   - GRU_logs/: 训练日志目录（损失曲线图等）
-%
-% 依赖：
-%   - GRU_dataset_processed.mat（由 GRU_prepare_dataset.m 生成）
-%   - Deep Learning Toolbox（MATLAB R2024b+）
-%
-% 备注：
-%   - 多任务学习：L = CE_main(加权) + λ_turn·CE_turn + λ_theta·MSE_theta·mask_theta + λ_theta_flat·MSE_theta(flat)
-%   - 类别权重：按类频次的反比计算（平衡训练）
-%   - 早停：验证损失无改善patience轮后停止
-%   - 使用 dlnetwork + dlfeval + dlgradient 实现自定义训练循环
-% =============================
+%   model.feature_net : GRU 特征提取网络。
+%   model.heads       : 多任务输出头参数。
+%   model.scaler      : 归一化参数，用于部署和推理。
+%   meta              : 训练配置、训练历史和测试指标。
 
-%% ==================== 配置区域（用户可修改） ====================
-
-root = project_root();
-data_gru_dir = fullfile(root, 'data', 'gru');
-data_models_dir = fullfile(root, 'data', 'models');
-default_log_dir = results_dir('gru/train_logs');
-
-if ~exist('cfg', 'var') || ~isstruct(cfg)
+if nargin < 1 || ~isstruct(cfg)
     cfg = struct();
 end
-
-% 文件路径
-if ~isfield(cfg, 'input_file'); cfg.input_file = fullfile(data_gru_dir, 'GRU_dataset_processed.mat'); end
-if ~isfield(cfg, 'model_file'); cfg.model_file = fullfile(data_models_dir, 'GRU_model.mat'); end
-if ~isfield(cfg, 'meta_file');  cfg.meta_file  = fullfile(data_models_dir, 'GRU_meta.mat');  end
-if ~isfield(cfg, 'log_dir');    cfg.log_dir    = default_log_dir; end
-
-% 模型超参数
-cfg.hidden_size = 96;                % GRU隐藏层大小
-cfg.num_layers = 2;                  % GRU层数
-cfg.dropout = 0.2;                   % Dropout概率
-
-% 训练超参数
-cfg.batch_size = 64;                 % 批量大小
-cfg.max_epochs = 2;                % 最大训练轮数（V1.5：从100增至150，充分训练）
-cfg.initial_lr = 1e-3;               % 初始学习率
-cfg.lr_schedule = 'cosine';          % 学习率调度策略（'cosine' / 'step' / 'none'）
-cfg.lr_drop_factor = 0.5;            % 学习率下降因子（step策略）
-cfg.lr_drop_period = 20;             % 学习率下降周期（step策略）
-
-% 损失函数权重
-cfg.lambda_turn = 0.3;               % 转弯分类损失权重
-cfg.lambda_theta = 0.5;              % 坡度回归损失权重
-cfg.lambda_theta_flat = 0.2;         % 平地theta=0约束权重（抑制平地漂移）
-
-% 梯度裁剪
-cfg.grad_clip = 5.0;                 % 梯度裁剪阈值
-
-% 早停
-cfg.patience = 20;                   % 早停耐心值（验证损失无改善的轮数）V1.4: 从10提升到20
-cfg.min_delta = 1e-4;                % 验证损失改善的最小阈值
-
-% 类别权重（主分类）
-cfg.use_class_weights = true;        % 是否使用类别权重平衡
-cfg.class_weight_method = 'balanced'; % 类别权重计算方法（'inverse' / 'sqrt_inverse' / 'balanced' / 'inverse_capped' / 'custom'）【默认使用balanced，根据样本量自动生成温和权重】
-
-% 调试与可视化
-cfg.verbose = true;                  % 是否打印详细信息
-cfg.plot_loss = true;                % 是否绘制损失曲线
-cfg.validation_frequency = 1;        % 验证频率（每N个epoch验证一次）
-
-% 随机种子（用于可复现）
-cfg.seed = 42;
-
-% GPU选项
-cfg.use_gpu = true;                  % 是否使用GPU（如果可用）
-
-%% ==================== 主程序（自动执行） ====================
-
-if cfg.verbose
-    fprintf('\n========================================\n');
-    fprintf('GRU多任务学习训练开始\n');
-    fprintf('========================================\n');
+if exist('init_project', 'file') == 2
+    init_project();
 end
 
-%% 0. 初始化
-% 固定随机种子
-rng(cfg.seed);
+root = project_root();
+cfg = local_defaults(cfg, root);
+rng(cfg.seed, 'twister');
 
-% 创建日志目录
 if ~exist(cfg.log_dir, 'dir')
     mkdir(cfg.log_dir);
 end
 
-% 检查GPU可用性
-if cfg.use_gpu && canUseGPU()
-    exec_env = 'gpu';
-    if cfg.verbose
-        fprintf('\n[环境] 使用GPU加速\n');
-        gpuinfo = gpuDevice();
-        fprintf('  GPU设备: %s\n', gpuinfo.Name);
-        fprintf('  显存: %.2f GB\n', gpuinfo.TotalMemory / 1e9);
-    end
-else
-    exec_env = 'cpu';
-    if cfg.verbose
-        fprintf('\n[环境] 使用CPU训练\n');
-    end
-end
-
-%% 1. 加载数据集
 if cfg.verbose
-    fprintf('\n[步骤1/6] 加载数据集...\n');
-    fprintf('  输入文件: %s\n', cfg.input_file);
+    fprintf('\n========== GRU 多任务训练 ==========\n');
+    fprintf('模式: %s\n', cfg.mode);
+    fprintf('输入: %s\n', cfg.input_file);
+    fprintf('模型: %s\n', cfg.model_file);
+    fprintf('============================================\n\n');
 end
 
 if ~exist(cfg.input_file, 'file')
-    error('数据集文件不存在: %s', cfg.input_file);
+    error('GRU_TRAIN:MissingDataset', 'Dataset not found: %s', cfg.input_file);
 end
+S = load(cfg.input_file, 'dataset');
+dataset = S.dataset;
+local_check_dataset(dataset);
 
-load(cfg.input_file, 'dataset');  % 加载 dataset 结构体
-
-% 补齐 scaler 的滤波参数（兼容旧版数据集）
-if ~isfield(dataset, 'meta'); dataset.meta = struct(); end
-if ~isfield(dataset.scaler, 'tau_accel_lp')
-    if isfield(dataset.meta, 'tau_accel_lp')
-        dataset.scaler.tau_accel_lp = dataset.meta.tau_accel_lp;
-    else
-        dataset.scaler.tau_accel_lp = 0.4;  % 与预处理默认一致
-    end
-end
-if ~isfield(dataset.scaler, 'tau_diff')
-    if isfield(dataset.meta, 'tau_diff')
-        dataset.scaler.tau_diff = dataset.meta.tau_diff;
-    else
-        dataset.scaler.tau_diff = 0.3;
-    end
-end
-
-if cfg.verbose
-    fprintf('  ✓ 加载成功！\n');
-    fprintf('    训练集: %d 样本\n', size(dataset.X_train, 1));
-    fprintf('    验证集: %d 样本\n', size(dataset.X_val, 1));
-    fprintf('    测试集: %d 样本\n', size(dataset.X_test, 1));
-    fprintf('    特征维度: %d\n', size(dataset.X_train, 3));
-    fprintf('    序列长度: %d\n', size(dataset.X_train, 2));
-end
-
-%% 2. 计算类别权重（主分类）
-if cfg.verbose
-    fprintf('\n[步骤2/6] 计算类别权重（主分类）...\n');
-end
-
-% 统计主分类标签分布（V1.7: 3类，移除 slip）
-y_main_train = dataset.y_main_train;
-class_labels = (1:3)';  % V1.7: [flat, stall, slope]
-n_classes_main = length(class_labels);
-class_counts = zeros(n_classes_main, 1);
-
-for i = 1:n_classes_main
-    class_counts(i) = sum(y_main_train == class_labels(i));
-end
-
-% 计算类别权重
-if cfg.use_class_weights
-    switch cfg.class_weight_method
-        case 'inverse'
-            % 按频次的反比
-            class_weights = 1 ./ class_counts;
-        case 'sqrt_inverse'
-            % 按频次平方根的反比（缓和权重差异）
-            class_weights = 1 ./ sqrt(class_counts);
-        case 'balanced'
-            % sklearn风格：n_samples / (n_classes * n_samples_per_class)
-            n_total = sum(class_counts);
-            class_weights = n_total ./ (n_classes_main * class_counts);
-        case 'inverse_capped'
-            % inverse权重但添加上界限制，防止过度补偿（V1.2新增）
-            class_weights = 1 ./ class_counts;
-            % 先归一化再限制上界
-            class_weights = class_weights / mean(class_weights);
-            max_weight = 2.0;  % 最大权重为平均值的2倍
-            class_weights = min(class_weights, max_weight);
-            % 再次归一化（因为限制后均值可能不为1）
-            class_weights = class_weights / mean(class_weights);
-            fprintf('    权重策略: inverse with cap (max=%.1f)\n', max_weight);
-        case 'custom'
-            % 手动设置权重（V1.7: 3类，移除 slip）
-            class_weights = [0.60;   % flat
-                             1.80;   % stall
-                             0.80];  % slope
-            class_weights = class_weights / mean(class_weights);
-            fprintf('    权重策略: custom (3-class v1.7)\n');
-        otherwise
-            error('未知的类别权重计算方法: %s', cfg.class_weight_method);
-    end
-    
-    % 归一化权重（使得平均权重为1）
-    class_weights = class_weights / mean(class_weights);
+if cfg.use_gpu && canUseGPU()
+    exec_env = 'gpu';
 else
-    % 均匀权重
-    class_weights = ones(n_classes_main, 1);
+    exec_env = 'cpu';
 end
 
-if cfg.verbose
-    fprintf('  ✓ 类别权重计算完成！\n');
-    fprintf('    类别标签: ');
-    fprintf('%d ', class_labels);
-    fprintf('\n');
-    
-    fprintf('    类别计数: ');
-    fprintf('%d ', class_counts);
-    fprintf('\n');
-    
-    fprintf('    类别权重: ');
-    fprintf('%.4f ', class_weights);
-    fprintf('\n');
-    
-    fprintf('    类别名称: flat, slip, stall, slope\n');
-end
-
-%% 3. 准备数据
-if cfg.verbose
-    fprintf('\n[步骤3/6] 准备训练数据...\n');
-end
-
-% 提取训练集（permute使得维度为 [feat_dim, seq_len, n_samples]）
-X_train = permute(dataset.X_train, [3, 2, 1]);  % [feat_dim, seq_len, n_train]
-y_main_train = dataset.y_main_train;            % [n_train, 1]
-y_turn_train = dataset.y_turn_train;            % [n_train, 1]
-y_theta_train = dataset.y_theta_train;          % [n_train, 1]
-mask_theta_train = dataset.mask_theta_train;    % [n_train, 1]
-
-% 提取验证集
-X_val = permute(dataset.X_val, [3, 2, 1]);      % [feat_dim, seq_len, n_val]
-y_main_val = dataset.y_main_val;
-y_turn_val = dataset.y_turn_val;
-y_theta_val = dataset.y_theta_val;
-mask_theta_val = dataset.mask_theta_val;
-
-% 提取测试集
+X_train = permute(dataset.X_train, [3, 2, 1]);
+X_val = permute(dataset.X_val, [3, 2, 1]);
 X_test = permute(dataset.X_test, [3, 2, 1]);
-y_main_test = dataset.y_main_test;
-y_turn_test = dataset.y_turn_test;
-y_theta_test = dataset.y_theta_test;
-mask_theta_test = dataset.mask_theta_test;
 
-% 转弯标签映射：{-1, 0, +1} → {1, 2, 3}（用于分类）
-y_turn_train_cls = y_turn_train + 2;  % -1→1, 0→2, +1→3
-y_turn_val_cls = y_turn_val + 2;
+Y.train = local_make_targets(dataset, 'train');
+Y.val = local_make_targets(dataset, 'val');
+Y.test = local_make_targets(dataset, 'test');
 
-% 训练样本数
 n_train = size(X_train, 3);
-n_val = size(X_val, 3);
+input_size = size(X_train, 1);
+cfg.input_size = input_size;
 
-if cfg.verbose
-    fprintf('  ✓ 数据准备完成！\n');
-    fprintf('    训练批次数: %d (batch_size=%d)\n', ...
-        ceil(n_train / cfg.batch_size), cfg.batch_size);
+class_weights_main = local_class_weights(Y.train.main, 1:3, cfg.class_weight_method);
+class_weights_turn = local_class_weights(Y.train.turn_cls, 1:3, cfg.turn_class_weight_method);
+class_weights_turn = class_weights_turn .* cfg.turn_class_multipliers(:);
+if any(class_weights_turn > 0)
+    class_weights_turn = class_weights_turn / mean(class_weights_turn(class_weights_turn > 0));
 end
 
-%% 4. 构建GRU网络（使用functionLayer实现三输出头）
-if cfg.verbose
-    fprintf('\n[步骤4/6] 构建GRU网络...\n');
-end
-
-% 输入维度
-input_size = size(X_train, 1);  % feat_dim = 16
-seq_len = size(X_train, 2);     % seq_len = 48
-
-% 构建网络层（共享GRU特征提取器）
-layers = [
-    sequenceInputLayer(input_size, 'Name', 'input', 'Normalization', 'none')
-    
-    % GRU层1
-    gruLayer(cfg.hidden_size, 'OutputMode', 'sequence', 'Name', 'gru1')
-    dropoutLayer(cfg.dropout, 'Name', 'dropout1')
-    
-    % GRU层2（输出所有时刻的特征）
-    gruLayer(cfg.hidden_size, 'OutputMode', 'sequence', 'Name', 'gru2')
-    dropoutLayer(cfg.dropout, 'Name', 'dropout2')
-];
-
-% 创建 dlnetwork（只包含特征提取部分）
-net_feature = dlnetwork(layers);
-
-% 创建三个输出头的参数
-% 主分类头: hidden_size → 3
-fc_main_weights = dlarray(randn(3, cfg.hidden_size) * 0.01);  % V1.7: 4→3
-fc_main_bias = dlarray(zeros(3, 1));
-
-% 转弯分类头: hidden_size → 3
-fc_turn_weights = dlarray(randn(3, cfg.hidden_size) * 0.01);
-fc_turn_bias = dlarray(zeros(3, 1));
-
-% 坡度回归头: hidden_size → 1
-fc_theta_weights = dlarray(randn(1, cfg.hidden_size) * 0.01);
-fc_theta_bias = dlarray(0);
-
-% 转移到GPU
 if strcmp(exec_env, 'gpu')
-    % dlnetwork对象会自动处理GPU转换，只需转换权重参数
-    fc_main_weights = gpuArray(fc_main_weights);
-    fc_main_bias = gpuArray(fc_main_bias);
-    fc_turn_weights = gpuArray(fc_turn_weights);
-    fc_turn_bias = gpuArray(fc_turn_bias);
-    fc_theta_weights = gpuArray(fc_theta_weights);
-    fc_theta_bias = gpuArray(fc_theta_bias);
+    class_weights_main = gpuArray(class_weights_main);
+    class_weights_turn = gpuArray(class_weights_turn);
 end
+
+cfg.seq_len = size(X_train, 2);
+feature_net = local_build_gru(input_size, cfg);
+head_size = local_head_feature_size(cfg);
+turn_head_size = local_turn_head_feature_size(head_size, cfg);
+heads = local_init_heads(head_size, turn_head_size, cfg, exec_env);
 
 if cfg.verbose
-    fprintf('  ✓ 网络构建完成！\n');
-    fprintf('    输入维度: [%d, %d] (feat_dim, seq_len)\n', input_size, seq_len);
-    fprintf('    GRU隐藏层: %d 单元 × %d 层\n', cfg.hidden_size, cfg.num_layers);
-    fprintf('    输出头:\n');
-    fprintf('      - 主分类: 3类 (flat/stall/slope)\n');  % V1.7
-    fprintf('      - 转弯分类: 3类 (right/straight/left)\n');
-    fprintf('      - 坡度回归: 1维 (theta [rad])\n');
+    fprintf('[数据]\n');
+    fprintf('  训练/验证/测试窗口数: %d / %d / %d\n', ...
+        size(dataset.X_train,1), size(dataset.X_val,1), size(dataset.X_test,1));
+    fprintf('  输入: feat_dim=%d, seq_len=%d\n', input_size, size(X_train,2));
+    fprintf('  执行环境: %s\n', exec_env);
+    fprintf('[模型]\n');
+    fprintf('  hidden=%d, layers=%d, dropout=%.2f\n', ...
+        cfg.hidden_size, cfg.num_layers, cfg.dropout);
+    fprintf('  head pooling: %s\n', cfg.head_pooling);
+    fprintf('  序列上下文: %d steps (%.2f s)\n', ...
+        local_receptive_field(cfg), local_receptive_field(cfg) * dataset.meta.Ts);
 end
 
-%% 5. 初始化优化器（Adam）
-if cfg.verbose
-    fprintf('\n[步骤5/6] 初始化优化器...\n');
-end
+opt = struct();
+opt.iter = 0;
+opt.avg = [];
+opt.avgSq = [];
+best = struct('val_loss', inf, 'selection_score', inf, 'feature_net', [], 'heads', [], 'epoch', 0);
+base_best = struct('val_loss', inf, 'selection_score', inf, 'feature_net', [], 'heads', [], 'epoch', 0);
+history = local_empty_history();
+patience_count = 0;
 
-% 收集所有可训练参数
-params = struct();
-params.net_feature = net_feature.Learnables;
-params.fc_main_weights = fc_main_weights;
-params.fc_main_bias = fc_main_bias;
-params.fc_turn_weights = fc_turn_weights;
-params.fc_turn_bias = fc_turn_bias;
-params.fc_theta_weights = fc_theta_weights;
-params.fc_theta_bias = fc_theta_bias;
-
-% Adam优化器状态
-adamState = struct();
-adamState.avgGrad = [];
-adamState.avgSqGrad = [];
-adamState.iter = 0;
-
-% 学习率调度函数
-if strcmp(cfg.lr_schedule, 'cosine')
-    lr_fn = @(epoch) cfg.initial_lr * 0.5 * (1 + cos(pi * epoch / cfg.max_epochs));
-elseif strcmp(cfg.lr_schedule, 'step')
-    lr_fn = @(epoch) cfg.initial_lr * (cfg.lr_drop_factor ^ floor(epoch / cfg.lr_drop_period));
-else
-    lr_fn = @(epoch) cfg.initial_lr;
-end
-
-% 训练历史记录
-history = struct();
-history.train_loss = [];
-history.train_loss_main = [];
-history.train_loss_turn = [];
-history.train_loss_theta = [];
-history.train_loss_theta_flat = [];
-history.val_loss = [];
-history.val_loss_main = [];
-history.val_loss_turn = [];
-history.val_loss_theta = [];
-history.val_loss_theta_flat = [];
-history.val_acc_main = [];
-history.val_acc_turn = [];
-history.val_mae_theta = [];
-history.lr = [];
-
-% 早停变量
-best_val_loss = inf;
-patience_counter = 0;
-best_params = [];
-
-if cfg.verbose
-    fprintf('  ✓ 优化器初始化完成！\n');
-    fprintf('    优化器: Adam\n');
-    fprintf('    初始学习率: %.4f\n', cfg.initial_lr);
-    fprintf('    学习率调度: %s\n', cfg.lr_schedule);
-    fprintf('    梯度裁剪: %.1f\n', cfg.grad_clip);
-end
-
-%% 6. 训练循环
-if cfg.verbose
-    fprintf('\n[步骤6/6] 开始训练...\n');
-    fprintf('========================================\n\n');
-end
-
-% 训练进度
-start_time = tic;
-num_iterations_per_epoch = ceil(n_train / cfg.batch_size);
+num_batches = ceil(n_train / cfg.batch_size);
+tic_train = tic;
 
 for epoch = 1:cfg.max_epochs
-    % 更新学习率
-    current_lr = lr_fn(epoch);
-    history.lr(epoch) = current_lr;
-    
-    % 随机打乱训练数据
-    idx_shuffle = randperm(n_train);
-    
-    % Epoch统计
-    epoch_loss = 0;
-    epoch_loss_main = 0;
-    epoch_loss_turn = 0;
-    epoch_loss_theta = 0;
-    epoch_loss_theta_flat = 0;
-    num_batches = 0;
-    
-    % Mini-batch训练
-    for iter = 1:num_iterations_per_epoch
-        % 提取当前batch的索引
-        batch_start = (iter - 1) * cfg.batch_size + 1;
-        batch_end = min(iter * cfg.batch_size, n_train);
-        batch_idx = idx_shuffle(batch_start:batch_end);
-        
-        % 提取batch数据
-        X_batch = X_train(:, :, batch_idx);
-        y_main_batch = y_main_train(batch_idx);
-        y_turn_batch = y_turn_train_cls(batch_idx);  % 使用映射后的标签
-        y_theta_batch = y_theta_train(batch_idx);
-        mask_theta_batch = mask_theta_train(batch_idx);
-        
-        % 转为dlarray
-        X_batch = dlarray(X_batch, 'CBT');  % [feat_dim, seq_len, batch]
-        
-        % 转移到GPU
+    lr = local_lr(cfg, epoch);
+    order = randperm(n_train);
+    acc = local_epoch_accumulator();
+
+    for b = 1:num_batches
+        i0 = (b - 1) * cfg.batch_size + 1;
+        i1 = min(b * cfg.batch_size, n_train);
+        idx = order(i0:i1);
+
+        Xb = dlarray(X_train(:,:,idx), 'CBT');
+        Tb = local_batch_targets(Y.train, idx, exec_env);
         if strcmp(exec_env, 'gpu')
-            X_batch = gpuArray(X_batch);
-            y_main_batch = gpuArray(y_main_batch);
-            y_turn_batch = gpuArray(y_turn_batch);
-            y_theta_batch = gpuArray(y_theta_batch);
-            mask_theta_batch = gpuArray(mask_theta_batch);
+            Xb = gpuArray(Xb);
         end
-        
-        % 前向传播 + 计算损失 + 反向传播
-        [loss, loss_main, loss_turn, loss_theta, loss_theta_flat, gradients] = dlfeval(...
-            @modelGradients, net_feature, ...
-            fc_main_weights, fc_main_bias, ...
-            fc_turn_weights, fc_turn_bias, ...
-            fc_theta_weights, fc_theta_bias, ...
-            X_batch, y_main_batch, y_turn_batch, y_theta_batch, mask_theta_batch, ...
-            class_weights, cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, exec_env);
-        
-        % 梯度裁剪
-        [gradients, grad_norm] = clipGradients(gradients, cfg.grad_clip);
-        
-        % 更新参数（Adam）
-        adamState.iter = adamState.iter + 1;
-        [params, adamState] = adamUpdate(params, gradients, adamState, current_lr);
-        
-        % 更新网络和权重
-        net_feature.Learnables = params.net_feature;
-        fc_main_weights = params.fc_main_weights;
-        fc_main_bias = params.fc_main_bias;
-        fc_turn_weights = params.fc_turn_weights;
-        fc_turn_bias = params.fc_turn_bias;
-        fc_theta_weights = params.fc_theta_weights;
-        fc_theta_bias = params.fc_theta_bias;
-        
-        % 累积损失
-        epoch_loss = epoch_loss + extractdata(gather(loss));
-        epoch_loss_main = epoch_loss_main + extractdata(gather(loss_main));
-        epoch_loss_turn = epoch_loss_turn + extractdata(gather(loss_turn));
-        epoch_loss_theta = epoch_loss_theta + extractdata(gather(loss_theta));
-        epoch_loss_theta_flat = epoch_loss_theta_flat + extractdata(gather(loss_theta_flat));
-        num_batches = num_batches + 1;
+
+        cfg_epoch = local_epoch_cfg(cfg, epoch);
+        [losses, grads] = dlfeval(@local_model_gradients, ...
+            feature_net, heads, Xb, Tb, dataset.scaler, cfg_epoch, ...
+            class_weights_main, class_weights_turn);
+
+        if local_is_turn_finetune_epoch(cfg, epoch)
+            grads = local_keep_turn_head_grads_only(grads);
+        end
+        grads = local_clip_gradients(grads, cfg.grad_clip, cfg);
+        opt.iter = opt.iter + 1;
+        [feature_net, heads, opt] = local_adam_update(feature_net, heads, grads, opt, lr);
+        acc = local_accumulate(acc, losses);
     end
-    
-    % Epoch平均损失
-    epoch_loss = epoch_loss / num_batches;
-    epoch_loss_main = epoch_loss_main / num_batches;
-    epoch_loss_turn = epoch_loss_turn / num_batches;
-    epoch_loss_theta = epoch_loss_theta / num_batches;
-    epoch_loss_theta_flat = epoch_loss_theta_flat / num_batches;
-    
-    history.train_loss(epoch) = epoch_loss;
-    history.train_loss_main(epoch) = epoch_loss_main;
-    history.train_loss_turn(epoch) = epoch_loss_turn;
-    history.train_loss_theta(epoch) = epoch_loss_theta;
-    history.train_loss_theta_flat(epoch) = epoch_loss_theta_flat;
-    
-    % 验证
-    if mod(epoch, cfg.validation_frequency) == 0
-        [val_loss, val_loss_main, val_loss_turn, val_loss_theta, val_loss_theta_flat, ...
-         val_acc_main, val_acc_turn, val_mae_theta, ~, ~, ~] = ...
-            evaluateModel(net_feature, ...
-                fc_main_weights, fc_main_bias, ...
-                fc_turn_weights, fc_turn_bias, ...
-                fc_theta_weights, fc_theta_bias, ...
-                X_val, y_main_val, y_turn_val_cls, y_theta_val, mask_theta_val, ...
-                class_weights, cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, ...
-                cfg.batch_size, exec_env);
-        
-        history.val_loss(epoch) = val_loss;
-        history.val_loss_main(epoch) = val_loss_main;
-        history.val_loss_turn(epoch) = val_loss_turn;
-        history.val_loss_theta(epoch) = val_loss_theta;
-        history.val_loss_theta_flat(epoch) = val_loss_theta_flat;
-        history.val_acc_main(epoch) = val_acc_main;
-        history.val_acc_turn(epoch) = val_acc_turn;
-        history.val_mae_theta(epoch) = val_mae_theta;
-        
-        % 打印进度
-        if cfg.verbose
-            elapsed = toc(start_time);
-            eta = elapsed / epoch * (cfg.max_epochs - epoch);
-            fprintf('[Epoch %3d/%3d] train_loss=%.4f (main=%.4f, turn=%.4f, theta=%.4f, flatθ=%.4f) | ', ...
-                epoch, cfg.max_epochs, epoch_loss, epoch_loss_main, epoch_loss_turn, epoch_loss_theta, epoch_loss_theta_flat);
-            fprintf('val_loss=%.4f (acc_main=%.3f, acc_turn=%.3f, mae_theta=%.4f°, flatθ=%.4f) | ', ...
-                val_loss, val_acc_main, val_acc_turn, rad2deg(val_mae_theta), val_loss_theta_flat);
-            fprintf('lr=%.4e | %.1fs/%.1fs\n', current_lr, elapsed, eta);
+
+    train_losses = local_average_acc(acc, num_batches);
+    cfg_epoch = local_epoch_cfg(cfg, epoch);
+    val_metrics = local_evaluate(feature_net, heads, X_val, Y.val, dataset.scaler, cfg_epoch, ...
+        class_weights_main, class_weights_turn, exec_env);
+
+    history = local_append_history(history, epoch, lr, train_losses, val_metrics);
+
+    if cfg.verbose && (epoch == 1 || mod(epoch, cfg.print_every) == 0 || epoch == cfg.max_epochs)
+        fprintf(['轮次 %03d/%03d | lr=%.2e | 训练 %.4f | 验证 %.4f | ' ...
+            '主类准确率 %.3f | 转弯准确率 %.3f | 坡度MAE %.3f deg\n'], ...
+            epoch, cfg.max_epochs, lr, train_losses.total, val_metrics.total, ...
+            val_metrics.acc_main, val_metrics.acc_turn, rad2deg(val_metrics.mae_theta));
+    end
+
+    selection_score = local_selection_score(val_metrics, cfg);
+    if epoch < cfg.turn_finetune_start_epoch
+        base_cfg = cfg;
+        base_cfg.best_metric = cfg.base_best_metric;
+        base_score = local_selection_score(val_metrics, base_cfg);
+        if base_score < base_best.selection_score - cfg.min_delta
+            base_best.val_loss = val_metrics.total;
+            base_best.selection_score = base_score;
+            base_best.feature_net = feature_net;
+            base_best.heads = heads;
+            base_best.epoch = epoch;
         end
-        
-        % 早停检查
-        if val_loss < (best_val_loss - cfg.min_delta)
-            % 验证损失改善
-            best_val_loss = val_loss;
-            patience_counter = 0;
-            
-            % 保存最佳模型
-            best_params = struct();
-            best_params.net_feature = net_feature.Learnables;
-            best_params.fc_main_weights = fc_main_weights;
-            best_params.fc_main_bias = fc_main_bias;
-            best_params.fc_turn_weights = fc_turn_weights;
-            best_params.fc_turn_bias = fc_turn_bias;
-            best_params.fc_theta_weights = fc_theta_weights;
-            best_params.fc_theta_bias = fc_theta_bias;
-            
-            if cfg.verbose
-                fprintf('  ✓ 验证损失改善 (%.4f → %.4f)，保存最佳模型\n', ...
-                    best_val_loss + cfg.min_delta, best_val_loss);
-            end
-        else
-            % 验证损失未改善
-            patience_counter = patience_counter + 1;
-            
-            if patience_counter >= cfg.patience
-                if cfg.verbose
-                    fprintf('\n早停触发：验证损失连续 %d 轮未改善\n', cfg.patience);
-                end
-                break;
-            end
-        end
+    end
+    if epoch >= cfg.selection_start_epoch && selection_score < best.selection_score - cfg.min_delta
+        best.val_loss = val_metrics.total;
+        best.selection_score = selection_score;
+        best.feature_net = feature_net;
+        best.heads = heads;
+        best.epoch = epoch;
+        patience_count = 0;
     else
-        % 不进行验证，只打印训练损失
+        patience_count = patience_count + 1;
+    end
+
+    if epoch >= cfg.early_stop_min_epochs && patience_count >= cfg.patience
         if cfg.verbose
-            elapsed = toc(start_time);
-            eta = elapsed / epoch * (cfg.max_epochs - epoch);
-            fprintf('[Epoch %3d/%3d] train_loss=%.4f (main=%.4f, turn=%.4f, theta=%.4f) | lr=%.4e | %.1fs/%.1fs\n', ...
-                epoch, cfg.max_epochs, epoch_loss, epoch_loss_main, epoch_loss_turn, epoch_loss_theta, ...
-                current_lr, elapsed, eta);
+            fprintf('[GRU] 第 %d 轮早停，最佳轮次: %d\n', epoch, best.epoch);
         end
+        break;
     end
 end
 
-% 训练结束
-total_time = toc(start_time);
-
-if cfg.verbose
-    fprintf('\n========================================\n');
-    fprintf('训练完成！\n');
-    fprintf('========================================\n');
-    fprintf('  总训练时间: %.2f 分钟\n', total_time / 60);
-    fprintf('  实际训练轮数: %d / %d\n', epoch, cfg.max_epochs);
-    fprintf('  最佳验证损失: %.4f (Epoch %d)\n', best_val_loss, ...
-        find(history.val_loss == best_val_loss, 1));
+if cfg.combine_base_and_turn_best && ~isempty(base_best.feature_net) && ~isempty(best.feature_net)
+    feature_net = base_best.feature_net;
+    heads = local_copy_turn_head(base_best.heads, best.heads);
+    final_epoch = best.epoch;
+    final_base_epoch = base_best.epoch;
+else
+    feature_net = best.feature_net;
+    heads = best.heads;
+    final_epoch = best.epoch;
+    final_base_epoch = NaN;
 end
+test_metrics = local_evaluate(feature_net, heads, X_test, Y.test, dataset.scaler, cfg, ...
+    class_weights_main, class_weights_turn, exec_env);
 
-%% 7. 恢复最佳模型
-if ~isempty(best_params)
-    net_feature.Learnables = best_params.net_feature;
-    fc_main_weights = best_params.fc_main_weights;
-    fc_main_bias = best_params.fc_main_bias;
-    fc_turn_weights = best_params.fc_turn_weights;
-    fc_turn_bias = best_params.fc_turn_bias;
-    fc_theta_weights = best_params.fc_theta_weights;
-    fc_theta_bias = best_params.fc_theta_bias;
-end
-
-%% 8. 测试集评估
-if cfg.verbose
-    fprintf('\n========================================\n');
-    fprintf('测试集评估\n');
-    fprintf('========================================\n');
-end
-
-y_turn_test_cls = y_turn_test + 2;
-[test_loss, test_loss_main, test_loss_turn, test_loss_theta, test_loss_theta_flat, ...
- test_acc_main, test_acc_turn, test_mae_theta, pred_main_test, pred_turn_test, pred_theta_test] = ...
-    evaluateModel(net_feature, ...
-        fc_main_weights, fc_main_bias, ...
-        fc_turn_weights, fc_turn_bias, ...
-        fc_theta_weights, fc_theta_bias, ...
-        X_test, y_main_test, y_turn_test_cls, y_theta_test, mask_theta_test, ...
-        class_weights, cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, ...
-        cfg.batch_size, exec_env);
-
-if cfg.verbose
-    fprintf('  测试损失: %.4f\n', test_loss);
-    fprintf('  主分类准确率: %.2f%%\n', test_acc_main * 100);
-    fprintf('  转弯分类准确率: %.2f%%\n', test_acc_turn * 100);
-    fprintf('  坡度角MAE: %.4f° (%.4f rad)\n', rad2deg(test_mae_theta), test_mae_theta);
-    fprintf('  平地θ约束损失: %.4f\n', test_loss_theta_flat);
-    
-    % ========== V1.1: 详细评估指标 ==========
-    fprintf('\n----------------------------------------\n');
-    fprintf('详细评估指标（主分类）\n');
-    fprintf('----------------------------------------\n');
-    
-    % 计算混淆矩阵（显式指定类别顺序，防止少数类缺失导致矩阵降阶）
-    % V1.7: 更新为 3 类（flat, stall, slope），移除 slip
-    class_names = {'flat', 'stall', 'slope'};
-    class_order = 1:length(class_names);
-    CM_main = confusionmat(y_main_test, pred_main_test, 'Order', class_order);
-    
-    % 计算per-class指标
-    n_classes_main = length(class_names);
-    precision = zeros(n_classes_main, 1);
-    recall = zeros(n_classes_main, 1);
-    f1 = zeros(n_classes_main, 1);
-    support = zeros(n_classes_main, 1);
-    
-    for c = 1:n_classes_main
-        TP = CM_main(c, c);
-        FP = sum(CM_main(:, c)) - TP;
-        FN = sum(CM_main(c, :)) - TP;
-        
-        precision(c) = TP / (TP + FP + eps);
-        recall(c) = TP / (TP + FN + eps);
-        f1(c) = 2 * precision(c) * recall(c) / (precision(c) + recall(c) + eps);
-        support(c) = sum(y_main_test == c);
-    end
-    
-    % macro-F1
-    macro_f1 = mean(f1);
-    
-    % 打印per-class指标
-    fprintf('\n%-10s | Precision | Recall | F1-Score | Support\n', 'Class');
-    fprintf('-----------|-----------|--------|----------|--------\n');
-    for c = 1:n_classes_main
-        fprintf('%-10s |   %.4f  | %.4f |  %.4f  |  %d\n', ...
-            class_names{c}, precision(c), recall(c), f1(c), support(c));
-    end
-    fprintf('-----------|-----------|--------|----------|--------\n');
-    fprintf('macro-F1   |           |        |  %.4f  |  %d\n', macro_f1, length(y_main_test));
-    fprintf('weighted-F1|           |        |  %.4f  |  %d\n', ...
-        sum(f1 .* support) / sum(support), length(y_main_test));
-    
-    % 打印混淆矩阵
-    fprintf('\n[混淆矩阵 - 主分类]\n');
-    fprintf('%-10s', '真实\\预测');
-    for c = 1:n_classes_main
-        fprintf(' | %-6s', class_names{c});
-    end
-    fprintf('\n');
-    fprintf(repmat('-', 1, 10 + 9*n_classes_main));
-    fprintf('\n');
-    for r = 1:n_classes_main
-        fprintf('%-10s', class_names{r});
-        for c = 1:n_classes_main
-            fprintf(' |  %4d ', CM_main(r, c));
-        end
-        fprintf('\n');
-    end
-    
-    % 可视化混淆矩阵
-    figure('Name', '主分类混淆矩阵', 'NumberTitle', 'off');
-    confusionchart(CM_main, class_names);
-    title(sprintf('主分类混淆矩阵（测试集）- 准确率: %.2f%%, macro-F1: %.4f', ...
-        test_acc_main * 100, macro_f1));
-    saveas(gcf, fullfile(cfg.log_dir, 'confusion_matrix_main.png'));
-    if cfg.verbose
-        fprintf('\n  ✓ 混淆矩阵已保存至: %s\n', fullfile(cfg.log_dir, 'confusion_matrix_main.png'));
-    end
-
-    % ========== 转弯三分类混淆矩阵 ==========
-    turn_class_names = {'right', 'straight', 'left'};  % 对应标签 {1,2,3}
-    CM_turn = confusionmat(y_turn_test_cls, pred_turn_test, 'Order', 1:3);
-    figure('Name', '转弯分类混淆矩阵', 'NumberTitle', 'off');
-    confusionchart(CM_turn, turn_class_names);
-    title(sprintf('转弯分类混淆矩阵（测试集）- 准确率: %.2f%%', test_acc_turn * 100));
-    saveas(gcf, fullfile(cfg.log_dir, 'confusion_matrix_turn.png'));
-    if cfg.verbose
-        fprintf('  ✓ 转弯混淆矩阵已保存至: %s\n', fullfile(cfg.log_dir, 'confusion_matrix_turn.png'));
-    end
-
-    % ========== 坡度回归可视化（theta vs theta / 误差直方 / CDF） ==========
-    theta_true = gather(y_theta_test(:));
-    theta_pred = gather(pred_theta_test(:));
-    mask_slope = gather(mask_theta_test(:)) == 1;
-    theta_true_deg = rad2deg(theta_true(mask_slope));
-    theta_pred_deg = rad2deg(theta_pred(mask_slope));
-    theta_err_deg = theta_pred_deg - theta_true_deg;
-    theta_abs_err_deg = abs(theta_err_deg);
-
-    if isempty(theta_true_deg)
-        warning('坡度样本为空，跳过坡度回归可视化。');
-    else
-
-        % 散点图：theta_true vs theta_pred
-        figure('Name', '坡度回归散点', 'NumberTitle', 'off');
-        scatter(theta_true_deg, theta_pred_deg, 12, 'filled', 'MarkerFaceAlpha', 0.6);
-        hold on; grid on;
-        lim_min = min([theta_true_deg; theta_pred_deg]);
-        lim_max = max([theta_true_deg; theta_pred_deg]);
-        plot([lim_min, lim_max], [lim_min, lim_max], 'k--', 'LineWidth', 1);
-        xlabel('\\theta True (deg)'); ylabel('\\theta Pred (deg)');
-        title(sprintf('坡度回归: \\theta_{true} vs \\theta_{pred} (MAE=%.3f°)', rad2deg(test_mae_theta)));
-        xlim([lim_min, lim_max]); ylim([lim_min, lim_max]);
-        saveas(gcf, fullfile(cfg.log_dir, 'theta_scatter.png'));
-
-        % 误差直方图
-        figure('Name', '坡度回归误差直方图', 'NumberTitle', 'off');
-        histogram(theta_err_deg, 40, 'Normalization', 'pdf'); grid on;
-        xlabel('误差 (deg)'); ylabel('概率密度');
-        title('坡度回归误差直方图 (pred - true)');
-        saveas(gcf, fullfile(cfg.log_dir, 'theta_error_hist.png'));
-
-        % 绝对误差CDF
-        figure('Name', '坡度回归误差CDF', 'NumberTitle', 'off');
-        [f_ecdf, x_ecdf] = ecdf(theta_abs_err_deg);
-        plot(x_ecdf, f_ecdf, 'LineWidth', 1.5); grid on;
-        xlabel('|误差| (deg)'); ylabel('CDF');
-        title('坡度回归绝对误差CDF');
-        saveas(gcf, fullfile(cfg.log_dir, 'theta_error_cdf.png'));
-        if cfg.verbose
-            fprintf('  ✓ 坡度回归图已保存至: %s, %s, %s\n', ...
-                fullfile(cfg.log_dir, 'theta_scatter.png'), ...
-                fullfile(cfg.log_dir, 'theta_error_hist.png'), ...
-                fullfile(cfg.log_dir, 'theta_error_cdf.png'));
-        end
-    end
-    
-    % ========== 自动分析与建议 ==========
-    fprintf('\n========================================\n');
-    fprintf('自动分析与建议\n');
-    fprintf('========================================\n');
-    
-    % 调用分析函数
-    analysis = analyzeModelPerformance(CM_main, precision, recall, f1, macro_f1, ...
-        class_counts, class_names, cfg.class_weight_method);
-    
-    % 打印建议
-    fprintf('\n[整体评估]: %s\n', analysis.overall_status);
-    if ~isempty(analysis.recommendations)
-        fprintf('\n[改进建议]:\n');
-        for i = 1:length(analysis.recommendations)
-            fprintf('  %d. %s\n', i, analysis.recommendations{i});
-        end
-    end
-    if ~isempty(analysis.warnings)
-        fprintf('\n[⚠️ 警告]:\n');
-        for i = 1:length(analysis.warnings)
-            fprintf('  - %s\n', analysis.warnings{i});
-        end
-    end
-    
-    % 保存详细指标到meta
-    meta.test_detailed = struct();
-    meta.test_detailed.confusion_matrix = CM_main;
-    meta.test_detailed.precision = precision;
-    meta.test_detailed.recall = recall;
-    meta.test_detailed.f1 = f1;
-    meta.test_detailed.macro_f1 = macro_f1;
-    meta.test_detailed.support = support;
-    meta.test_detailed.class_names = class_names;
-    meta.test_detailed.analysis = analysis;
-end
-
-%% 9. 保存模型
-if cfg.verbose
-    fprintf('\n========================================\n');
-    fprintf('保存模型\n');
-    fprintf('========================================\n');
-end
-
-% 构建模型结构体
 model = struct();
-model.net_feature = net_feature;
-model.fc_main_weights = gather(fc_main_weights);
-model.fc_main_bias = gather(fc_main_bias);
-model.fc_turn_weights = gather(fc_turn_weights);
-model.fc_turn_bias = gather(fc_turn_bias);
-model.fc_theta_weights = gather(fc_theta_weights);
-model.fc_theta_bias = gather(fc_theta_bias);
+model.feature_net = feature_net;
+model.heads = local_gather_heads(heads);
 model.scaler = dataset.scaler;
 model.feat_names = dataset.feat_names;
-model.seq_len = seq_len;  % 序列长度（便于推理时使用）
-model.feat_dim = input_size;  % 特征维度
-model.class_labels_main = {'flat', 'stall', 'slope'};  % V1.7: 3类
-model.class_labels_turn = {'right', 'straight', 'left'};  % [-1, 0, +1]
-model.class_weights = class_weights;
 model.cfg = cfg;
+model.input_format = 'CBT';
+model.output_contract = 'main3_turn3_theta';
 
-% 保存模型
-if cfg.verbose
-    fprintf('  正在保存到: %s\n', cfg.model_file);
-end
-save(cfg.model_file, 'model', '-v7.3');
-
-% 保存元数据
 meta = struct();
-meta.generation_time = datestr(now, 'yyyy-mm-dd HH:MM:SS');
-meta.version = 'V1.0';
-meta.author = 'LPV-MPC Project';
+meta.created_at = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
+meta.mode = cfg.mode;
+meta.dataset_meta = dataset.meta;
 meta.cfg = cfg;
 meta.history = history;
-meta.best_val_loss = best_val_loss;
-meta.test_metrics = struct(...
-    'test_loss', test_loss, ...
-    'test_acc_main', test_acc_main, ...
-    'test_acc_turn', test_acc_turn, ...
-    'test_mae_theta', test_mae_theta, ...
-    'test_loss_theta_flat', test_loss_theta_flat);
-meta.total_time = total_time;
-meta.actual_epochs = epoch;
+meta.best_epoch = final_epoch;
+meta.base_best_epoch = final_base_epoch;
+meta.best_val_loss = best.val_loss;
+meta.best_selection_score = best.selection_score;
+meta.base_best_val_loss = base_best.val_loss;
+meta.base_best_selection_score = base_best.selection_score;
+meta.test_metrics = test_metrics;
+meta.train_seconds = toc(tic_train);
+meta.receptive_field_steps = local_receptive_field(cfg);
+meta.receptive_field_seconds = local_receptive_field(cfg) * dataset.meta.Ts;
 
-if cfg.verbose
-    fprintf('  正在保存到: %s\n', cfg.meta_file);
-end
+save(cfg.model_file, 'model', '-v7.3');
 save(cfg.meta_file, 'meta');
+local_write_training_report(cfg, meta, test_metrics);
 
 if cfg.verbose
-    fprintf('  ✓ 保存成功！\n');
+    fprintf('\n[GRU] 训练完成。\n');
+    fprintf('  最佳轮次: %d\n', best.epoch);
+    fprintf('  测试主类/转弯准确率: %.3f / %.3f\n', test_metrics.acc_main, test_metrics.acc_turn);
+    fprintf('  测试坡度 MAE: %.3f deg\n', rad2deg(test_metrics.mae_theta));
+    fprintf('  模型已保存: %s\n', cfg.model_file);
+    fprintf('  元信息已保存: %s\n', cfg.meta_file);
+end
 end
 
-%% 10. 绘制训练曲线
-if cfg.plot_loss
-    if cfg.verbose
-        fprintf('\n========================================\n');
-        fprintf('绘制训练曲线\n');
-        fprintf('========================================\n');
-    end
-    
-    % 创建2行3列的子图
-    fig = figure('Position', [100, 100, 1400, 800]);
-    
-    % 子图1：总损失
-    subplot(2, 3, 1);
-    plot(1:epoch, history.train_loss, 'b-', 'LineWidth', 1.5);
-    hold on;
-    val_epochs = find(history.val_loss > 0);
-    plot(val_epochs, history.val_loss(val_epochs), 'r-', 'LineWidth', 1.5);
-    xlabel('Epoch');
-    ylabel('Loss');
-    title('总损失');
-    legend({'训练', '验证'}, 'Location', 'best');
-    grid on;
-    
-    % 子图2：主分类损失
-    subplot(2, 3, 2);
-    plot(1:epoch, history.train_loss_main, 'b-', 'LineWidth', 1.5);
-    hold on;
-    plot(val_epochs, history.val_loss_main(val_epochs), 'r-', 'LineWidth', 1.5);
-    xlabel('Epoch');
-    ylabel('Loss');
-    title('主分类损失');
-    legend({'训练', '验证'}, 'Location', 'best');
-    grid on;
-    
-    % 子图3：转弯分类损失
-    subplot(2, 3, 3);
-    plot(1:epoch, history.train_loss_turn, 'b-', 'LineWidth', 1.5);
-    hold on;
-    plot(val_epochs, history.val_loss_turn(val_epochs), 'r-', 'LineWidth', 1.5);
-    xlabel('Epoch');
-    ylabel('Loss');
-    title('转弯分类损失');
-    legend({'训练', '验证'}, 'Location', 'best');
-    grid on;
-    
-    % 子图4：坡度/平地θ损失
-    subplot(2, 3, 4);
-    plot(1:epoch, history.train_loss_theta, 'b-', 'LineWidth', 1.5);
-    hold on;
-    plot(val_epochs, history.val_loss_theta(val_epochs), 'r-', 'LineWidth', 1.5);
-    plot(1:epoch, history.train_loss_theta_flat, 'c--', 'LineWidth', 1.5);
-    plot(val_epochs, history.val_loss_theta_flat(val_epochs), 'm--', 'LineWidth', 1.5);
-    xlabel('Epoch');
-    ylabel('Loss');
-    title('坡度/平地θ损失');
-    legend({'训练-坡度', '验证-坡度', '训练-平地θ', '验证-平地θ'}, 'Location', 'best');
-    grid on;
-    
-    % 子图5：准确率
-    subplot(2, 3, 5);
-    plot(val_epochs, history.val_acc_main(val_epochs), 'g-', 'LineWidth', 1.5);
-    hold on;
-    plot(val_epochs, history.val_acc_turn(val_epochs), 'm-', 'LineWidth', 1.5);
-    xlabel('Epoch');
-    ylabel('准确率');
-    title('分类准确率');
-    legend({'主分类', '转弯分类'}, 'Location', 'best');
-    grid on;
-    ylim([0, 1]);
-    
-    % 子图6：学习率
-    subplot(2, 3, 6);
-    plot(1:epoch, history.lr(1:epoch), 'k-', 'LineWidth', 1.5);
-    xlabel('Epoch');
-    ylabel('学习率');
-    title('学习率调度');
-    grid on;
-    
-    % 保存图像
-    saveas(fig, fullfile(cfg.log_dir, 'training_curves.png'));
-    
-    if cfg.verbose
-        fprintf('  ✓ 训练曲线已保存至: %s\n', fullfile(cfg.log_dir, 'training_curves.png'));
-    end
+function cfg = local_defaults(cfg, root)
+data_GRU_dir = fullfile(root, 'data', 'tcn');
+data_models_dir = fullfile(root, 'data', 'models');
+if ~isfield(cfg, 'input_file'); cfg.input_file = fullfile(data_GRU_dir, 'TCN_dataset_processed.mat'); end
+if ~isfield(cfg, 'model_file'); cfg.model_file = fullfile(data_models_dir, 'GRU_model.mat'); end
+if ~isfield(cfg, 'meta_file'); cfg.meta_file = fullfile(data_models_dir, 'GRU_meta.mat'); end
+if ~isfield(cfg, 'log_dir'); cfg.log_dir = results_dir('gru/train_logs'); end
+if ~isfield(cfg, 'report_file'); cfg.report_file = fullfile(cfg.log_dir, 'GRU_train_report.md'); end
+if ~isfield(cfg, 'mode'); cfg.mode = 'physics_guided'; end
+
+if ~isfield(cfg, 'hidden_size'); cfg.hidden_size = 64; end
+if ~isfield(cfg, 'num_layers'); cfg.num_layers = 1; end
+if ~isfield(cfg, 'dropout'); cfg.dropout = 0.15; end
+
+if ~isfield(cfg, 'batch_size'); cfg.batch_size = 64; end
+if ~isfield(cfg, 'max_epochs'); cfg.max_epochs = 80; end
+if ~isfield(cfg, 'initial_lr'); cfg.initial_lr = 1e-3; end
+if ~isfield(cfg, 'lr_schedule'); cfg.lr_schedule = 'cosine'; end
+if ~isfield(cfg, 'grad_clip'); cfg.grad_clip = 5.0; end
+if ~isfield(cfg, 'grad_clip_mode'); cfg.grad_clip_mode = 'separate'; end
+if ~isfield(cfg, 'patience'); cfg.patience = 12; end
+if ~isfield(cfg, 'min_delta'); cfg.min_delta = 1e-4; end
+if ~isfield(cfg, 'early_stop_min_epochs'); cfg.early_stop_min_epochs = 0; end
+if ~isfield(cfg, 'selection_start_epoch'); cfg.selection_start_epoch = 1; end
+
+if ~isfield(cfg, 'lambda_turn'); cfg.lambda_turn = 0.30; end
+if ~isfield(cfg, 'turn_finetune_start_epoch'); cfg.turn_finetune_start_epoch = inf; end
+if ~isfield(cfg, 'turn_finetune_lambda_turn'); cfg.turn_finetune_lambda_turn = cfg.lambda_turn; end
+if ~isfield(cfg, 'turn_finetune_disable_other_losses'); cfg.turn_finetune_disable_other_losses = true; end
+if ~isfield(cfg, 'lambda_theta'); cfg.lambda_theta = 0.35; end
+if ~isfield(cfg, 'lambda_theta_flat'); cfg.lambda_theta_flat = 0.20; end
+if ~isfield(cfg, 'theta_flat_loss_mode'); cfg.theta_flat_loss_mode = 'near_zero'; end
+if ~isfield(cfg, 'theta_flat_zero_tol_deg'); cfg.theta_flat_zero_tol_deg = 0.3; end
+if ~isfield(cfg, 'theta_near_flat_deg'); cfg.theta_near_flat_deg = 0.5; end
+if ~isfield(cfg, 'lambda_aux'); cfg.lambda_aux = 0.00; end
+if ~isfield(cfg, 'lambda_pitch_consistency'); cfg.lambda_pitch_consistency = 0.00; end
+if ~isfield(cfg, 'theta_neg_weight'); cfg.theta_neg_weight = 1.0; end
+if ~isfield(cfg, 'theta_pos_weight'); cfg.theta_pos_weight = 1.0; end
+if ~isfield(cfg, 'main_neg_slope_weight'); cfg.main_neg_slope_weight = 1.0; end
+if ~isfield(cfg, 'main_pos_slope_weight'); cfg.main_pos_slope_weight = 1.0; end
+if ~isfield(cfg, 'head_pooling'); cfg.head_pooling = 'last_mean'; end
+if ~isfield(cfg, 'turn_head_type'); cfg.turn_head_type = 'mlp'; end
+if ~isfield(cfg, 'turn_head_hidden'); cfg.turn_head_hidden = 64; end
+if ~isfield(cfg, 'turn_head_source'); cfg.turn_head_source = 'inputstats'; end
+if ~isfield(cfg, 'turn_class_multipliers'); cfg.turn_class_multipliers = [1.0, 1.0, 1.0]; end
+if ~isfield(cfg, 'use_focal_loss'); cfg.use_focal_loss = false; end
+if ~isfield(cfg, 'focal_gamma_main'); cfg.focal_gamma_main = 1.0; end
+if ~isfield(cfg, 'focal_gamma_turn'); cfg.focal_gamma_turn = 0.5; end
+if ~isfield(cfg, 'best_metric'); cfg.best_metric = 'composite'; end
+if ~isfield(cfg, 'base_best_metric'); cfg.base_best_metric = 'composite'; end
+if ~isfield(cfg, 'combine_base_and_turn_best'); cfg.combine_base_and_turn_best = false; end
+if ~isfield(cfg, 'select_main_error_weight'); cfg.select_main_error_weight = 0.45; end
+if ~isfield(cfg, 'select_turn_error_weight'); cfg.select_turn_error_weight = 0.15; end
+if ~isfield(cfg, 'select_theta_weight'); cfg.select_theta_weight = 0.15; end
+if ~isfield(cfg, 'select_downhill_error_weight'); cfg.select_downhill_error_weight = 0.25; end
+if ~isfield(cfg, 'select_turn_transition_weight'); cfg.select_turn_transition_weight = 0.00; end
+if ~isfield(cfg, 'select_turn_transition_target'); cfg.select_turn_transition_target = 0.75; end
+if ~isfield(cfg, 'select_turn_lr_weight'); cfg.select_turn_lr_weight = 0.00; end
+if ~isfield(cfg, 'select_turn_lr_target'); cfg.select_turn_lr_target = 0.80; end
+if ~isfield(cfg, 'select_theta_ref_deg'); cfg.select_theta_ref_deg = 5.0; end
+if ~isfield(cfg, 'select_main_floor'); cfg.select_main_floor = 0.93; end
+if ~isfield(cfg, 'select_theta_floor_deg'); cfg.select_theta_floor_deg = 1.20; end
+if ~isfield(cfg, 'select_downhill_floor'); cfg.select_downhill_floor = 0.80; end
+if ~isfield(cfg, 'turn_priority_main_penalty_weight'); cfg.turn_priority_main_penalty_weight = 20.0; end
+if ~isfield(cfg, 'turn_priority_theta_penalty_weight'); cfg.turn_priority_theta_penalty_weight = 0.25; end
+if ~isfield(cfg, 'turn_priority_downhill_penalty_weight'); cfg.turn_priority_downhill_penalty_weight = 0.60; end
+if ~isfield(cfg, 'turn_priority_loss_weight'); cfg.turn_priority_loss_weight = 0.02; end
+if strcmpi(cfg.mode, 'vanilla')
+    cfg.lambda_aux = 0;
+    cfg.lambda_pitch_consistency = 0;
 end
 
-if cfg.verbose
-    fprintf('\n========================================\n');
-    fprintf('GRU训练完成！\n');
-    fprintf('========================================\n');
-    fprintf('输出文件:\n');
-    fprintf('  - %s (训练好的模型)\n', cfg.model_file);
-    fprintf('  - %s (训练元数据)\n', cfg.meta_file);
-    fprintf('  - %s/ (训练日志)\n', cfg.log_dir);
-    fprintf('\n最终性能:\n');
-    fprintf('  - 测试集主分类准确率: %.2f%%\n', test_acc_main * 100);
-    fprintf('  - 测试集转弯分类准确率: %.2f%%\n', test_acc_turn * 100);
-    fprintf('  - 测试集坡度角MAE: %.4f°\n', rad2deg(test_mae_theta));
+if ~isfield(cfg, 'class_weight_method'); cfg.class_weight_method = 'balanced'; end
+if ~isfield(cfg, 'turn_class_weight_method'); cfg.turn_class_weight_method = 'sqrt_inverse'; end
+if ~isfield(cfg, 'seed'); cfg.seed = 42; end
+if ~isfield(cfg, 'use_gpu'); cfg.use_gpu = true; end
+if ~isfield(cfg, 'verbose'); cfg.verbose = true; end
+if ~isfield(cfg, 'print_every'); cfg.print_every = 1; end
 end
 
-%% ========== 辅助函数 ==========
-
-function [loss, loss_main, loss_turn, loss_theta, loss_theta_flat, gradients] = modelGradients(...
-    net_feature, fc_main_w, fc_main_b, fc_turn_w, fc_turn_b, fc_theta_w, fc_theta_b, ...
-    X, y_main, y_turn, y_theta, mask_theta, class_weights, lambda_turn, lambda_theta, lambda_theta_flat, exec_env)
-% 计算模型损失和梯度（多任务学习）
-% 输入:
-%   net_feature: dlnetwork对象（GRU特征提取器）
-%   fc_main_w/b: 主分类头权重和偏置
-%   fc_turn_w/b: 转弯分类头权重和偏置
-%   fc_theta_w/b: 坡度回归头权重和偏置
-%   X: 输入特征 [feat_dim, seq_len, batch]
-%   y_main: 主分类标签 [batch] ∈ {1,2,3,4}
-%   y_turn: 转弯分类标签 [batch] ∈ {1,2,3}（已映射）
-%   y_theta: 坡度角真值 [batch] [rad]
-%   mask_theta: 坡度角mask [batch] (slope样本=1)
-%   class_weights: 主分类类别权重 [4]
-%   lambda_turn: 转弯分类损失权重
-%   lambda_theta: 坡度回归损失权重
-%   lambda_theta_flat: 平地theta约束损失权重
-%   exec_env: 'cpu' 或 'gpu'
-% 输出:
-%   loss: 总损失（标量）
-%   loss_main: 主分类损失
-%   loss_turn: 转弯分类损失
-%   loss_theta: 坡度回归损失
-%   loss_theta_flat: 平地theta约束损失
-%   gradients: 梯度结构体
-
-    % 前向传播：GRU特征提取
-    features_seq = forward(net_feature, X);  % [hidden_size, seq_len, batch]
-    
-    % 提取最后一个时间步的特征
-    features = features_seq(:, end, :);  % [hidden_size, 1, batch]
-    features = squeeze(features);  % [hidden_size, batch]
-    
-    % 移除维度标签（避免矩阵乘法时的维度标签冲突）
-    features = stripdims(features);
-    
-    % 主分类头
-    logits_main = fc_main_w * features + fc_main_b;  % [4, batch]
-    probs_main = softmax(logits_main, 'DataFormat', 'CB');
-    
-    % 转弯分类头
-    logits_turn = fc_turn_w * features + fc_turn_b;  % [3, batch]
-    probs_turn = softmax(logits_turn, 'DataFormat', 'CB');
-    
-    % 坡度回归头
-    pred_theta = fc_theta_w * features + fc_theta_b;  % [1, batch]
-    % 注意：不使用squeeze，保持[1, batch]形状
-    
-    % 计算损失
-    % 获取实际批量大小
-    batch_size = size(X, 3);
-    
-    % 1) 主分类损失（交叉熵，带类别权重）
-    loss_main = 0;
-    for i = 1:batch_size
-        class_idx = y_main(i);
-        weight = class_weights(class_idx);
-        if strcmp(exec_env, 'gpu')
-            weight = gpuArray(weight);
-        end
-        loss_main = loss_main - weight * log(probs_main(class_idx, i) + 1e-8);
+function local_check_dataset(dataset)
+req = {'X_train','X_val','X_test','y_main_train','y_turn_train','y_theta_train', ...
+    'mask_theta_train','scaler','feat_names','meta'};
+for i = 1:numel(req)
+    if ~isfield(dataset, req{i})
+        error('GRU_TRAIN:BadDataset', 'Dataset missing field %s.', req{i});
     end
-    loss_main = loss_main / batch_size;
-    
-    % 2) 转弯分类损失（交叉熵，无权重）
-    loss_turn = 0;
-    for i = 1:batch_size
-        class_idx = y_turn(i);
-        loss_turn = loss_turn - log(probs_turn(class_idx, i) + 1e-8);
+end
+if size(dataset.X_train, 3) ~= numel(dataset.feat_names)
+    error('GRU_TRAIN:FeatureMismatch', 'Feature dimension does not match feat_names.');
+end
+end
+
+function cfg_epoch = local_epoch_cfg(cfg, epoch)
+cfg_epoch = cfg;
+if local_is_turn_finetune_epoch(cfg, epoch)
+    cfg_epoch.lambda_turn = cfg.turn_finetune_lambda_turn;
+    if cfg.turn_finetune_disable_other_losses
+        cfg_epoch.lambda_theta = 0;
+        cfg_epoch.lambda_theta_flat = 0;
+        cfg_epoch.lambda_aux = 0;
+        cfg_epoch.lambda_pitch_consistency = 0;
     end
-    loss_turn = loss_turn / batch_size;
-    
-    % 3) 坡度回归损失（MSE，仅slope样本）
-    % 将y_theta和mask_theta转换为行向量以匹配pred_theta的形状[1, batch]
+end
+end
+
+function tf = local_is_turn_finetune_epoch(cfg, epoch)
+tf = isfinite(cfg.turn_finetune_start_epoch) && epoch >= cfg.turn_finetune_start_epoch;
+end
+
+function grads = local_keep_turn_head_grads_only(grads)
+for i = 1:height(grads.net)
+    grads.net.Value{i} = grads.net.Value{i} * 0;
+end
+names = fieldnames(grads.heads);
+for i = 1:numel(names)
+    name = names{i};
+    if ~startsWith(name, 'turn_')
+        grads.heads.(name) = grads.heads.(name) * 0;
+    end
+end
+end
+
+function heads = local_copy_turn_head(base_heads, turn_heads)
+heads = base_heads;
+names = fieldnames(turn_heads);
+for i = 1:numel(names)
+    name = names{i};
+    if startsWith(name, 'turn_')
+        heads.(name) = turn_heads.(name);
+    end
+end
+end
+
+function T = local_make_targets(dataset, split_name)
+T = struct();
+T.main = dataset.(sprintf('y_main_%s', split_name));
+T.turn = dataset.(sprintf('y_turn_%s', split_name));
+T.turn_cls = T.turn + 2;
+T.turn_weight = local_get_dataset_field(dataset, ...
+    sprintf('turn_sample_weight_%s', split_name), ones(size(T.turn)));
+T.turn_purity = local_get_dataset_field(dataset, ...
+    sprintf('turn_purity_%s', split_name), NaN(size(T.turn)));
+T.turn_transition = local_get_dataset_field(dataset, ...
+    sprintf('turn_transition_%s', split_name), false(size(T.turn)));
+T.main_weight = local_get_dataset_field(dataset, ...
+    sprintf('main_sample_weight_%s', split_name), ones(size(T.main)));
+T.main_purity = local_get_dataset_field(dataset, ...
+    sprintf('main_purity_%s', split_name), NaN(size(T.main)));
+T.main_transition = local_get_dataset_field(dataset, ...
+    sprintf('main_transition_%s', split_name), false(size(T.main)));
+T.theta = dataset.(sprintf('y_theta_%s', split_name));
+T.mask_theta = dataset.(sprintf('mask_theta_%s', split_name));
+T.theta_weight = local_get_dataset_field(dataset, ...
+    sprintf('theta_sample_weight_%s', split_name), ones(size(T.theta)));
+T.theta_transition = local_get_dataset_field(dataset, ...
+    sprintf('theta_transition_%s', split_name), false(size(T.theta)));
+T.slip = local_get_dataset_field(dataset, sprintf('y_slip_%s', split_name), zeros(size(T.main)));
+T.stall = local_get_dataset_field(dataset, sprintf('y_stall_%s', split_name), zeros(size(T.main)));
+T.load_change = local_get_dataset_field(dataset, sprintf('y_load_change_%s', split_name), zeros(size(T.main)));
+end
+
+function y = local_get_dataset_field(dataset, field_name, default_value)
+if isfield(dataset, field_name)
+    y = dataset.(field_name);
+else
+    y = default_value;
+end
+end
+
+function Tb = local_batch_targets(T, idx, exec_env)
+fields = {'main','turn_cls','turn_weight','main_weight', ...
+    'theta','mask_theta','theta_weight','slip','stall','load_change'};
+Tb = struct();
+for i = 1:numel(fields)
+    f = fields{i};
+    Tb.(f) = T.(f)(idx);
     if strcmp(exec_env, 'gpu')
-        y_theta = gpuArray(y_theta);
-        mask_theta = gpuArray(mask_theta);
-    end
-    
-    % 转为行向量并转为dlarray
-    y_theta_row = dlarray(reshape(y_theta, 1, []));  % [1, batch]
-    mask_theta_row = dlarray(reshape(mask_theta, 1, []));  % [1, batch]
-    
-    % 计算误差
-    errors = (pred_theta - y_theta_row) .* mask_theta_row;  % [1, batch]
-    n_slope = sum(mask_theta) + 1e-8;  % 避免除零
-    loss_theta = sum(errors.^2) / n_slope;
-    
-    % 4) 平地theta约束（平地样本MSE）
-    flat_mask = double(y_main == 1);
-    flat_mask_row = dlarray(reshape(flat_mask, 1, []));
-    flat_errors = pred_theta .* flat_mask_row;
-    n_flat = sum(flat_mask_row) + 1e-8;
-    loss_theta_flat = sum(flat_errors.^2) / n_flat;
-    
-    % 总损失
-    loss = loss_main + lambda_turn * loss_turn + lambda_theta * loss_theta + lambda_theta_flat * loss_theta_flat;
-    
-    % 计算梯度
-    gradients = struct();
-    gradients.net_feature = dlgradient(loss, net_feature.Learnables);
-    gradients.fc_main_weights = dlgradient(loss, fc_main_w);
-    gradients.fc_main_bias = dlgradient(loss, fc_main_b);
-    gradients.fc_turn_weights = dlgradient(loss, fc_turn_w);
-    gradients.fc_turn_bias = dlgradient(loss, fc_turn_b);
-    gradients.fc_theta_weights = dlgradient(loss, fc_theta_w);
-    gradients.fc_theta_bias = dlgradient(loss, fc_theta_b);
-end
-
-function [val_loss, val_loss_main, val_loss_turn, val_loss_theta, val_loss_theta_flat, ...
-          val_acc_main, val_acc_turn, val_mae_theta, all_pred_main, all_pred_turn, all_pred_theta] = ...
-    evaluateModel(net_feature, fc_main_w, fc_main_b, fc_turn_w, fc_turn_b, ...
-                  fc_theta_w, fc_theta_b, ...
-                  X_val, y_main_val, y_turn_val, y_theta_val, mask_theta_val, ...
-                  class_weights, lambda_turn, lambda_theta, lambda_theta_flat, batch_size, exec_env)
-% 评估模型在验证集上的性能（V1.1: 返回预测结果用于详细分析）
-
-    n_val = size(X_val, 3);
-    num_batches = ceil(n_val / batch_size);
-    
-    total_loss = 0;
-    total_loss_main = 0;
-    total_loss_turn = 0;
-    total_loss_theta = 0;
-    total_loss_theta_flat = 0;
-    
-    all_pred_main = [];
-    all_pred_turn = [];
-    all_pred_theta = [];
-    
-    for iter = 1:num_batches
-        % 提取当前batch
-        batch_start = (iter - 1) * batch_size + 1;
-        batch_end = min(iter * batch_size, n_val);
-        batch_idx = batch_start:batch_end;
-        
-        X_batch = X_val(:, :, batch_idx);
-        y_main_batch = y_main_val(batch_idx);
-        y_turn_batch = y_turn_val(batch_idx);
-        y_theta_batch = y_theta_val(batch_idx);
-        mask_theta_batch = mask_theta_val(batch_idx);
-        
-        % 转为dlarray
-        X_batch = dlarray(X_batch, 'CBT');
-        
-        % 转移到GPU
-        if strcmp(exec_env, 'gpu')
-            X_batch = gpuArray(X_batch);
-            y_main_batch = gpuArray(y_main_batch);
-            y_turn_batch = gpuArray(y_turn_batch);
-            y_theta_batch = gpuArray(y_theta_batch);
-            mask_theta_batch = gpuArray(mask_theta_batch);
-        end
-        
-        % 前向传播
-        features_seq = forward(net_feature, X_batch);  % [hidden_size, seq_len, batch]
-        
-        % 提取最后一个时间步的特征
-        features = features_seq(:, end, :);  % [hidden_size, 1, batch]
-        features = squeeze(features);  % [hidden_size, batch]
-        
-        % 移除维度标签（避免矩阵乘法时的维度标签冲突）
-        features = stripdims(features);
-        
-        % 主分类头
-        logits_main = fc_main_w * features + fc_main_b;
-        probs_main = softmax(logits_main, 'DataFormat', 'CB');
-        [~, pred_main] = max(extractdata(gather(probs_main)), [], 1);
-        all_pred_main = [all_pred_main; pred_main(:)];
-        
-        % 转弯分类头
-        logits_turn = fc_turn_w * features + fc_turn_b;
-        probs_turn = softmax(logits_turn, 'DataFormat', 'CB');
-        [~, pred_turn] = max(extractdata(gather(probs_turn)), [], 1);
-        all_pred_turn = [all_pred_turn; pred_turn(:)];
-        
-        % 坡度回归头
-        pred_theta = fc_theta_w * features + fc_theta_b;
-        pred_theta = squeeze(pred_theta);
-        all_pred_theta = [all_pred_theta; extractdata(gather(pred_theta(:)))];
-        
-        % 计算损失
-        batch_loss_main = 0;
-        curr_batch_size = length(batch_idx);
-        for i = 1:curr_batch_size
-            class_idx = y_main_batch(i);
-            weight = class_weights(class_idx);
-            if strcmp(exec_env, 'gpu')
-                weight = gpuArray(weight);
-            end
-            batch_loss_main = batch_loss_main - weight * log(probs_main(class_idx, i) + 1e-8);
-        end
-        batch_loss_main = batch_loss_main / curr_batch_size;
-        
-        batch_loss_turn = 0;
-        for i = 1:curr_batch_size
-            class_idx = y_turn_batch(i);
-            batch_loss_turn = batch_loss_turn - log(probs_turn(class_idx, i) + 1e-8);
-        end
-        batch_loss_turn = batch_loss_turn / curr_batch_size;
-        
-        errors = (pred_theta(:) - y_theta_batch(:)) .* mask_theta_batch(:);
-        n_slope = sum(mask_theta_batch) + 1e-8;
-        batch_loss_theta = sum(errors.^2) / n_slope;
-        
-        flat_mask_batch = double(y_main_batch == 1);
-        batch_loss_theta_flat = sum((pred_theta(:) .* flat_mask_batch(:)).^2) / (sum(flat_mask_batch) + 1e-8);
-        
-        batch_loss = batch_loss_main + lambda_turn * batch_loss_turn + lambda_theta * batch_loss_theta + lambda_theta_flat * batch_loss_theta_flat;
-        
-        total_loss = total_loss + extractdata(gather(batch_loss));
-        total_loss_main = total_loss_main + extractdata(gather(batch_loss_main));
-        total_loss_turn = total_loss_turn + extractdata(gather(batch_loss_turn));
-        total_loss_theta = total_loss_theta + extractdata(gather(batch_loss_theta));
-        total_loss_theta_flat = total_loss_theta_flat + extractdata(gather(batch_loss_theta_flat));
-    end
-    
-    % 平均损失
-    val_loss = total_loss / num_batches;
-    val_loss_main = total_loss_main / num_batches;
-    val_loss_turn = total_loss_turn / num_batches;
-    val_loss_theta = total_loss_theta / num_batches;
-    val_loss_theta_flat = total_loss_theta_flat / num_batches;
-    
-    % 准确率
-    val_acc_main = mean(all_pred_main == y_main_val);
-    val_acc_turn = mean(all_pred_turn == y_turn_val);
-    
-    % MAE（仅slope样本）
-    mask_theta_val = gather(mask_theta_val);
-    y_theta_val = gather(y_theta_val);
-    slope_idx = find(mask_theta_val == 1);
-    if ~isempty(slope_idx)
-        val_mae_theta = mean(abs(all_pred_theta(slope_idx) - y_theta_val(slope_idx)));
-    else
-        val_mae_theta = 0;
+        Tb.(f) = gpuArray(Tb.(f));
     end
 end
+end
 
-function [gradients, grad_norm] = clipGradients(gradients, threshold)
-% 梯度裁剪（全局范数）
-    grad_norm = 0;
-    
-    % 计算全局梯度范数
-    fields = fieldnames(gradients);
-    for i = 1:length(fields)
-        field = fields{i};
-        if istable(gradients.(field))
-            % dlnetwork Learnables（table格式）
-            for j = 1:height(gradients.(field))
-                grad = gradients.(field).Value{j};
-                grad_norm = grad_norm + sum(grad(:).^2);
-            end
+function net = local_build_gru(input_size, cfg)
+layers = [
+    sequenceInputLayer(input_size, 'Name', 'input', 'Normalization', 'none')
+];
+for layer_idx = 1:cfg.num_layers
+    layers = [
+        layers
+        gruLayer(cfg.hidden_size, 'OutputMode', 'sequence', 'Name', sprintf('gru_%d', layer_idx))
+        dropoutLayer(cfg.dropout, 'Name', sprintf('dropout_%d', layer_idx))
+    ]; %#ok<AGROW>
+end
+net = dlnetwork(layers);
+end
+
+function heads = local_init_heads(hidden_size, turn_hidden_size, cfg, exec_env)
+scale = 0.02;
+heads = struct();
+heads.main_W = dlarray(randn(3, hidden_size) * scale);
+heads.main_b = dlarray(zeros(3, 1));
+heads.theta_W = dlarray(randn(1, hidden_size) * scale);
+heads.theta_b = dlarray(0);
+heads.slip_W = dlarray(randn(1, hidden_size) * scale);
+heads.slip_b = dlarray(0);
+heads.stall_W = dlarray(randn(1, hidden_size) * scale);
+heads.stall_b = dlarray(0);
+heads.load_W = dlarray(randn(1, hidden_size) * scale);
+heads.load_b = dlarray(0);
+
+switch lower(char(cfg.turn_head_type))
+    case 'linear'
+        heads.turn_W = dlarray(randn(3, turn_hidden_size) * scale);
+        heads.turn_b = dlarray(zeros(3, 1));
+    case 'mlp'
+        h = cfg.turn_head_hidden;
+        heads.turn_W1 = dlarray(randn(h, turn_hidden_size) * sqrt(2 / max(turn_hidden_size, 1)));
+        heads.turn_b1 = dlarray(zeros(h, 1));
+        heads.turn_W2 = dlarray(randn(3, h) * sqrt(2 / max(h, 1)));
+        heads.turn_b2 = dlarray(zeros(3, 1));
+    otherwise
+        error('GRU_TRAIN:BadTurnHead', '未知 turn_head_type: %s', cfg.turn_head_type);
+end
+
+if strcmp(exec_env, 'gpu')
+    names = fieldnames(heads);
+    for i = 1:numel(names)
+        heads.(names{i}) = gpuArray(heads.(names{i}));
+    end
+end
+end
+
+function head_size = local_head_feature_size(cfg)
+switch lower(char(cfg.head_pooling))
+    case 'last'
+        head_size = cfg.hidden_size;
+    case 'last_mean'
+        head_size = cfg.hidden_size * 2;
+    case 'last_mean_inputstats'
+        head_size = cfg.hidden_size * 2 + cfg.input_size * 5;
+    case 'last_mean_max'
+        head_size = cfg.hidden_size * 3;
+    case 'last_mean_max_inputstats'
+        head_size = cfg.hidden_size * 3 + cfg.input_size * 5;
+    otherwise
+        error('GRU_TRAIN:BadHeadPooling', '未知 head_pooling: %s', cfg.head_pooling);
+end
+end
+
+function turn_head_size = local_turn_head_feature_size(head_size, cfg)
+switch lower(char(cfg.turn_head_source))
+    case 'readout'
+        turn_head_size = head_size;
+    case 'inputstats'
+        turn_head_size = cfg.input_size * 5;
+    otherwise
+        error('GRU_TRAIN:BadTurnHeadSource', '未知 turn_head_source: %s', cfg.turn_head_source);
+end
+end
+
+function [losses, grads] = local_model_gradients(net, heads, X, T, scaler, cfg, class_w_main, class_w_turn)
+pred = local_forward(net, heads, X, cfg);
+
+main_sample_w = local_main_sample_weights(T.main, T.theta, cfg) .* reshape(T.main_weight, [], 1);
+loss_main = local_weighted_ce(pred.prob_main, T.main, class_w_main, ...
+    cfg.focal_gamma_main, cfg.use_focal_loss, main_sample_w);
+loss_turn = local_weighted_ce(pred.prob_turn, T.turn_cls, class_w_turn, ...
+    cfg.focal_gamma_turn, cfg.use_focal_loss, T.turn_weight);
+loss_theta = local_weighted_theta_mse(pred.theta, T.theta, T.mask_theta, cfg, T.theta_weight);
+flat_zero_mask = local_theta_flat_zero_mask(T.main, T.theta, T.mask_theta, cfg);
+loss_theta_flat = local_masked_mse(pred.theta, zeros(size(T.theta), 'like', T.theta), flat_zero_mask);
+
+loss_aux = local_bce_logits(pred.slip_logit, T.slip) ...
+    + local_bce_logits(pred.stall_logit, T.stall) ...
+    + local_bce_logits(pred.load_logit, T.load_change);
+loss_aux = loss_aux / 3;
+
+loss_pitch = local_pitch_consistency_loss(pred.theta, X, scaler);
+
+total = loss_main + cfg.lambda_turn * loss_turn ...
+    + cfg.lambda_theta * loss_theta ...
+    + cfg.lambda_theta_flat * loss_theta_flat ...
+    + cfg.lambda_aux * loss_aux ...
+    + cfg.lambda_pitch_consistency * loss_pitch;
+
+losses = struct('total', total, 'main', loss_main, 'turn', loss_turn, ...
+    'theta', loss_theta, 'theta_flat', loss_theta_flat, ...
+    'aux', loss_aux, 'pitch', loss_pitch);
+
+grad_net = dlgradient(total, net.Learnables);
+grad_heads = struct();
+head_names = fieldnames(heads);
+for i = 1:numel(head_names)
+    grad_heads.(head_names{i}) = dlgradient(total, heads.(head_names{i}));
+end
+grads = struct('net', grad_net, 'heads', grad_heads);
+end
+
+function pred = local_forward(net, heads, X, cfg, inference_mode)
+if nargin < 5
+    inference_mode = false;
+end
+if inference_mode
+    Z = predict(net, X);
+else
+    Z = forward(net, X);
+end
+[H, H_inputstats] = local_temporal_readout(Z, X, cfg);
+H_turn = local_turn_readout(H, H_inputstats, cfg);
+
+logits_main = heads.main_W * H + heads.main_b;
+logits_turn = local_turn_logits(heads, H_turn, cfg);
+theta = heads.theta_W * H + heads.theta_b;
+slip_logit = heads.slip_W * H + heads.slip_b;
+stall_logit = heads.stall_W * H + heads.stall_b;
+load_logit = heads.load_W * H + heads.load_b;
+
+pred = struct();
+pred.logits_main = logits_main;
+pred.logits_turn = logits_turn;
+pred.prob_main = softmax(logits_main, 'DataFormat', 'CB');
+pred.prob_turn = softmax(logits_turn, 'DataFormat', 'CB');
+pred.theta = reshape(theta, [], 1);
+pred.slip_logit = reshape(slip_logit, [], 1);
+pred.stall_logit = reshape(stall_logit, [], 1);
+pred.load_logit = reshape(load_logit, [], 1);
+end
+
+function H_turn = local_turn_readout(H, H_inputstats, cfg)
+switch lower(char(cfg.turn_head_source))
+    case 'readout'
+        H_turn = H;
+    case 'inputstats'
+        H_turn = H_inputstats;
+    otherwise
+        error('GRU_TRAIN:BadTurnHeadSource', '未知 turn_head_source: %s', cfg.turn_head_source);
+end
+end
+
+function logits = local_turn_logits(heads, H_turn, cfg)
+switch lower(char(cfg.turn_head_type))
+    case 'linear'
+        logits = heads.turn_W * H_turn + heads.turn_b;
+    case 'mlp'
+        A = max(heads.turn_W1 * H_turn + heads.turn_b1, 0);
+        logits = heads.turn_W2 * A + heads.turn_b2;
+    otherwise
+        error('GRU_TRAIN:BadTurnHead', '未知 turn_head_type: %s', cfg.turn_head_type);
+end
+end
+
+function [H, H_inputstats] = local_temporal_readout(Z, X, cfg)
+H_inputstats = local_input_stats_readout(X);
+switch lower(char(cfg.head_pooling))
+    case 'last'
+        H = Z(:, end, :);
+    case 'last_mean'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H = cat(1, H_last, H_mean);
+    case 'last_mean_inputstats'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H = cat(1, H_last, H_mean, H_inputstats);
+    case 'last_mean_max'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H_max = max(Z, [], 2);
+        H = cat(1, H_last, H_mean, H_max);
+    case 'last_mean_max_inputstats'
+        H_last = Z(:, end, :);
+        H_mean = mean(Z, 2);
+        H_max = max(Z, [], 2);
+        H = cat(1, H_last, H_mean, H_max, H_inputstats);
+    otherwise
+        error('GRU_TRAIN:BadHeadPooling', '未知 head_pooling: %s', cfg.head_pooling);
+end
+H = reshape(H, size(H,1), []);
+H_inputstats = reshape(H_inputstats, size(H_inputstats,1), []);
+end
+
+function H = local_input_stats_readout(X)
+X_last = X(:, end, :);
+X_mean = mean(X, 2);
+X_std = sqrt(mean((X - X_mean).^2, 2) + 1e-8);
+X_max = max(X, [], 2);
+X_min = min(X, [], 2);
+H = cat(1, X_last, X_mean, X_std, X_max, X_min);
+end
+
+function loss = local_weighted_ce(prob, labels, class_weights, focal_gamma, use_focal, sample_weights)
+if nargin < 4 || isempty(focal_gamma)
+    focal_gamma = 0;
+end
+if nargin < 5 || isempty(use_focal)
+    use_focal = false;
+end
+if nargin < 6 || isempty(sample_weights)
+    sample_weights = ones(numel(labels), 1);
+end
+sample_weights = dlarray(reshape(sample_weights, [], 1));
+B = numel(labels);
+loss = dlarray(0);
+weight_sum = dlarray(0);
+for i = 1:B
+    c = labels(i);
+    pt = prob(c, i);
+    focal_factor = 1;
+    if use_focal && focal_gamma > 0
+        focal_factor = (1 - pt).^focal_gamma;
+    end
+    w = class_weights(c) * sample_weights(i);
+    loss = loss - w * focal_factor * log(pt + 1e-8);
+    weight_sum = weight_sum + w;
+end
+loss = loss / (weight_sum + 1e-8);
+end
+
+function w = local_main_sample_weights(main_labels, theta, cfg)
+main_labels = reshape(main_labels, [], 1);
+theta = reshape(theta, [], 1);
+w = ones(size(theta), 'like', theta);
+w(main_labels == 3 & theta < 0) = cfg.main_neg_slope_weight;
+w(main_labels == 3 & theta > 0) = cfg.main_pos_slope_weight;
+end
+
+function mask = local_theta_flat_zero_mask(main_labels, theta, mask_theta, cfg)
+main_labels = reshape(main_labels, [], 1);
+theta = reshape(theta, [], 1);
+mask_theta = reshape(mask_theta, [], 1);
+mode = lower(char(cfg.theta_flat_loss_mode));
+switch mode
+    case {'', 'none', 'off'}
+        mask = zeros(size(theta), 'like', theta);
+    case {'main_flat', 'flat', 'legacy'}
+        mask = double(main_labels == 1) .* mask_theta;
+    case {'near_flat', 'theta_near_flat'}
+        mask = double(abs(theta) <= deg2rad(cfg.theta_near_flat_deg)) .* mask_theta;
+    case {'true_zero', 'zero'}
+        mask = double(abs(theta) <= deg2rad(1e-4)) .* mask_theta;
+    case {'near_zero', 'very_near_zero'}
+        mask = double(abs(theta) <= deg2rad(cfg.theta_flat_zero_tol_deg)) .* mask_theta;
+    otherwise
+        error('GRU_TRAIN:BadThetaFlatLossMode', ...
+            '未知 theta_flat_loss_mode: %s', cfg.theta_flat_loss_mode);
+end
+end
+
+function loss = local_masked_mse(pred, target, mask)
+pred = reshape(pred, [], 1);
+target = dlarray(reshape(target, [], 1));
+mask = dlarray(reshape(mask, [], 1));
+loss = sum(((pred - target) .* mask).^2) / (sum(mask) + 1e-8);
+end
+
+function loss = local_weighted_theta_mse(pred, target, mask, cfg, sample_weights)
+if nargin < 5 || isempty(sample_weights)
+    sample_weights = ones(size(target), 'like', target);
+end
+pred = reshape(pred, [], 1);
+target = dlarray(reshape(target, [], 1));
+mask = dlarray(reshape(mask, [], 1));
+sample_weights = dlarray(reshape(sample_weights, [], 1));
+w = dlarray(ones(size(target), 'like', extractdata(target)));
+w = w + (cfg.theta_neg_weight - 1) * double(target < 0);
+w = w + (cfg.theta_pos_weight - 1) * double(target > 0);
+wm = w .* mask .* sample_weights;
+loss = sum(((pred - target).^2) .* wm) / (sum(wm) + 1e-8);
+end
+
+function loss = local_bce_logits(logits, target)
+target = dlarray(reshape(target, [], 1));
+loss = mean(max(logits, 0) - logits .* target + log(1 + exp(-abs(logits))));
+end
+
+function loss = local_pitch_consistency_loss(theta_pred, X, scaler)
+if numel(scaler.mean) < 19
+    loss = dlarray(0);
+    return;
+end
+pitch_norm = reshape(X(19, end, :), [], 1);
+pitch_est = pitch_norm * scaler.std(19) + scaler.mean(19);
+loss = mean((theta_pred - pitch_est).^2);
+end
+
+function w = local_class_weights(y, labels, method)
+counts = zeros(numel(labels), 1);
+for i = 1:numel(labels)
+    counts(i) = sum(y == labels(i));
+end
+counts_safe = max(counts, 1);
+switch lower(method)
+    case 'inverse'
+        w = 1 ./ counts_safe;
+    case 'sqrt_inverse'
+        w = 1 ./ sqrt(counts_safe);
+    case 'balanced'
+        w = sum(counts) ./ (numel(labels) * counts_safe);
+    otherwise
+        w = ones(numel(labels), 1);
+end
+w(counts == 0) = 0;
+if any(w > 0)
+    w = w / mean(w(w > 0));
+else
+    w = ones(numel(labels), 1);
+end
+end
+
+function lr = local_lr(cfg, epoch)
+switch lower(cfg.lr_schedule)
+    case 'cosine'
+        lr = cfg.initial_lr * 0.5 * (1 + cos(pi * (epoch - 1) / cfg.max_epochs));
+    otherwise
+        lr = cfg.initial_lr;
+end
+end
+
+function score = local_selection_score(val_metrics, cfg)
+switch lower(char(cfg.best_metric))
+    case 'loss'
+        score = val_metrics.total;
+    case 'composite'
+        theta_norm = val_metrics.mae_theta / max(deg2rad(cfg.select_theta_ref_deg), 1e-6);
+        if isfield(val_metrics, 'downhill') && isfield(val_metrics.downhill, 'slope_recall') ...
+                && isfinite(val_metrics.downhill.slope_recall)
+            downhill_error = 1 - val_metrics.downhill.slope_recall;
         else
-            % 普通数组
-            grad = gradients.(field);
-            grad_norm = grad_norm + sum(grad(:).^2);
+            downhill_error = 0;
         end
+        score = val_metrics.total ...
+            + cfg.select_main_error_weight * (1 - val_metrics.acc_main) ...
+            + cfg.select_turn_error_weight * (1 - val_metrics.acc_turn) ...
+            + cfg.select_theta_weight * theta_norm ...
+            + cfg.select_downhill_error_weight * downhill_error ...
+            + cfg.select_turn_transition_weight * local_positive_gap( ...
+                cfg.select_turn_transition_target, val_metrics.acc_turn_transition) ...
+            + cfg.select_turn_lr_weight * local_positive_gap( ...
+                cfg.select_turn_lr_target, min(val_metrics.recall_turn([1 3])));
+    case 'turn_priority'
+        theta_mae_deg = rad2deg(val_metrics.mae_theta);
+        main_penalty = max(0, cfg.select_main_floor - val_metrics.acc_main);
+        theta_penalty = max(0, theta_mae_deg - cfg.select_theta_floor_deg) / max(cfg.select_theta_floor_deg, 1e-6);
+        if isfield(val_metrics, 'downhill') && isfield(val_metrics.downhill, 'slope_recall') ...
+                && isfinite(val_metrics.downhill.slope_recall)
+            downhill_penalty = max(0, cfg.select_downhill_floor - val_metrics.downhill.slope_recall);
+        else
+            downhill_penalty = 0;
+        end
+        score = (1 - val_metrics.acc_turn) ...
+            + cfg.turn_priority_main_penalty_weight * main_penalty ...
+            + cfg.turn_priority_theta_penalty_weight * theta_penalty ...
+            + cfg.turn_priority_downhill_penalty_weight * downhill_penalty ...
+            + cfg.turn_priority_loss_weight * val_metrics.total;
+    otherwise
+        error('GRU_TRAIN:BadBestMetric', '未知 best_metric: %s', cfg.best_metric);
+end
+end
+
+function gap = local_positive_gap(target, value)
+if ~isfinite(value)
+    gap = 0;
+else
+    gap = max(0, target - value);
+end
+end
+
+function rf = local_receptive_field(cfg)
+if isfield(cfg, 'seq_len')
+    rf = cfg.seq_len;
+else
+    rf = NaN;
+end
+end
+
+function acc = local_epoch_accumulator()
+fields = {'total','main','turn','theta','theta_flat','aux','pitch'};
+for i = 1:numel(fields)
+    acc.(fields{i}) = 0;
+end
+end
+
+function acc = local_accumulate(acc, losses)
+fields = fieldnames(acc);
+for i = 1:numel(fields)
+    acc.(fields{i}) = acc.(fields{i}) + double(gather(extractdata(losses.(fields{i}))));
+end
+end
+
+function avg = local_average_acc(acc, n)
+fields = fieldnames(acc);
+avg = struct();
+for i = 1:numel(fields)
+    avg.(fields{i}) = acc.(fields{i}) / max(n, 1);
+end
+end
+
+function history = local_empty_history()
+history = struct('epoch', [], 'lr', [], 'train_total', [], 'val_total', [], ...
+    'val_acc_main', [], 'val_acc_turn', [], 'val_mae_theta', [], ...
+    'val_acc_turn_pure', [], 'val_acc_turn_transition', []);
+end
+
+function history = local_append_history(history, epoch, lr, train_losses, val_metrics)
+history.epoch(end+1) = epoch;
+history.lr(end+1) = lr;
+history.train_total(end+1) = train_losses.total;
+history.val_total(end+1) = val_metrics.total;
+history.val_acc_main(end+1) = val_metrics.acc_main;
+history.val_acc_turn(end+1) = val_metrics.acc_turn;
+history.val_mae_theta(end+1) = val_metrics.mae_theta;
+history.val_acc_turn_pure(end+1) = local_metric_or_nan(val_metrics, 'acc_turn_pure');
+history.val_acc_turn_transition(end+1) = local_metric_or_nan(val_metrics, 'acc_turn_transition');
+end
+
+function v = local_metric_or_nan(s, field_name)
+if isstruct(s) && isfield(s, field_name)
+    v = s.(field_name);
+else
+    v = NaN;
+end
+end
+
+function metrics = local_evaluate(net, heads, X, Y, scaler, cfg, class_w_main, class_w_turn, exec_env)
+n = size(X, 3);
+num_batches = ceil(n / cfg.batch_size);
+acc = local_epoch_accumulator();
+pred_main_all = zeros(n, 1);
+pred_turn_all = zeros(n, 1);
+main_conf_all = zeros(n, 1);
+turn_conf_all = zeros(n, 1);
+theta_all = zeros(n, 1);
+
+for b = 1:num_batches
+    i0 = (b - 1) * cfg.batch_size + 1;
+    i1 = min(b * cfg.batch_size, n);
+    idx = i0:i1;
+    Xb = dlarray(X(:,:,idx), 'CBT');
+    Tb = local_batch_targets(Y, idx, exec_env);
+    if strcmp(exec_env, 'gpu')
+        Xb = gpuArray(Xb);
     end
-    grad_norm = sqrt(grad_norm);
-    
-    % 裁剪
-    if grad_norm > threshold
-        scale = threshold / grad_norm;
-        for i = 1:length(fields)
-            field = fields{i};
-            if istable(gradients.(field))
-                for j = 1:height(gradients.(field))
-                    gradients.(field).Value{j} = gradients.(field).Value{j} * scale;
-                end
-            else
-                gradients.(field) = gradients.(field) * scale;
-            end
+
+    pred = local_forward(net, heads, Xb, cfg, true);
+    losses = local_eval_losses(pred, Xb, Tb, scaler, cfg, class_w_main, class_w_turn);
+    acc = local_accumulate(acc, losses);
+
+    prob_main = extractdata(gather(pred.prob_main));
+    prob_turn = extractdata(gather(pred.prob_turn));
+    [main_conf, pm] = max(prob_main, [], 1);
+    [turn_conf, pt] = max(prob_turn, [], 1);
+    pred_main_all(idx) = pm(:);
+    pred_turn_all(idx) = pt(:);
+    main_conf_all(idx) = main_conf(:);
+    turn_conf_all(idx) = turn_conf(:);
+    theta_all(idx) = extractdata(gather(pred.theta));
+end
+
+metrics = local_average_acc(acc, num_batches);
+metrics.acc_main = mean(pred_main_all == Y.main);
+metrics.acc_turn = mean((pred_turn_all - 2) == Y.turn);
+metrics.confidence_main = local_confidence_summary(main_conf_all, pred_main_all == Y.main);
+metrics.confidence_turn = local_confidence_summary(turn_conf_all, (pred_turn_all - 2) == Y.turn);
+metrics.cm_main = confusionmat(Y.main, pred_main_all, 'Order', [1 2 3]);
+metrics.cm_turn = confusionmat(Y.turn, pred_turn_all - 2, 'Order', [-1 0 1]);
+metrics.recall_main = diag(metrics.cm_main) ./ max(sum(metrics.cm_main, 2), 1);
+metrics.recall_turn = diag(metrics.cm_turn) ./ max(sum(metrics.cm_turn, 2), 1);
+metrics.precision_main = diag(metrics.cm_main) ./ max(sum(metrics.cm_main, 1)', 1);
+metrics.precision_turn = diag(metrics.cm_turn) ./ max(sum(metrics.cm_turn, 1)', 1);
+turn_pred = pred_turn_all - 2;
+pure_mask = isfinite(Y.turn_purity) & Y.turn_purity >= 0.8 & ~logical(Y.turn_transition);
+transition_mask = logical(Y.turn_transition);
+metrics.acc_turn_pure = local_masked_acc(turn_pred, Y.turn, pure_mask);
+metrics.acc_turn_transition = local_masked_acc(turn_pred, Y.turn, transition_mask);
+metrics.n_turn_pure = sum(pure_mask);
+metrics.n_turn_transition = sum(transition_mask);
+slope_idx = find(Y.mask_theta == 1);
+if isempty(slope_idx)
+    metrics.mae_theta = 0;
+    metrics.theta_true_range_deg = [NaN NaN];
+    metrics.theta_pred_range_deg = [NaN NaN];
+    metrics.slope_sign_acc = NaN;
+    metrics.uphill = local_empty_slope_submetric();
+    metrics.downhill = local_empty_slope_submetric();
+else
+    metrics.mae_theta = mean(abs(theta_all(slope_idx) - Y.theta(slope_idx)));
+    metrics.theta_true_range_deg = rad2deg([min(Y.theta(slope_idx)), max(Y.theta(slope_idx))]);
+    metrics.theta_pred_range_deg = rad2deg([min(theta_all(slope_idx)), max(theta_all(slope_idx))]);
+    metrics.slope_sign_acc = mean(sign(theta_all(slope_idx)) == sign(Y.theta(slope_idx)));
+    metrics.uphill = local_slope_submetric(slope_idx(Y.theta(slope_idx) > 0), ...
+        pred_main_all, theta_all, Y.theta);
+    metrics.downhill = local_slope_submetric(slope_idx(Y.theta(slope_idx) < 0), ...
+        pred_main_all, theta_all, Y.theta);
+end
+slope_mask = logical(Y.mask_theta(:));
+theta_deg = rad2deg(Y.theta(:));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_abs_le_8', theta_all, Y.theta, ...
+    slope_mask & abs(theta_deg) <= 8.0));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_abs_le_10', theta_all, Y.theta, ...
+    slope_mask & abs(theta_deg) <= 10.0));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_pos_8_10', theta_all, Y.theta, ...
+    slope_mask & theta_deg >= 8.0 & theta_deg <= 10.0));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_neg_10_8', theta_all, Y.theta, ...
+    slope_mask & theta_deg >= -10.0 & theta_deg <= -8.0));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_pos_6_8', theta_all, Y.theta, ...
+    slope_mask & theta_deg >= 6.0 & theta_deg <= 8.0));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_neg_8_6', theta_all, Y.theta, ...
+    slope_mask & theta_deg >= -8.0 & theta_deg <= -6.0));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_neg_2_0p5', theta_all, Y.theta, ...
+    slope_mask & theta_deg >= -2.0 & theta_deg <= -0.5));
+metrics = local_merge_struct(metrics, local_theta_error_zone('theta_pos_0p5_2', theta_all, Y.theta, ...
+    slope_mask & theta_deg >= 0.5 & theta_deg <= 2.0));
+metrics = local_merge_struct(metrics, local_theta_zone('theta_flat', theta_all, Y.theta, Y.main == 1));
+metrics = local_merge_struct(metrics, local_theta_zone('theta_near_flat', theta_all, Y.theta, abs(theta_deg) <= 0.5));
+metrics = local_merge_struct(metrics, local_theta_zone('theta_true_zero', theta_all, Y.theta, abs(theta_deg) <= 1e-6));
+end
+
+function s = local_empty_slope_submetric()
+s = struct('n', 0, 'slope_recall', NaN, 'theta_mae_deg', NaN, ...
+    'theta_sign_acc', NaN, 'pred_theta_range_deg', [NaN NaN], ...
+    'true_theta_range_deg', [NaN NaN]);
+end
+
+function acc = local_masked_acc(pred, truth, mask)
+if ~any(mask)
+    acc = NaN;
+else
+    acc = mean(pred(mask) == truth(mask));
+end
+end
+
+function s = local_confidence_summary(confidence, correct)
+confidence = double(confidence(:));
+correct = logical(correct(:));
+s = struct();
+if isempty(confidence)
+    s.mean = NaN;
+    s.error_mean = NaN;
+    s.low_conf_0p60_ratio = NaN;
+    s.low_conf_0p70_ratio = NaN;
+    s.bins = struct('bin', {}, 'n', {}, 'error_rate', {}, 'mean_confidence', {});
+    return;
+end
+s.mean = mean(confidence);
+if any(~correct)
+    s.error_mean = mean(confidence(~correct));
+else
+    s.error_mean = NaN;
+end
+s.low_conf_0p60_ratio = mean(confidence < 0.60);
+s.low_conf_0p70_ratio = mean(confidence < 0.70);
+edges = [0.0, 0.60, 0.70, 0.80, 0.90, 1.0000001];
+s.bins = repmat(struct('bin', '', 'n', 0, 'error_rate', NaN, 'mean_confidence', NaN), numel(edges)-1, 1);
+for i = 1:(numel(edges)-1)
+    lo = edges(i);
+    hi = edges(i+1);
+    mask = confidence >= lo & confidence < hi;
+    s.bins(i).bin = sprintf('[%.2f,%.2f)', lo, min(hi, 1.0));
+    s.bins(i).n = sum(mask);
+    if any(mask)
+        s.bins(i).error_rate = mean(~correct(mask));
+        s.bins(i).mean_confidence = mean(confidence(mask));
+    end
+end
+end
+
+function s = local_slope_submetric(idx, pred_main_all, theta_all, theta_true)
+s = local_empty_slope_submetric();
+s.n = numel(idx);
+if isempty(idx)
+    return;
+end
+s.slope_recall = mean(pred_main_all(idx) == 3);
+s.theta_mae_deg = rad2deg(mean(abs(theta_all(idx) - theta_true(idx))));
+s.theta_sign_acc = mean(sign(theta_all(idx)) == sign(theta_true(idx)));
+s.pred_theta_range_deg = rad2deg([min(theta_all(idx)), max(theta_all(idx))]);
+s.true_theta_range_deg = rad2deg([min(theta_true(idx)), max(theta_true(idx))]);
+end
+
+function out = local_merge_struct(out, add)
+names = fieldnames(add);
+for i = 1:numel(names)
+    out.(names{i}) = add.(names{i});
+end
+end
+
+function m = local_theta_error_zone(prefix, theta_hat, theta_true, mask)
+mask = logical(mask(:));
+m = struct();
+if ~any(mask)
+    m.([prefix '_mae_deg']) = NaN;
+    m.([prefix '_rmse_deg']) = NaN;
+    m.([prefix '_p95_abs_err_deg']) = NaN;
+    m.([prefix '_max_abs_err_deg']) = NaN;
+    m.([prefix '_bias_deg']) = NaN;
+    m.([prefix '_n']) = 0;
+    return;
+end
+err_deg = rad2deg(theta_hat(mask) - theta_true(mask));
+m.([prefix '_mae_deg']) = mean(abs(err_deg), 'omitnan');
+m.([prefix '_rmse_deg']) = sqrt(mean(err_deg.^2, 'omitnan'));
+m.([prefix '_p95_abs_err_deg']) = prctile(abs(err_deg), 95);
+m.([prefix '_max_abs_err_deg']) = max(abs(err_deg));
+m.([prefix '_bias_deg']) = mean(err_deg, 'omitnan');
+m.([prefix '_n']) = sum(mask);
+end
+
+function m = local_theta_zone(prefix, theta_hat, theta_true, mask)
+mask = logical(mask(:));
+m = struct();
+if ~any(mask)
+    m.([prefix '_mae_deg']) = NaN;
+    m.([prefix '_abs_p95_deg']) = NaN;
+    m.([prefix '_abs_max_deg']) = NaN;
+    m.([prefix '_bias_deg']) = NaN;
+    m.([prefix '_n']) = 0;
+    return;
+end
+err = theta_hat(mask) - theta_true(mask);
+abs_theta_deg = abs(rad2deg(theta_hat(mask)));
+m.([prefix '_mae_deg']) = rad2deg(mean(abs(err), 'omitnan'));
+m.([prefix '_abs_p95_deg']) = prctile(abs_theta_deg, 95);
+m.([prefix '_abs_max_deg']) = max(abs_theta_deg);
+m.([prefix '_bias_deg']) = rad2deg(mean(err, 'omitnan'));
+m.([prefix '_n']) = sum(mask);
+end
+
+function losses = local_eval_losses(pred, X, T, scaler, cfg, class_w_main, class_w_turn)
+main_sample_w = local_main_sample_weights(T.main, T.theta, cfg) .* reshape(T.main_weight, [], 1);
+loss_main = local_weighted_ce(pred.prob_main, T.main, class_w_main, ...
+    cfg.focal_gamma_main, cfg.use_focal_loss, main_sample_w);
+loss_turn = local_weighted_ce(pred.prob_turn, T.turn_cls, class_w_turn, ...
+    cfg.focal_gamma_turn, cfg.use_focal_loss, T.turn_weight);
+loss_theta = local_weighted_theta_mse(pred.theta, T.theta, T.mask_theta, cfg, T.theta_weight);
+flat_zero_mask = local_theta_flat_zero_mask(T.main, T.theta, T.mask_theta, cfg);
+loss_theta_flat = local_masked_mse(pred.theta, zeros(size(T.theta), 'like', T.theta), flat_zero_mask);
+loss_aux = (local_bce_logits(pred.slip_logit, T.slip) ...
+    + local_bce_logits(pred.stall_logit, T.stall) ...
+    + local_bce_logits(pred.load_logit, T.load_change)) / 3;
+loss_pitch = local_pitch_consistency_loss(pred.theta, X, scaler);
+total = loss_main + cfg.lambda_turn * loss_turn ...
+    + cfg.lambda_theta * loss_theta ...
+    + cfg.lambda_theta_flat * loss_theta_flat ...
+    + cfg.lambda_aux * loss_aux ...
+    + cfg.lambda_pitch_consistency * loss_pitch;
+losses = struct('total', total, 'main', loss_main, 'turn', loss_turn, ...
+    'theta', loss_theta, 'theta_flat', loss_theta_flat, ...
+    'aux', loss_aux, 'pitch', loss_pitch);
+end
+
+function grads = local_clip_gradients(grads, threshold, cfg)
+if nargin < 3 || ~isfield(cfg, 'grad_clip_mode')
+    mode = 'global';
+else
+    mode = lower(char(cfg.grad_clip_mode));
+end
+switch mode
+    case 'global'
+        grads = local_clip_gradients_global(grads, threshold);
+    case 'separate'
+        grads.net = local_clip_learnable_table(grads.net, threshold);
+        names = fieldnames(grads.heads);
+        for i = 1:numel(names)
+            grads.heads.(names{i}) = local_clip_array(grads.heads.(names{i}), threshold);
         end
+    otherwise
+        error('GRU_TRAIN:BadGradClipMode', '未知 grad_clip_mode: %s', cfg.grad_clip_mode);
+end
+end
+
+function grads = local_clip_gradients_global(grads, threshold)
+norm_sq = dlarray(0);
+for i = 1:height(grads.net)
+    g = grads.net.Value{i};
+    norm_sq = norm_sq + sum(g(:).^2);
+end
+names = fieldnames(grads.heads);
+for i = 1:numel(names)
+    g = grads.heads.(names{i});
+    norm_sq = norm_sq + sum(g(:).^2);
+end
+norm_val = sqrt(norm_sq);
+if double(gather(extractdata(norm_val))) <= threshold
+    return;
+end
+scale = threshold / norm_val;
+for i = 1:height(grads.net)
+    grads.net.Value{i} = grads.net.Value{i} * scale;
+end
+for i = 1:numel(names)
+    grads.heads.(names{i}) = grads.heads.(names{i}) * scale;
+end
+end
+
+function T = local_clip_learnable_table(T, threshold)
+norm_sq = dlarray(0);
+for i = 1:height(T)
+    g = T.Value{i};
+    norm_sq = norm_sq + sum(g(:).^2);
+end
+norm_val = sqrt(norm_sq);
+if double(gather(extractdata(norm_val))) <= threshold
+    return;
+end
+scale = threshold / norm_val;
+for i = 1:height(T)
+    T.Value{i} = T.Value{i} * scale;
+end
+end
+
+function g = local_clip_array(g, threshold)
+norm_val = sqrt(sum(g(:).^2));
+if double(gather(extractdata(norm_val))) <= threshold
+    return;
+end
+g = g * (threshold / norm_val);
+end
+
+function [net, heads, opt] = local_adam_update(net, heads, grads, opt, lr)
+beta1 = 0.9;
+beta2 = 0.999;
+epsv = 1e-8;
+
+if isempty(opt.avg)
+    opt.avg.net = grads.net;
+    opt.avg.net.Value(:) = {0};
+    opt.avgSq.net = grads.net;
+    opt.avgSq.net.Value(:) = {0};
+    names = fieldnames(heads);
+    for i = 1:numel(names)
+        opt.avg.heads.(names{i}) = 0;
+        opt.avgSq.heads.(names{i}) = 0;
     end
 end
 
-function [params, adamState] = adamUpdate(params, gradients, adamState, learningRate)
-% Adam优化器更新
-    beta1 = 0.9;
-    beta2 = 0.999;
-    epsilon = 1e-8;
-    
-    adamState.iter = adamState.iter + 1;
-    
-    % 初始化状态
-    if isempty(adamState.avgGrad)
-        adamState.avgGrad = struct();
-        adamState.avgSqGrad = struct();
-    end
-    
-    % 更新 net_feature
-    if ~isfield(adamState.avgGrad, 'net_feature')
-        adamState.avgGrad.net_feature = gradients.net_feature;
-        adamState.avgGrad.net_feature.Value(:) = {0};
-        adamState.avgSqGrad.net_feature = gradients.net_feature;
-        adamState.avgSqGrad.net_feature.Value(:) = {0};
-    end
-    
-    for i = 1:height(params.net_feature)
-        grad = gradients.net_feature.Value{i};
-        
-        % 更新一阶矩估计
-        adamState.avgGrad.net_feature.Value{i} = ...
-            beta1 * adamState.avgGrad.net_feature.Value{i} + (1 - beta1) * grad;
-        
-        % 更新二阶矩估计
-        adamState.avgSqGrad.net_feature.Value{i} = ...
-            beta2 * adamState.avgSqGrad.net_feature.Value{i} + (1 - beta2) * (grad .^ 2);
-        
-        % 偏差修正
-        m_hat = adamState.avgGrad.net_feature.Value{i} / (1 - beta1^adamState.iter);
-        v_hat = adamState.avgSqGrad.net_feature.Value{i} / (1 - beta2^adamState.iter);
-        
-        % 更新参数
-        params.net_feature.Value{i} = params.net_feature.Value{i} - ...
-            learningRate * m_hat ./ (sqrt(v_hat) + epsilon);
-    end
-    
-    % 更新其他参数（fc权重和偏置）
-    param_names = {'fc_main_weights', 'fc_main_bias', 'fc_turn_weights', ...
-                   'fc_turn_bias', 'fc_theta_weights', 'fc_theta_bias'};
-    
-    for i = 1:length(param_names)
-        name = param_names{i};
-        grad = gradients.(name);
-        
-        if ~isfield(adamState.avgGrad, name)
-            adamState.avgGrad.(name) = 0;
-            adamState.avgSqGrad.(name) = 0;
-        end
-        
-        % 更新矩估计
-        adamState.avgGrad.(name) = beta1 * adamState.avgGrad.(name) + (1 - beta1) * grad;
-        adamState.avgSqGrad.(name) = beta2 * adamState.avgSqGrad.(name) + (1 - beta2) * (grad .^ 2);
-        
-        % 偏差修正
-        m_hat = adamState.avgGrad.(name) / (1 - beta1^adamState.iter);
-        v_hat = adamState.avgSqGrad.(name) / (1 - beta2^adamState.iter);
-        
-        % 更新参数
-        params.(name) = params.(name) - learningRate * m_hat ./ (sqrt(v_hat) + epsilon);
-    end
+learnables = net.Learnables;
+for i = 1:height(learnables)
+    g = grads.net.Value{i};
+    opt.avg.net.Value{i} = beta1 * opt.avg.net.Value{i} + (1 - beta1) * g;
+    opt.avgSq.net.Value{i} = beta2 * opt.avgSq.net.Value{i} + (1 - beta2) * (g.^2);
+    mhat = opt.avg.net.Value{i} / (1 - beta1^opt.iter);
+    vhat = opt.avgSq.net.Value{i} / (1 - beta2^opt.iter);
+    learnables.Value{i} = learnables.Value{i} - lr * mhat ./ (sqrt(vhat) + epsv);
 end
-function analysis = analyzeModelPerformance(CM, precision, recall, f1, macro_f1, ...
-    class_counts, class_names, weight_method)
-% 自动分析模型性能并给出改进建议（V1.1新增）
-% 输入:
-%   CM: 混淆矩阵 [n_classes × n_classes]
-%   precision, recall, f1: per-class指标 [n_classes × 1]
-%   macro_f1: macro-F1分数
-%   class_counts: 训练集类别样本数 [n_classes × 1]
-%   class_names: 类别名称 cell array
-%   weight_method: 当前使用的类别权重方法
-% 输出:
-%   analysis: 分析结果结构体
-%     .overall_status: 整体评估（字符串）
-%     .recommendations: 改进建议（cell array）
-%     .warnings: 警告信息（cell array）
-%     .metrics: 关键指标汇总
+net.Learnables = learnables;
 
-    n_classes = length(class_names);
-    analysis = struct();
-    analysis.recommendations = {};
-    analysis.warnings = {};
-    
-    % ========== 1. 整体评估 ==========
-    if macro_f1 >= 0.85
-        analysis.overall_status = '🎯 完美！所有类别表现优秀';
-    elseif macro_f1 >= 0.75
-        analysis.overall_status = '✅ 良好，但仍有提升空间';
-    elseif macro_f1 >= 0.65
-        analysis.overall_status = '⚠️ 需要关注，部分类别表现不佳';
-    else
-        analysis.overall_status = '❌ 需要改进，模型泛化能力不足';
-    end
-    
-    % ========== 2. 类别不平衡分析 ==========
-    max_count = max(class_counts);
-    min_count = min(class_counts);
-    imbalance_ratio = max_count / min_count;
-    
-    analysis.metrics.imbalance_ratio = imbalance_ratio;
-    analysis.metrics.min_class_samples = min_count;
-    analysis.metrics.max_class_samples = max_count;
-    
-    if imbalance_ratio > 10
-        analysis.warnings{end+1} = sprintf('严重类别不平衡（比例 %.1f:1），最少类仅%d样本', ...
-            imbalance_ratio, min_count);
-        analysis.recommendations{end+1} = '🔴 强烈建议：对少数类进行过采样或SMOTE数据增强';
-    elseif imbalance_ratio > 5
-        analysis.warnings{end+1} = sprintf('中度类别不平衡（比例 %.1f:1）', imbalance_ratio);
-        analysis.recommendations{end+1} = '🟡 建议：考虑调整类别权重或适度过采样';
-    elseif imbalance_ratio > 3
-        analysis.recommendations{end+1} = sprintf('📊 轻度类别不平衡（比例 %.1f:1），当前权重策略（%s）应已充分补偿', ...
-            imbalance_ratio, weight_method);
-    end
-    
-    % ========== 3. Per-Class 性能分析 ==========
-    low_recall_classes = {};
-    low_precision_classes = {};
-    low_f1_classes = {};
-    low_sample_classes = {};
-    
-    for c = 1:n_classes
-        % 召回率检查
-        if recall(c) < 0.60
-            low_recall_classes{end+1} = class_names{c};
-            analysis.warnings{end+1} = sprintf('%s 召回率极低（%.2f%%），大量漏检！', ...
-                class_names{c}, recall(c)*100);
-        elseif recall(c) < 0.70
-            low_recall_classes{end+1} = class_names{c};
-        end
-        
-        % 精确率检查
-        if precision(c) < 0.60
-            low_precision_classes{end+1} = class_names{c};
-            analysis.warnings{end+1} = sprintf('%s 精确率极低（%.2f%%），可能存在标注错误！', ...
-                class_names{c}, precision(c)*100);
-        end
-        
-        % F1检查
-        if f1(c) < 0.65
-            low_f1_classes{end+1} = class_names{c};
-        end
-        
-        % 样本量检查
-        if class_counts(c) < 500
-            low_sample_classes{end+1} = sprintf('%s(%d)', class_names{c}, class_counts(c));
-        end
-    end
-    
-    % ========== 4. 生成建议 ==========
-    
-    % 低召回率建议
-    if ~isempty(low_recall_classes)
-        % 分析原因
-        for c = 1:n_classes
-            if ismember(class_names{c}, low_recall_classes)
-                if precision(c) > 0.75 && recall(c) < 0.70
-                    analysis.recommendations{end+1} = sprintf(...
-                        '⚖️ %s：高精确率（%.2f）但低召回率（%.2f） → 增加类别权重（当前方法：%s）', ...
-                        class_names{c}, precision(c), recall(c), weight_method);
-                elseif class_counts(c) < 500
-                    analysis.recommendations{end+1} = sprintf(...
-                        '📈 %s：样本量不足（%d） → 增加数据或过采样', ...
-                        class_names{c}, class_counts(c));
-                else
-                    analysis.recommendations{end+1} = sprintf(...
-                        '🔍 %s：召回率低（%.2f） → 检查特征区分度或增强该类数据多样性', ...
-                        class_names{c}, recall(c));
-                end
-            end
-        end
-    end
-    
-    % 低精确率建议
-    if ~isempty(low_precision_classes)
-        for c = 1:n_classes
-            if ismember(class_names{c}, low_precision_classes)
-                analysis.recommendations{end+1} = sprintf(...
-                    '🔄 %s：精确率低（%.2f） → 检查标注质量或该类与其他类的混淆情况', ...
-                    class_names{c}, precision(c));
-            end
-        end
-    end
-    
-    % 样本量不足建议
-    if ~isempty(low_sample_classes)
-        analysis.recommendations{end+1} = sprintf(...
-            '📊 样本量不足的类别：%s → 建议每类至少收集500+样本', ...
-            strjoin(low_sample_classes, ', '));
-    end
-    
-    % ========== 5. 混淆对分析 ==========
-    confusion_pairs = {};
-    for r = 1:n_classes
-        for c = 1:n_classes
-            if r ~= c
-                confusion_rate = CM(r, c) / sum(CM(r, :));
-                if confusion_rate > 0.20  % 超过20%的错分
-                    pair_str = sprintf('%s → %s (%.1f%%)', ...
-                        class_names{r}, class_names{c}, confusion_rate*100);
-                    confusion_pairs{end+1} = pair_str;
-                end
-            end
-        end
-    end
-    
-    if ~isempty(confusion_pairs)
-        analysis.warnings{end+1} = '严重混淆对检测：';
-        for i = 1:length(confusion_pairs)
-            analysis.warnings{end+1} = sprintf('  - %s', confusion_pairs{i});
-        end
-        analysis.recommendations{end+1} = ...
-            '🔍 建议：分析上述混淆对的特征差异，考虑添加区分性特征或数据增强';
-    end
-    
-    % ========== 6. 权重策略建议 ==========
-    if strcmp(weight_method, 'inverse') && imbalance_ratio > 5
-        analysis.recommendations{end+1} = ...
-            '⚖️ 当前使用 inverse 权重，不平衡比例较高 → 可尝试 ''sqrt_inverse'' 平滑权重差异';
-    elseif strcmp(weight_method, 'sqrt_inverse') && min(recall) < 0.60
-        analysis.recommendations{end+1} = ...
-            '⚖️ 当前使用 sqrt_inverse 权重，少数类召回率仍低 → 可尝试 ''inverse'' 增强权重';
-    end
-    
-    % ========== 7. 训练策略建议 ==========
-    if macro_f1 < 0.75 && macro_f1 > 0.65
-        analysis.recommendations{end+1} = ...
-            '📈 macro-F1处于边界值 → 建议增加训练轮数或调整学习率';
-    end
-    
-    % ========== 8. 汇总指标 ==========
-    analysis.metrics.macro_f1 = macro_f1;
-    analysis.metrics.min_recall = min(recall);
-    analysis.metrics.max_recall = max(recall);
-    analysis.metrics.min_precision = min(precision);
-    analysis.metrics.num_low_recall_classes = length(low_recall_classes);
-    analysis.metrics.num_confusion_pairs = length(confusion_pairs);
-    
-    % 如果没有建议，给予肯定
-    if isempty(analysis.recommendations)
-        analysis.recommendations{1} = '✨ 模型表现优秀，无需额外调整！';
-    end
-    
-    % 如果没有警告，表示正常
-    if isempty(analysis.warnings)
-        analysis.warnings{1} = '✅ 无异常警告';
-    end
+names = fieldnames(heads);
+for i = 1:numel(names)
+    name = names{i};
+    g = grads.heads.(name);
+    opt.avg.heads.(name) = beta1 * opt.avg.heads.(name) + (1 - beta1) * g;
+    opt.avgSq.heads.(name) = beta2 * opt.avgSq.heads.(name) + (1 - beta2) * (g.^2);
+    mhat = opt.avg.heads.(name) / (1 - beta1^opt.iter);
+    vhat = opt.avgSq.heads.(name) / (1 - beta2^opt.iter);
+    heads.(name) = heads.(name) - lr * mhat ./ (sqrt(vhat) + epsv);
+end
 end
 
+function heads = local_gather_heads(heads)
+names = fieldnames(heads);
+for i = 1:numel(names)
+    heads.(names{i}) = gather(heads.(names{i}));
+end
+end
+
+function local_write_training_report(cfg, meta, test_metrics)
+fid = fopen(cfg.report_file, 'w');
+if fid < 0
+    warning('GRU_TRAIN:ReportWriteFailed', 'Cannot write report: %s', cfg.report_file);
+    return;
+end
+cleanup = onCleanup(@() fclose(fid));
+fprintf(fid, '# GRU 训练报告\n\n');
+fprintf(fid, '- 生成时间: %s\n', meta.created_at);
+fprintf(fid, '- 训练模式: `%s`\n', meta.mode);
+fprintf(fid, '- 数据集: `%s`\n', cfg.input_file);
+fprintf(fid, '- 模型文件: `%s`\n', cfg.model_file);
+fprintf(fid, '- 最佳轮次: %d\n', meta.best_epoch);
+if isfield(meta, 'base_best_epoch') && isfinite(meta.base_best_epoch)
+    fprintf(fid, '- 主任务基座最佳轮次: %d\n', meta.base_best_epoch);
+end
+fprintf(fid, '- 最佳验证损失: %.6f\n', meta.best_val_loss);
+fprintf(fid, '- 最佳选择分数: %.6f\n', meta.best_selection_score);
+if isfield(meta, 'base_best_selection_score') && isfinite(meta.base_best_selection_score)
+    fprintf(fid, '- 主任务基座选择分数: %.6f\n', meta.base_best_selection_score);
+end
+fprintf(fid, '- 选模指标: `%s`\n', cfg.best_metric);
+fprintf(fid, '- Base best metric: `%s`, combine_base_and_turn_best=%d\n', ...
+    cfg.base_best_metric, double(cfg.combine_base_and_turn_best));
+fprintf(fid, '- Head pooling: `%s`\n', cfg.head_pooling);
+fprintf(fid, '- Turn head: `%s`, source=`%s`, hidden=%d\n', ...
+    cfg.turn_head_type, cfg.turn_head_source, cfg.turn_head_hidden);
+if isfinite(cfg.turn_finetune_start_epoch)
+    fprintf(fid, '- Turn finetune: start_epoch=%d, lambda_turn=%.3f, disable_other_losses=%d\n', ...
+        cfg.turn_finetune_start_epoch, cfg.turn_finetune_lambda_turn, ...
+        double(cfg.turn_finetune_disable_other_losses));
+end
+fprintf(fid, '- Gradient clip: `%s`, threshold=%.3f\n', cfg.grad_clip_mode, cfg.grad_clip);
+fprintf(fid, '- 损失权重: 转弯=%.3f, 坡度=%.3f, 平地坡度约束=%.3f, 辅助=%.3f, pitch一致性=%.3f\n', ...
+    cfg.lambda_turn, cfg.lambda_theta, cfg.lambda_theta_flat, cfg.lambda_aux, cfg.lambda_pitch_consistency);
+fprintf(fid, '- 平地坡度约束模式: `%s`, near-zero tol=%.3f deg\n', ...
+    cfg.theta_flat_loss_mode, cfg.theta_flat_zero_tol_deg);
+fprintf(fid, '- 坡度符号权重: 负坡=%.3f, 正坡=%.3f\n', ...
+    cfg.theta_neg_weight, cfg.theta_pos_weight);
+fprintf(fid, '- 主分类 slope 样本权重: 负坡=%.3f, 正坡=%.3f\n', ...
+    cfg.main_neg_slope_weight, cfg.main_pos_slope_weight);
+fprintf(fid, '- 下坡选模惩罚权重: %.3f\n', cfg.select_downhill_error_weight);
+fprintf(fid, '- 转弯过渡选模: weight=%.3f, target=%.3f\n', ...
+    cfg.select_turn_transition_weight, cfg.select_turn_transition_target);
+fprintf(fid, '- 左右转最小召回选模: weight=%.3f, target=%.3f\n', ...
+    cfg.select_turn_lr_weight, cfg.select_turn_lr_target);
+fprintf(fid, '- 类别权重策略: main=`%s`, turn=`%s`\n', ...
+    cfg.class_weight_method, cfg.turn_class_weight_method);
+fprintf(fid, '- 转弯类别乘子 [right straight left]: [%.3f %.3f %.3f]\n', ...
+    cfg.turn_class_multipliers(1), cfg.turn_class_multipliers(2), cfg.turn_class_multipliers(3));
+fprintf(fid, '- Focal loss: enable=%d, gamma_main=%.3f, gamma_turn=%.3f\n', ...
+    double(cfg.use_focal_loss), cfg.focal_gamma_main, cfg.focal_gamma_turn);
+fprintf(fid, '- 感受野: %d steps / %.3f s\n\n', ...
+    meta.receptive_field_steps, meta.receptive_field_seconds);
+
+fprintf(fid, '## 测试指标\n\n');
+fprintf(fid, '| 指标 | 数值 |\n|---|---:|\n');
+fprintf(fid, '| 总损失 | %.6f |\n', test_metrics.total);
+fprintf(fid, '| 主工况准确率 | %.4f |\n', test_metrics.acc_main);
+fprintf(fid, '| 转弯准确率 | %.4f |\n', test_metrics.acc_turn);
+fprintf(fid, '| 转弯纯窗口准确率 | %.4f |\n', test_metrics.acc_turn_pure);
+fprintf(fid, '| 转弯过渡窗口准确率 | %.4f |\n', test_metrics.acc_turn_transition);
+fprintf(fid, '| 坡度 MAE deg | %.4f |\n', rad2deg(test_metrics.mae_theta));
+fprintf(fid, '| |theta|<=10 P95 deg | %.4f |\n', test_metrics.theta_abs_le_10_p95_abs_err_deg);
+fprintf(fid, '| [-10,-8] P95 deg | %.4f |\n', test_metrics.theta_neg_10_8_p95_abs_err_deg);
+fprintf(fid, '| [8,10] P95 deg | %.4f |\n', test_metrics.theta_pos_8_10_p95_abs_err_deg);
+fprintf(fid, '| [-2,-0.5] P95 deg | %.4f |\n', test_metrics.theta_neg_2_0p5_p95_abs_err_deg);
+fprintf(fid, '| [0.5,2] P95 deg | %.4f |\n', test_metrics.theta_pos_0p5_2_p95_abs_err_deg);
+fprintf(fid, '| near-flat abs P95 deg | %.4f |\n', test_metrics.theta_near_flat_abs_p95_deg);
+fprintf(fid, '| flat theta bias deg | %.4f |\n', test_metrics.theta_flat_bias_deg);
+fprintf(fid, '| 主工况置信度均值 | %.4f |\n', test_metrics.confidence_main.mean);
+fprintf(fid, '| 主工况低置信度(<0.60)比例 | %.4f |\n', test_metrics.confidence_main.low_conf_0p60_ratio);
+fprintf(fid, '| 转弯置信度均值 | %.4f |\n', test_metrics.confidence_turn.mean);
+fprintf(fid, '| 转弯低置信度(<0.60)比例 | %.4f |\n', test_metrics.confidence_turn.low_conf_0p60_ratio);
+
+fprintf(fid, '\n## 测试集混淆矩阵\n\n');
+fprintf(fid, '### 主工况\n\n');
+fprintf(fid, '| true \\ pred | flat | stall | slope | recall |\n|---|---:|---:|---:|---:|\n');
+names_main = {'flat','stall','slope'};
+for i = 1:3
+    fprintf(fid, '| %s | %d | %d | %d | %.4f |\n', names_main{i}, ...
+        test_metrics.cm_main(i,1), test_metrics.cm_main(i,2), test_metrics.cm_main(i,3), ...
+        test_metrics.recall_main(i));
+end
+fprintf(fid, '\n| pred class | precision |\n|---|---:|\n');
+for i = 1:3
+    fprintf(fid, '| %s | %.4f |\n', names_main{i}, test_metrics.precision_main(i));
+end
+
+fprintf(fid, '\n### 转弯方向\n\n');
+fprintf(fid, '| true \\ pred | right | straight | left | recall |\n|---|---:|---:|---:|---:|\n');
+names_turn = {'right','straight','left'};
+for i = 1:3
+    fprintf(fid, '| %s | %d | %d | %d | %.4f |\n', names_turn{i}, ...
+        test_metrics.cm_turn(i,1), test_metrics.cm_turn(i,2), test_metrics.cm_turn(i,3), ...
+        test_metrics.recall_turn(i));
+end
+fprintf(fid, '\n| pred class | precision |\n|---|---:|\n');
+for i = 1:3
+    fprintf(fid, '| %s | %.4f |\n', names_turn{i}, test_metrics.precision_turn(i));
+end
+
+fprintf(fid, '\n## 坡度回归范围\n\n');
+fprintf(fid, '- Slope 真值范围: [%.3f, %.3f] deg\n', ...
+    test_metrics.theta_true_range_deg(1), test_metrics.theta_true_range_deg(2));
+fprintf(fid, '- Slope 预测范围: [%.3f, %.3f] deg\n', ...
+    test_metrics.theta_pred_range_deg(1), test_metrics.theta_pred_range_deg(2));
+fprintf(fid, '- Slope 符号准确率: %.4f\n', test_metrics.slope_sign_acc);
+
+fprintf(fid, '\n## 上坡/下坡子项指标\n\n');
+fprintf(fid, '| 子项 | n | slope recall | theta MAE deg | theta sign acc | true theta range deg | pred theta range deg |\n');
+fprintf(fid, '|---|---:|---:|---:|---:|---:|---:|\n');
+local_write_slope_submetric(fid, 'uphill', test_metrics.uphill);
+local_write_slope_submetric(fid, 'downhill', test_metrics.downhill);
+
+fprintf(fid, '\n## 置信度分桶\n\n');
+local_write_confidence_summary(fid, 'main', test_metrics.confidence_main);
+local_write_confidence_summary(fid, 'turn', test_metrics.confidence_turn);
+end
+
+function local_write_slope_submetric(fid, name, s)
+fprintf(fid, '| %s | %d | %.4f | %.4f | %.4f | [%.3f, %.3f] | [%.3f, %.3f] |\n', ...
+    name, s.n, s.slope_recall, s.theta_mae_deg, s.theta_sign_acc, ...
+    s.true_theta_range_deg(1), s.true_theta_range_deg(2), ...
+    s.pred_theta_range_deg(1), s.pred_theta_range_deg(2));
+end
+
+function local_write_confidence_summary(fid, name, s)
+fprintf(fid, '### %s\n\n', name);
+fprintf(fid, '- mean: %.4f\n', s.mean);
+fprintf(fid, '- error_mean: %.4f\n', s.error_mean);
+fprintf(fid, '- low_conf_0p60_ratio: %.4f\n', s.low_conf_0p60_ratio);
+fprintf(fid, '- low_conf_0p70_ratio: %.4f\n\n', s.low_conf_0p70_ratio);
+fprintf(fid, '| confidence bin | n | error rate | mean confidence |\n');
+fprintf(fid, '|---|---:|---:|---:|\n');
+for i = 1:numel(s.bins)
+    fprintf(fid, '| %s | %d | %.4f | %.4f |\n', ...
+        s.bins(i).bin, s.bins(i).n, s.bins(i).error_rate, s.bins(i).mean_confidence);
+end
+fprintf(fid, '\n');
+end

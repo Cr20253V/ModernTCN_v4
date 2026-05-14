@@ -288,10 +288,11 @@ a_long = sat(F_cmd/m, -accel_limit, accel_limit) - g*sin(theta_g);
 Delta_long = m * a_long * (h_cg/L); % 前后轴载荷转移
 
 % 横向加速度（用 omega,v 估）
-if abs(v) > 1e-3
-    R_est = max(v/max(omega,1e-6), 1e-3);
-    a_lat = (v^2) / R_est;
-    Delta_lat = m * a_lat * (h_cg/W);
+% RF/LR 为万向支撑轮，只参与垂向支撑；侧向/偏航动力主要由 LF/RR 舵驱轮承担。
+% 载荷转移幅值取 |v*omega|，方向由 sign(omega) 单独决定，避免右转时被夹到近零。
+if abs(v) > 1e-3 && abs(omega) > 1e-6
+    a_lat = abs(v * omega);
+    Delta_lat = m * a_lat * (h_cg/max(W,1e-6));
 else
     Delta_lat = 0;
 end

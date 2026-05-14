@@ -917,3 +917,182 @@
   1. 使用 `GRU_gen_train_data.m` + `GRU_prepare_dataset.m` + `GRU_train.m` 完成一轮训练；
   2. 用 `test_gru_performance.m` 做一次完整评估，确认模型本身的离线/在线性能；
   3. 若需要进一步精调在线决策逻辑，再分别使用 `test_GRU_latency.m`（dwell/tau_theta）与 `test_gru_filter_constants.m`（tau_accel_lp/tau_diff）做局部敏感性分析。
+
+---
+
+## 模块：TCN - Physics-Guided Multi-task TCN
+
+> 本节记录 2026-04-24/25 新增的 TCN 路径跟踪状态估计与 LPV-MPC 调度相关脚本。该模块用于替代原 Mamba2 方案，并与 GRU 对照组共享训练母集、输入特征和 run-level split。
+
+### 1. **gen_tcn_training_paths.m** - TCN 训练短路径生成脚本
+- **路径**：`src/paths/gen_tcn_training_paths.m`
+- **职责**：生成训练用短路径集合，覆盖速度变化、左右转、S 弯、坡度上/下坡、坡度转弯组合、扰动候选窗口和挑战路径。
+- **输出**：
+  - `data/paths/path_train_tcn_*.mat`
+  - `data/paths/path_train_tcn_manifest.csv`
+  - `figures/paths/path_train_tcn_*_preview.png`
+- **设计要点**：
+  - 路径时长以 15-40 s 短片段为主，服务 TCN 对局部动态过渡的建模。
+  - 保留 `ref.meta.recommended_injection_windows`，供训练数据生成脚本优先布置 slip/stall/load-change 事件。
+  - 根据车辆参数、LPV 网格和控制器约束限制速度、角速度、坡度范围，避免生成不可跟踪路径。
+
+### 2. **TCN_gen_train_data.m** - TCN/GRU 共享训练母集生成脚本
+- **路径**：`src/TCN/TCN_gen_train_data.m`
+- **职责**：调用 `GRU_DataGen.slx` 对 TCN 短路径集合批量仿真，生成连续 run 形式的训练母集。
+- **核心接口**：`data = TCN_gen_train_data(cfg)`
+- **默认输入**：
+  - `data/paths/path_train_tcn_*.mat`
+  - Simulink 模型 `GRU_DataGen`
+- **默认输出**：
+  - `data/tcn/TCN_train_data_full.mat`
+  - `data/tcn/TCN_train_data_report.md`
+- **关键功能**：
+  - 对每条短路径重复仿真若干次，不是简单复制，而是随机化事件类型、事件窗口、事件强度和噪声。
+  - 支持 slip、stall、load_change 三类动态过渡样本。
+  - 对生成数据执行自检，覆盖 y_raw/u/theta 维度、NaN/Inf、标签比例、动态窗口覆盖和事件覆盖。
+- **注意**：该脚本输出的是未窗口化母集，训练前必须运行 `TCN_prepare_dataset.m`。
+
+### 3. **TCN_write_train_data_report.m** - TCN 训练母集报告重建工具
+- **路径**：`src/TCN/TCN_write_train_data_report.m`
+- **职责**：从已有 `TCN_train_data_full.mat` 重新生成 Markdown 自检报告，不重新运行 Simulink。
+- **核心接口**：`report = TCN_write_train_data_report(input_file, report_file)`
+- **使用场景**：
+  - smoke 测试覆盖了报告，需要恢复 full 数据集报告。
+  - 修改报告字段后，需要快速复核已有母集分布。
+
+### 4. **TCN_prepare_dataset.m** - TCN/GRU 共享数据预处理脚本
+- **路径**：`src/TCN/TCN_prepare_dataset.m`
+- **职责**：将连续 run 母集转换为固定长度窗口数据集，并生成公平对比用的共享 run-level split。
+- **核心接口**：`dataset = TCN_prepare_dataset(cfg)`
+- **默认输入**：`data/tcn/TCN_train_data_full.mat`
+- **默认输出**：
+  - `data/tcn/TCN_dataset_processed.mat`
+  - `data/tcn/TCN_scaler.mat`
+  - `data/tcn/TCN_GRU_shared_run_split.mat`
+  - `data/tcn/TCN_prepare_dataset_report.md`
+- **输入特征**：复用 GRU 预处理逻辑中的 19 维可观测特征，包括 IMU、电流、轮速、舵角、轮速派生速度、滤波加速度、曲率 proxy、pitch 估计等。
+- **转弯标签策略**：
+  - 默认 `turn_label_strategy='tail_majority'`，转弯监督取窗口尾部稳定片段多数标签，避免只用窗口末端造成过渡边界污染。
+  - 保存 `turn_purity_*`、`turn_transition_*`、`turn_sample_weight_*`，低纯度转弯窗口默认降权，用于训练和报告诊断。
+- **切分策略**：
+  - 默认 `seq_len=128`，`stride=64`。
+  - 默认使用 `stratified_run_level_v1`，平衡主工况、左右转、正/负坡、slip/stall/load-change。
+  - 严禁同一 run 的窗口同时进入 train/val/test。
+- **公平性要求**：GRU 对照组应复用该母集或至少复用 `TCN_GRU_shared_run_split.mat`。
+
+### 5. **TCN_train.m** - Physics-Guided Multi-task TCN 训练脚本
+- **路径**：`src/TCN/TCN_train.m`
+- **职责**：训练因果膨胀卷积 TCN，用于 AGV 行驶状态估计、坡度估计和 LPV-MPC 调度。
+- **核心接口**：`[model, meta] = TCN_train(cfg)`
+- **默认输入**：`data/tcn/TCN_dataset_processed.mat`
+- **默认输出**：
+  - `data/models/TCN_model.mat`
+  - `data/models/TCN_meta.mat`
+  - `results/tcn/train_logs/TCN_train_report.md`
+- **模型结构**：
+  - 因果 1D 膨胀卷积 TCN，默认 6 个 block、96 filters、kernel size 3。
+  - 默认感受野约 127 steps，即 1.27 s（Ts=0.01 s），与 `seq_len=128` 对齐。
+  - 默认使用 `head_pooling='last_mean_max_inputstats'`，将 TCN 末端隐藏状态、时间均值池化、最大池化与原始输入窗口统计特征拼接后送入多任务头。
+  - 多任务输出头：主分类、转弯分类、坡度回归、slip/stall/load-change 辅助二分类。
+  - 转弯分类头默认 `turn_head_type='mlp'` 且 `turn_head_source='inputstats'`，只读取窗口输入统计特征，避免转弯 loss 直接干扰 TCN 主干；可设为 `readout` 回退共享读出。
+  - 支持 `turn_finetune_start_epoch`：进入转弯微调阶段后只更新转弯头，冻结 TCN 主干和其他任务头，用于先保住主工况/坡度再提升转弯。
+  - 支持 `combine_base_and_turn_best=true`：最终模型使用主任务基座最佳 checkpoint 的 TCN/主工况/坡度头，并复制转弯阶段最佳 checkpoint 的 `turn_*` 头，避免转弯选模拖低主工况。
+- **训练损失**：
+  - 主工况交叉熵 + 类别权重。
+  - 转弯交叉熵可读取 `turn_sample_weight_*`，对低纯度过渡窗口降权。
+  - `best_metric` 支持 `composite`、`turn_priority`、`loss`；`turn_priority` 用于转弯优化阶段，同时通过主工况、坡度 MAE 和下坡 recall 设保底约束。
+  - 默认 `grad_clip_mode='separate'`，主干和各输出头分组裁剪，避免转弯头梯度过大时压缩主干更新。
+  - 支持 `selection_start_epoch` 与 `early_stop_min_epochs`，避免转弯优先实验过早停止在主工况尚未收敛的 checkpoint。
+  - 转弯交叉熵。
+  - 可选 focal loss，强化 flat/slope 难分样本和少数 stall 样本，默认关闭。
+  - slope 样本坡度回归 MSE，默认对负坡样本加权，缓解正坡样本占优时模型不输出负坡的问题。
+  - 主工况分类对负坡 slope 样本额外加权，缓解“下坡能估出负角但未判为 slope”的问题。
+  - flat 样本 theta=0 约束。
+  - 辅助扰动 BCE。
+  - 可选 pitch consistency，当前默认关闭，避免 pitch 积分偏置压制坡度回归。
+- **最佳模型选择**：
+  - 默认使用 `best_metric='composite'`，综合验证 loss、主分类错误率、转弯错误率和坡度 MAE。
+  - composite 指标额外惩罚下坡 slope recall 低的问题。
+  - 可设置 `best_metric='loss'` 回退为单纯验证 loss。
+- **报告诊断**：
+  - 输出测试集主工况/转弯混淆矩阵、每类召回率和坡度预测范围。
+  - 输出上坡/下坡子项指标，包括 slope recall、坡度 MAE、坡度符号准确率和预测范围。
+  - 用于判断总体准确率偏低是由少数类、flat/slope 混淆还是坡度幅值压缩导致。
+
+### 5.1 **TCN_diagnose_dataset.m** - TCN 数据集可分性诊断脚本
+- **路径**：`src/TCN/TCN_diagnose_dataset.m`
+- **职责**：在不训练 TCN 的前提下，诊断窗口标签纯度和传统模型可分性上限。
+- **核心接口**：`report = TCN_diagnose_dataset(cfg)`
+- **默认输入**：
+  - `data/tcn/TCN_train_data_full.mat`
+  - `data/tcn/TCN_dataset_processed.mat`
+- **默认输出**：`results/tcn/diagnostics/TCN_dataset_diagnosis_report.md`
+- **诊断内容**：
+  - 统计主工况与转弯窗口纯度、转弯过渡窗口比例、末端标签与多数标签不一致比例。
+  - 使用 last/mean/std/max/min 统计特征训练 bagged trees 主工况与转弯分类基线。
+  - 若环境支持 `fitcecoc`，额外输出 ECOC 基线。
+- **使用场景**：判断性能瓶颈来自数据/标签/预处理，还是来自 TCN 模型结构与训练策略。
+
+### 5.2 **TCN_auto_train_sweep.m** - TCN 自动训练配置扫描脚本
+- **路径**：`src/TCN/TCN_auto_train_sweep.m`
+- **职责**：自动串行训练多组 TCN 配置，读取每次 `meta.test_metrics` 并汇总主工况、转弯、上坡/下坡、坡度 MAE 和综合评分。
+- **核心接口**：`summary = TCN_auto_train_sweep(cfg)`
+- **默认扫描项**：
+  - `main_neg_slope_weight = [2.0 3.0 4.0]`
+  - `select_downhill_error_weight = [0.05 0.15 0.25]`
+  - `lambda_turns = 0.30`
+  - `turn_weight_methods = {'sqrt_inverse'}`
+- **默认输出**：
+  - `results/tcn/sweeps/<run_tag>/TCN_auto_train_sweep_summary.csv`
+  - `results/tcn/sweeps/<run_tag>/TCN_auto_train_sweep_report.md`
+  - 每组配置独立的模型、meta 和训练报告。
+- **使用场景**：需要让 MATLAB 自动执行“训练-读取结果-比较配置”的闭环时使用。完整扫描耗时较长，可先用较小 `max_epochs` 做 smoke。
+- **扩展功能**：
+  - 可设置 `lambda_turns` 与 `turn_weight_methods` 扫描转弯识别权重。
+  - 会汇总 `acc_turn_pure` 与 `acc_turn_transition`，便于判断错误集中在稳定转弯还是过渡窗口。
+  - 支持透传 `best_metric`、`turn_head_type`、`turn_head_hidden` 等训练配置。
+  - 可设置 `promote_best=true`，将综合评分最优模型复制为默认 `data/models/TCN_model.mat` 与 `TCN_meta.mat`。
+
+### 5.3 **TCN_auto_experiment_pipeline.m** - TCN 自动实验流水线
+- **路径**：`src/TCN/TCN_auto_experiment_pipeline.m`
+- **职责**：自动执行“主工况恢复 -> 转弯增强 -> 分阶段组合 checkpoint”的候选实验，减少手动单组训练。
+- **核心接口**：`summary = TCN_auto_experiment_pipeline(cfg)`
+- **默认输出**：
+  - `results/tcn/experiments/<run_tag>/TCN_auto_experiment_pipeline_summary.csv`
+  - `results/tcn/experiments/<run_tag>/TCN_auto_experiment_pipeline_report.md`
+  - 每个 case 独立的模型、meta 和训练报告。
+- **默认实验组**：
+  - `main_recovery`：线性转弯头、关闭/降低转弯损失、global/separate 裁剪、负坡权重变化，用于找回 `93%+` 主工况基座。
+  - `turn_enhanced`：在基座配置上测试 `inputstats + MLP` 转弯头。
+  - `staged_combo`：组合主任务最佳 checkpoint 与转弯头最佳 checkpoint。
+- **关键配置**：
+  - `cfg.case_filter={'main_recovery'}` 可只跑某一组。
+  - `cfg.skip_existing=true` 可复用同一 `run_tag` 下关键配置一致的已完成 case；模型/meta 文件名包含 `run_tag`，避免 smoke 结果污染正式实验。
+  - `main_recovery` 默认展开 `main_recovery_neg_weights`、`main_recovery_downhill_weights`、`main_recovery_lambda_turns`、`main_recovery_grad_clip_modes` 和 `main_recovery_turn_heads` 的网格。
+  - `cfg.promote_best=true` 可自动推广综合评分最佳模型。
+
+### 5.4 **TCN_recommended_cfg.m** - TCN 推荐配置生成器
+- **路径**：`src/TCN/TCN_recommended_cfg.m`
+- **职责**：返回当前实验阶段的推荐训练配置，避免手动复制长配置。
+- **核心接口**：`cfg = TCN_recommended_cfg(mode)`
+- **当前模式**：
+  - `production_current` / `staged_best`：当前综合推荐模型，来自 `staged_bestbase_v1` 的 `staged_bestbase_inputstats_turn_lam050`，主工况约 93.0%、转弯约 89.9%。
+  - `main_recovery_best` / `production_base`：当前综合最优主工况基座，来自 `main_recovery_grid_v2` 的 `neg4/down0.25/lambda_turn0.20/global/linear_readout`。
+  - `main_max_acc`：当前主工况准确率最高候选，牺牲部分坡度 MAE。
+  - `staged_turn_probe`：以当前最佳基座为中心，尝试 `inputstats + MLP` 转弯头的分阶段增强。
+
+### 6. **训练数据专用 AGV S-Function 与动力学函数**
+- **路径**：
+  - `src/core/agv_model_sfunc_train_data.m`
+  - `src/core/state_eq_ref_train_data.m`
+  - `src/core/output_eq_ref_train_data.m`
+- **职责**：服务 `GRU_DataGen.slx` 的训练数据生成链路，支持 5 维输入：
+  - `F_cmd`
+  - `omega_cmd`
+  - `theta_ground`
+  - `slip_gamma`
+  - `stall_load`
+- **输出约定**：
+  - `output_eq_ref_train_data.m` 输出 34 维 `y_raw`，兼容 TCN/GRU/Mamba 历史数据格式。
+  - 第 32-34 维为 slip ratio 和横向加速度扩展通道。
+- **注意**：这些函数只用于训练数据仿真，不应直接替代闭环控制主模型中的 `state_eq.m/output_eq.m`。

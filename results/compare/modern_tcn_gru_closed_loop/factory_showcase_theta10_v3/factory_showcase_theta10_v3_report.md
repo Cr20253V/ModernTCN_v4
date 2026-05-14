@@ -1,0 +1,61 @@
+# ModernTCN 与 GRU 闭环仿真对比报告
+
+- ModernTCN 输出文件：`E:\Matlab\Simulink\S-Function_16\results\compare\modern_tcn_gru_closed_loop\factory_showcase_theta10_v3\ModernTCN_factory_showcase_theta10_v3_out.mat`
+- GRU 输出文件：`E:\Matlab\Simulink\S-Function_16\results\compare\modern_tcn_gru_closed_loop\factory_showcase_theta10_v3\GRU_factory_showcase_theta10_v3_out.mat`
+- 展示路径文件：`E:\Matlab\Simulink\S-Function_16\data\paths\path_factory_logistics_showcase_theta10_v3.mat`
+
+## 指标说明
+
+- 跟踪误差：`ey_rmse/peak`、`epsi_rmse/peak`、`ev_rmse/peak`、`eomega_rmse/peak`、`xy_rmse/peak`，数值越小越好。
+- 控制性能：`F_rms/peak`、`omega_cmd_rms/peak`、`j_du`、`F_sat595_pct`、`omega_sat060_pct`、主动约束触碰率和 `viol_rate`，用于检查控制幅值、平滑性和约束安全性。
+- 处理用时：输出文件中记录了 `diag_solve_time_ms`，本报告统计 p50/p95/p99/max 和 10 ms 阈值下的超时率 `timeout_rate`。
+- AI/调度：`theta_mae_deg`、`theta_sched_mae_deg`、主状态准确率 `main_acc_pct`、转向准确率 `turn_acc_pct`。
+- 表格列名保留脚本中的指标变量名，便于和 CSV/MAT 结果一一对应。
+
+## 总体结果
+
+| controller | ey_rmse | ey_peak | epsi_rmse | ev_rmse | eomega_rmse | xy_rmse | F_peak | omega_cmd_peak | j_du | viol_rate | theta_mae_deg | theta_sched_mae_deg | main_acc_pct | turn_acc_pct |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ModernTCN | 0.0246 | 0.0940 | 0.0438 | 0.0535 | 0.0307 | 0.8036 | 285.6759 | 0.8860 | 0.5991 | 0.0000 | 0.8974 | 0.9239 | 94.1375 | 81.3941 |
+| GRU | 0.0623 | 0.3696 | 0.1714 | 0.0753 | 0.0653 | 1.6641 | 325.0353 | 1.5545 | 7.0298 | 0.0000 | 0.3664 | 0.3415 | 92.2168 | 80.0697 |
+
+## 处理用时统计
+
+处理用时信号来自 `diag_solve_time_ms`。`timeout_rate` 使用 10 ms 作为阈值。
+
+| controller | solve_time_p50_ms | solve_time_p95_ms | solve_time_p99_ms | solve_time_max_ms | timeout_rate |
+|---|---|---|---|---|---|
+| ModernTCN | 0.0212 | 0.0233 | 0.0253 | 1.7755 | 0.0000 |
+| GRU | 0.0118 | 0.0174 | 0.0225 | 0.6779 | 0.0000 |
+
+## 约束与饱和
+
+| controller | F_sat595_pct | F_limit_hit_pct | omega_sat060_pct | omega_limit_hit_pct | viol_rate |
+|---|---|---|---|---|---|
+| ModernTCN | 0.0000 | 0.0000 | 0.0580 | 0.0000 | 0.0000 |
+| GRU | 0.0000 | 0.0000 | 1.9841 | 0.0000 | 0.0000 |
+
+## 分区关键指标
+
+| controller | zone | ey_rmse | ey_peak | epsi_rmse | ev_rmse | eomega_rmse | omega_cmd_peak | j_du | theta_mae_deg | theta_sched_mae_deg | main_acc_pct | turn_acc_pct |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ModernTCN | all | 0.0246 | 0.0940 | 0.0438 | 0.0535 | 0.0307 | 0.8860 | 0.5991 | 0.8974 | 0.9239 | 94.1375 | 81.3941 |
+| ModernTCN | startup | 0.0000 | 0.0000 | 0.0000 | 0.1008 | 0.0000 | 0.0002344 | 19.4626 | 0.0635 | 0.0000 | 100.0000 | 100.0000 |
+| ModernTCN | receiving_aisle_right_entry | 0.0456 | 0.0940 | 0.0226 | 0.0033 | 0.0541 | 0.6604 | 0.0336 | 1.1777 | 0.0000 | 100.0000 | 91.8750 |
+| ModernTCN | main_aisle_to_ramp | 0.0027 | 0.0129 | 0.0029 | 0.0628 | 0.0042 | 0.0269 | 0.8543 | 0.1309 | 0.5705 | 92.3500 | 100.0000 |
+| ModernTCN | extended_uphill_left_ramp_transfer | 0.0224 | 0.0671 | 0.0264 | 0.0349 | 0.0261 | 0.4745 | 0.0497 | 2.1294 | 2.1059 | 100.0000 | 41.2750 |
+| ModernTCN | upper_pickup_straight | 0.0050 | 0.0217 | 0.0039 | 0.0453 | 0.0029 | 0.0106 | 2.1075 | 0.1181 | 0.3215 | 94.7500 | 100.0000 |
+| ModernTCN | slope_reversal_right_transfer | 0.0390 | 0.0801 | 0.1062 | 0.0650 | 0.0508 | 0.8860 | 0.4362 | 1.5110 | 1.8758 | 86.9643 | 67.0357 |
+| ModernTCN | downhill_delivery_aisle | 0.0090 | 0.0497 | 0.0188 | 0.1085 | 0.0215 | 0.0759 | 0.4116 | 0.2547 | 0.3537 | 83.5000 | 96.7222 |
+| ModernTCN | shipping_cross_aisle | 0.0004784 | 0.0008773 | 0.0001646 | 0.0487 | 0.0001637 | 0.0014 | 1.8974 | 0.1477 | 0.6957 | 90.2917 | 100.0000 |
+| ModernTCN | dock_approach_straight | 0.0004413 | 0.0008115 | 0.0003342 | 0.0028 | 0.000342 | 0.0013 | 0.0034 | 0.1155 | 1.723e-07 | 100.0000 | 100.0000 |
+| GRU | all | 0.0623 | 0.3696 | 0.1714 | 0.0753 | 0.0653 | 1.5545 | 7.0298 | 0.3664 | 0.3415 | 92.2168 | 80.0697 |
+| GRU | startup | 0.0000 | 0.0000 | 0.0000 | 0.1008 | 0.0000 | 0.0002344 | 19.4626 | 0.0000 | 0.0000 | 100.0000 | 100.0000 |
+| GRU | receiving_aisle_right_entry | 0.0456 | 0.0940 | 0.0226 | 0.0033 | 0.0539 | 0.6606 | 0.0312 | 0.0000 | 0.0000 | 100.0000 | 95.1250 |
+| GRU | main_aisle_to_ramp | 0.0027 | 0.0129 | 0.0029 | 0.0484 | 0.0042 | 0.0269 | 0.2024 | 0.4483 | 0.5496 | 94.8000 | 100.0000 |
+| GRU | extended_uphill_left_ramp_transfer | 0.0645 | 0.2382 | 0.2467 | 0.1252 | 0.0859 | 0.7538 | 1.4743 | 0.4772 | 0.4074 | 99.1000 | 71.1250 |
+| GRU | upper_pickup_straight | 0.0317 | 0.1761 | 0.0477 | 0.0388 | 0.0524 | 0.8691 | 0.4814 | 0.5038 | 0.4304 | 72.5833 | 100.0000 |
+| GRU | slope_reversal_right_transfer | 0.1333 | 0.3696 | 0.3299 | 0.0903 | 0.1046 | 1.5545 | 44.1285 | 0.4878 | 0.4624 | 84.5357 | 42.0000 |
+| GRU | downhill_delivery_aisle | 0.0244 | 0.0708 | 0.0495 | 0.0845 | 0.0757 | 0.2979 | 0.8836 | 0.4894 | 0.3587 | 93.6667 | 51.0556 |
+| GRU | shipping_cross_aisle | 0.0005435 | 0.0009369 | 0.0001438 | 0.0316 | 0.0001512 | 0.0014 | 0.3464 | 0.5358 | 0.5355 | 80.8750 | 100.0000 |
+| GRU | dock_approach_straight | 0.0005721 | 0.0009326 | 0.0002399 | 0.0027 | 0.0001979 | 0.0013 | 0.0034 | 1.515e-07 | 4.232e-07 | 100.0000 | 100.0000 |

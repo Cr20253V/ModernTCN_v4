@@ -19,10 +19,10 @@ function ctrl = mpc_setup_single_interp(db, opts)
 %       - Q：输出权重对角元素 [q_y, q_psi, q_v, q_omega]，默认 [3, 8, 1, 1]
 %       - R：输入权重对角元素 [r_F, r_omega]，默认 [1e-3, 1e-3]
 %       - dR：输入变化率权重对角元素 [r_dF, r_domega]，默认 [1e-2, 1e-2]
-%       - umin：输入下界 [Fmin, omegamin]，默认 [-300, -0.6]
-%       - umax：输入上界 [Fmax, omegamax]，默认 [300, 0.6]
-%       - dumin：输入变化率下界，默认 [-400, -0.4]
-%       - dumax：输入变化率上界，默认 [400, 0.4]
+%       - umin：输入下界 [Fmin, omegamin]，默认 [-600, -1.2]
+%       - umax：输入上界 [Fmax, omegamax]，默认 [600, 1.2]
+%       - dumin：输入变化率下界，默认 [-400, -0.9]
+%       - dumax：输入变化率上界，默认 [400, 0.9]
 %       - ymin：输出下界（软约束），默认 [-0.5, -0.3, -0.5, -0.3]
 %       - ymax：输出上界（软约束），默认 [0.5, 0.3, 0.5, 0.3]
 %       - soft_weight_pos：位置（e_y）软约束权重，默认 1e4
@@ -63,8 +63,8 @@ nu = db.nu;
 ny = db.ny;
 
 % 默认预测/控制时域（根据采样周期自适应）
-if ~isfield(opts, 'Np'), opts.Np = round(1.5 / Ts); end  % 1.5秒预测时域（缩短以适应转弯动态）
-if ~isfield(opts, 'Nc'), opts.Nc = round(0.5 / Ts); end  % 0.5秒控制时域
+if ~isfield(opts, 'Np'), opts.Np = round(1.6 / Ts); end  % 1.6秒预测时域，回稳并保留适度提前量
+if ~isfield(opts, 'Nc'), opts.Nc = round(0.6 / Ts); end  % 0.6秒控制时域，避免动作过慢
 
 % 默认权重（提高横向跟踪优先级）
 if ~isfield(opts, 'Q'), opts.Q = [15.293, 28.737, 5.076, 2.9918]; end  % [e_y, e_psi, e_v, e_omega]，提高 q_y 和 q_psi
@@ -72,14 +72,14 @@ if ~isfield(opts, 'R'), opts.R = [1e-3, 1e-3]; end  % [F_cmd, omega_cmd]
 if ~isfield(opts, 'dR'), opts.dR = [1e-2, 1e-2]; end  % 速率权重
 
 % 默认约束
-if ~isfield(opts, 'umin'), opts.umin = [-300; -0.6]; end  % [N, rad/s]
-if ~isfield(opts, 'umax'), opts.umax = [300; 0.6]; end
-if ~isfield(opts, 'dumin'), opts.dumin = [-400; -0.4]; end  % [N/step, (rad/s)/step]
-if ~isfield(opts, 'dumax'), opts.dumax = [400; 0.4]; end
+if ~isfield(opts, 'umin'), opts.umin = [-600; -1.2]; end  % [N, rad/s]，诊断性放宽转向角速度约束
+if ~isfield(opts, 'umax'), opts.umax = [600; 1.2]; end
+if ~isfield(opts, 'dumin'), opts.dumin = [-400; -0.9]; end  % [N/step, (rad/s)/step]，同步放宽转向角速度变化率约束
+if ~isfield(opts, 'dumax'), opts.dumax = [400; 0.9]; end
 if ~isfield(opts, 'ymin'), opts.ymin = [-1.0; -0.5; -0.5; -0.3]; end  % [m, rad, m/s, rad/s]，放宽 e_y 和 e_psi
 if ~isfield(opts, 'ymax'), opts.ymax = [1.0; 0.5; 0.5; 0.3]; end
-if ~isfield(opts, 'soft_weight_pos'), opts.soft_weight_pos = 1e4; end  % 位置软约束惩罚
-if ~isfield(opts, 'soft_weight_yaw'), opts.soft_weight_yaw = 1e4; end  % 航向软约束惩罚
+if ~isfield(opts, 'soft_weight_pos'), opts.soft_weight_pos = 3e3; end  % 位置软约束惩罚，避免过度保守
+if ~isfield(opts, 'soft_weight_yaw'), opts.soft_weight_yaw = 3e3; end  % 航向软约束惩罚
 
 fprintf('========== MPC控制器设计 ==========\n');
 fprintf('采样周期: %.3f s\n', Ts);
@@ -295,13 +295,21 @@ maps.eomega_max = abs(opts.ymax(4));  % 角速度误差最大值[rad/s]
 % 转弯时自动提高横向跟踪权重 q_y，改善转弯精度
 % 可通过 Bayesian_Optimization 优化这些参数
 maps.omega_threshold = 0.15;    % 角速度阈值 [rad/s]，|omega|>0.15 判定为转弯
-maps.q_y_gain_max = 1.8;        % 转弯时 q_y 最大增益系数（放大倍数）
+maps.q_y_gain_max = 2.5;        % 转弯时 q_y 最大增益系数（放大倍数，针对0.37rad/s增强）
 maps.transition_width = 0.05;   % 过渡带宽度 [rad/s]，平滑切换避免抖动
 % 说明：
 %   - |omega| < (threshold - width)：直线，q_y_gain = 1.0
 %   - |omega| > (threshold + width)：转弯，q_y_gain = gain_max
 %   - 中间区域：三次 Hermite 平滑过渡
 % ====== 方案B 结束 ======
+
+% ====== 方案C：坡度自适应权重调度配置（新增） ======
+% 坡道上提高速度跟踪权重 q_v，并调整输入惩罚
+maps.theta_threshold = 0.035;       % 坡度阈值 [rad] (约2度)
+maps.q_v_gain_max = 5.0;            % 坡道上 q_v 增益 (加强速度保持)
+maps.R_F_gain_max_uphill = 1.0;     % 上坡时不增加 R_F (允许大力输出)
+maps.theta_transition_width = 0.017; % 过渡带宽度 [rad]
+% ====== 方案C 结束 ======
 
 % 断言：确保rho端点与网格一致（稳健性检查）
 assert(all(abs(maps.rho_min - [db.grid.V(1); db.grid.W(1); db.grid.T(1)]) < 1e-10), ...

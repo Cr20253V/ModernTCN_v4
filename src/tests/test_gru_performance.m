@@ -201,7 +201,7 @@ for i = 1:num_samples
     conf_main(i) = max(conf.conf_main);
 end
 
-metrics_main = classification_metrics(y_main(1:num_samples), pred_main, {'flat','slip','stall','slope'});
+metrics_main = classification_metrics(y_main(1:num_samples), pred_main, {'flat','stall','slope'});
 metrics_turn = classification_metrics(y_turn(1:num_samples) + 2, pred_turn + 2, {'right','straight','left'});
 
 % 坡度 MAE 仅对 slope 样本
@@ -251,7 +251,7 @@ rpt.scene = get_scene_name(run_data);
 rpt.duration = time(end);
 rpt.acc_main = mean(out_main(start_idx:end) == truth_main(start_idx:end));
 rpt.acc_turn = mean(out_turn(start_idx:end) == truth_turn(start_idx:end));
-slope_mask = truth_main(start_idx:end) == 4;
+slope_mask = truth_main(start_idx:end) == 3;
 if any(slope_mask)
     slope_idx = find(slope_mask) + start_idx - 1;
     rpt.mae_theta = mean(abs(out_theta(slope_idx) - truth_theta(slope_idx)));
@@ -260,8 +260,8 @@ else
 end
 
 % 检测延迟：真值首次进入 slope 与预测首次进入 slope 的时间差
-truth_slope_idx = find(truth_main == 4, 1, 'first');
-pred_slope_idx = find(out_main == 4, 1, 'first');
+truth_slope_idx = find(truth_main == 3, 1, 'first');
+pred_slope_idx = find(out_main == 3, 1, 'first');
 if ~isempty(truth_slope_idx) && ~isempty(pred_slope_idx)
     rpt.slope_delay = time(pred_slope_idx) - time(truth_slope_idx);
 else
@@ -275,7 +275,7 @@ if enable_plots
     nexttile; hold on; grid on;
     plot(time, truth_main, 'k','LineWidth',2);
     plot(time, out_main, 'r--','LineWidth',1.2);
-    yticks(1:4); yticklabels({'flat','slip','stall','slope'});
+    yticks(1:3); yticklabels({'flat','stall','slope'});
     ylabel('主分类'); title(sprintf('%s | 主分类准确率 %.2f%%', rpt.scene, rpt.acc_main*100));
     % 转弯分类对比
     nexttile; hold on; grid on;

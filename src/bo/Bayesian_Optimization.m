@@ -1,8 +1,8 @@
 function [best, boResults] = Bayesian_Optimization(params, db, options)
 % =============================
 % 文件名：Bayesian_Optimization.m
-% 版本号：V2.10
-% 最后修改时间：2025-11-20
+% 版本号：V2.12
+% 最后修改时间：2026-03-07
 % 作者：LPV-MPC Project
 % 功能描述：
 %   两阶段贝叶斯优化：全局搜索 + 局部精细搜索
@@ -30,6 +30,15 @@ function [best, boResults] = Bayesian_Optimization(params, db, options)
 %   - V2.8更新（流程优化）：按照正确流程重新组织第二阶段：验证第一阶段最优 → 生成局部初始点 → 局部优化 → 按情况选择结果
 %   - V2.9更新（关键修复）：修复第一阶段选择逻辑，现在选择实际观察到的最小代价点而不仅是bestPoint预测的最优点
 %   - V2.10更新（2025-11-20）：更新场景权重默认值（bumpy: 0.10→0.35, slope: 0.30→0.10, straight_turn: 0.20→0.10, straight: 0.05→0.10），使优化更关注颠簸场景
+%   - V2.11更新（2026-03-06）：IsObjectiveDeterministic 改为 false
+%       原因：并行仿真（UseParallel=true）时，各worker的persistent base_ctrl初始化时序
+%       不可控，导致同参数两次调用代价差值达0.1~0.2级别。声明false使bayesopt使用
+%       噪声感知高斯过程，避免代理模型在噪声数据上过度乐观拟合，bestPoint更可靠。
+%   - V2.12更新（2026-03-07）：修复Phase 1与LocalRefine的比较逻辑（问题4）
+%       原问题：Phase 1将代理预测值(bestJ_pred)与实际采样(min_objective_stage1)混合
+%       比较；LocalRefine将stage2实际采样与stage1代理预测值比较——苹果与橘子对比。
+%       修复：Phase 1始终采用实际观测最优(min_row_stage1)作为最终结果；LocalRefine
+%       改为与min_objective_stage1（stage1实际采样最小值）比较，统一比较基准。
 % =============================
 
 root = project_root();
@@ -65,60 +74,173 @@ end
 %       - options.scenes：场景权重（默认：turn=0.35, slope=0.30, ...）
 %       - options.MaxObjectiveEvaluations：最大评估次数（默认：100）
 %       - options.save_history：是否保存历史（默认：false）
+%       - options.phase：优化阶段（1=核心权重, 2=场景自适应, 3=微调）
+%       - options.phase1_result：Phase 1的最优结果（Phase 2/3使用）
 if nargin < 3
     options = struct();
 end
 
-% 变量范围（V2.5: 调整以适应移除F_eq后的系统）
-vars = [
-    optimizableVariable('q_y',[15,35],'Type','real');         % ↑↑ 进一步提升横向跟踪（解决 turn e_y 大的问题）
-    optimizableVariable('q_psi',[12,30],'Type','real');       % ↑↑ 进一步提升航向跟踪
-    optimizableVariable('q_v',[3.0,8],'Type','real');         % ↑↑ V2.5: 提高范围以应对阻力补偿需求（原[2.0,6]）
-    optimizableVariable('q_omega',[0.5,3],'Type','real');     % 维持
-    optimizableVariable('log10_r_F',[-4.0,-2.5],'Type','real'); % ↓↓ V2.5: 放宽下界，允许更大控制努力（原[-3.5,-2]）
-    optimizableVariable('log10_r_omega',[-3.8,-2.2],'Type','real'); % 放松角速度指令权重
-    optimizableVariable('log10_rdF',[-2.2,-1],'Type','real'); % ↑ 提升纵向平滑性
-    optimizableVariable('log10_rdw',[-2.5,-1],'Type','real'); % ↑ 提升角速度平滑性
-    optimizableVariable('alpha_Q',[0.0,1.0],'Type','real');
-    optimizableVariable('beta_Q',[0.0,1.0],'Type','real');
-    optimizableVariable('alpha_R',[0.0,1.0],'Type','real');
-    optimizableVariable('beta_R',[0.0,1.0],'Type','real');
-    optimizableVariable('alpha_dR',[0.0,1.0],'Type','real');
-    optimizableVariable('beta_dR',[0.0,1.0],'Type','real');
-    optimizableVariable('scale_umin_lo',[0.9,1.1],'Type','real');
-    optimizableVariable('scale_umin_hi',[0.9,1.1],'Type','real');
-    optimizableVariable('scale_umax_lo',[0.9,1.1],'Type','real');
-    optimizableVariable('scale_umax_hi',[0.9,1.1],'Type','real');
-    optimizableVariable('tau',[0.2,0.6],'Type','real');
-    % 场景自适应参数（方案B+C）
-    optimizableVariable('omega_threshold',[0.05,0.20],'Type','real');
-    optimizableVariable('transition_width',[0.02,0.06],'Type','real');
-    optimizableVariable('q_y_gain_max',[1.2,2.5],'Type','real');
-    optimizableVariable('theta_threshold',[0.03,0.05],'Type','real');
-    optimizableVariable('theta_transition_width',[0.01,0.025],'Type','real');
-    optimizableVariable('q_v_gain_max',[1.2,2.0],'Type','real');
-    optimizableVariable('R_F_gain_max_uphill',[1.0,1.6],'Type','real');
-    optimizableVariable('R_F_gain_max_downhill',[1.0,2.0],'Type','real');
-    optimizableVariable('dR_F_gain_max_uphill',[1.0,1.8],'Type','real');
-    optimizableVariable('dR_F_gain_max_downhill',[1.0,2.2],'Type','real')
-];
+%% ========== 分阶段优化配置 ==========
+% 策略说明：
+%   Phase 1: 只优化 Q, R, dR 共8个核心变量（夯实基础）
+%   Phase 2: 固定核心权重，只优化4个场景自适应变量（场景攻坚）
+%   Phase 3: 放开部分变量进行微调（可选）
+%
+% 被冻结的变量：
+%   - alpha/beta_*: 形状参数（固定为0.5，线性插值）
+%   - scale_*: 约束缩放（固定为1.0，信任物理参数）
+%   - tau: rho滤波常数（固定为0.35）
+% =====================================
+
+phase = 1;  % 默认Phase 1
+if isfield(options, 'phase')
+    phase = options.phase;
+end
+fprintf('[Bayesian_Optimization] 当前优化阶段: Phase %d\n', phase);
+
+%% 冻结参数（不参与优化的固定值）
+frozen = struct();
+frozen.alpha_Q = 0.5;   % 线性插值
+frozen.beta_Q = 0.5;
+frozen.alpha_R = 0.5;
+frozen.beta_R = 0.5;
+frozen.alpha_dR = 0.5;
+frozen.beta_dR = 0.5;
+frozen.scale_umin_lo = 1.0;  % 信任物理约束
+frozen.scale_umin_hi = 1.0;
+frozen.scale_umax_lo = 1.0;
+frozen.scale_umax_hi = 1.0;
+frozen.tau = 0.35;           % rho滤波常数
+% 场景自适应默认值（Phase 1时固定）
+% 场景自适应默认值（完整列表，确保objective_wrapper不会缺字段）
+frozen.omega_threshold = 0.15;
+frozen.q_y_gain_max = 1.0;           % 不放大 = 关闭自适应
+frozen.theta_threshold = 0.04;
+frozen.q_v_gain_max = 1.0;
+frozen.transition_width = 0.03;      % 默认过渡宽度
+frozen.theta_transition_width = 0.02;
+frozen.R_F_gain_max_uphill = 1.0;    % 控制增益（不放大）
+frozen.R_F_gain_max_downhill = 1.0;
+frozen.dR_F_gain_max_uphill = 1.0;
+frozen.dR_F_gain_max_downhill = 1.0;
+
+% [新增] 传递路径文件和分区配置 (加载模式)
+if isfield(options, 'path_file'), frozen.path_file = options.path_file; end
+if isfield(options, 'zones'), frozen.zones = options.zones; end
+
+%% 变量定义（根据Phase选择不同变量集）
+switch phase
+    case 1
+        % ===== Phase 1: 核心权重优化 (8个变量) =====
+        % 目标：搞定直道、缓弯和微小干扰
+        fprintf('[Phase 1] 核心权重优化 (8个变量)\n');
+        vars = [
+            % --- 状态误差权重 Q ---
+            optimizableVariable('q_y',[10,150],'Type','real');     % 横向误差惩罚（S弯关键）[上界150←0100，前次优化达上界99.45]
+            optimizableVariable('q_psi',[15,100],'Type','real');   % 航向误差惩罚（方向稳定性）
+            optimizableVariable('q_v',[3.0,50],'Type','real');     % 速度误差惩罚（坡道爬坡）[上界50←35，前次优化达上界]
+            optimizableVariable('q_omega',[0.5,1.5],'Type','real');  % 角速度误差惩罚 [上界1.5←4.0，防止过度惩罚导致振荡]
+            % --- 控制量权重 R ---
+            optimizableVariable('log10_r_F',[-4.0,-0.5],'Type','real');    % 驱动力惩罚 (10^-4 ~ 10^-0.5)
+            optimizableVariable('log10_r_omega',[-4.5,-1.0],'Type','real');% 角速度指令惩罚 [上界-1.0←-1.5，前次优化达上界]
+            % --- 控制增量权重 dR ---
+            optimizableVariable('log10_rdF',[-2.5,0],'Type','real');       % 驱动力平滑性[上界0←-1]
+            optimizableVariable('log10_rdw',[-2.5,-0.5],'Type','real');    % 角速度平滑性 [放宽上限以允许更强平滑]
+        ];
+        
+    case 2
+        % ===== Phase 2: 场景自适应优化 (4个变量) =====
+        % 前提：Phase 1的核心权重已固定
+        fprintf('[Phase 2] 场景自适应优化 (4个变量)\n');
+        
+        % 检查Phase 1结果是否传入
+        if ~isfield(options, 'phase1_result')
+            error('Phase 2需要传入options.phase1_result（Phase 1的最优解）');
+        end
+        p1 = options.phase1_result;
+        
+        % 将Phase 1结果加入frozen
+        frozen.q_y = p1.q_y;
+        frozen.q_psi = p1.q_psi;
+        frozen.q_v = p1.q_v;
+        frozen.q_omega = p1.q_omega;
+        frozen.log10_r_F = p1.log10_r_F;
+        frozen.log10_r_omega = p1.log10_r_omega;
+        frozen.log10_rdF = p1.log10_rdF;
+        frozen.log10_rdw = p1.log10_rdw;
+        
+        vars = [
+            % --- 弯道自适应 ---
+            optimizableVariable('omega_threshold',[0.08,0.50],'Type','real');  % 弯道触发阈值 [rad/s] [下限0.08←0.03，防止伪最优全程放大]
+            optimizableVariable('q_y_gain_max',[0.5,6.0],'Type','real');       % 弯道横向权重放大倍数 [0.5,6.0]←[0.5,4.0]，前次优化达上界
+            % --- 坡道自适应 ---
+            optimizableVariable('theta_threshold',[0.01,0.15],'Type','real');  % 坡道触发阈值 [rad] [上限0.15←0.12，复合区实际坡度超內06.88°]
+            optimizableVariable('q_v_gain_max',[1.0,4.0],'Type','real');       % 坡道速度权重放大倍数 [扩展1.0-4.0←1.2-2.5，优化达上界]
+            % --- 坡道控制增益 ---
+            % 语义：R_interp(1) = R_interp(1) / R_F_gain_max_uphill
+            %       增益越大，上坡驱动力惩罚越小，更倾向保速爬坡
+            optimizableVariable('R_F_gain_max_uphill',[1.0,2.5],'Type','real');
+        ];
+        
+    case 3
+        % ===== Phase 3: 全量微调 (可选) =====
+        fprintf('[Phase 3] 全量微调 (12个变量)\n');
+        
+        % 检查Phase 2结果
+        if ~isfield(options, 'phase2_result')
+            error('Phase 3需要传入options.phase2_result');
+        end
+        
+        % 使用前两阶段结果作为初始点，小范围搜索
+        % TODO: 根据需要实现
+        error('Phase 3暂未实现，请使用Phase 1/2');
+        
+    otherwise
+        error('未知的优化阶段: %d (支持 1, 2, 3)', phase);
+end
+
+fprintf('[Bayesian_Optimization] 优化变量数: %d\n', numel(vars));
 
 %% 场景权重配置
-% 默认权重（共 5 个场景）
+% V3.5: 按功能分区定义（共6个区，与路径时间段对应）
 % 可通过 options.scenes 覆盖
 if ~isfield(options,'scenes')
-    scenes = struct('straight_left_turn',0.25,'straight_right_turn',0.25,...
-                    'slope',0.15,'bumpy',0.20,'straight',0.15);
-    fprintf('[Bayesian_Optimization] 使用默认场景权重。\n');
+    scenes = struct(...
+        'startup',0.05, ...       % 0-10s: 启动区（低权重）
+        'golden_test',0.20, ...   % 10-50s: 黄金测试区
+        'pure_turn',0.25, ...     % 50-70s: 纯转弯区（S弯120°）
+        'pure_slope',0.20, ...    % 70-90s: 纯坡度区
+        'composite',0.25, ...     % 90-110s: 复合区（坡度+转弯耦合）
+        'closure',0.05);          % 110-120s: 闭环区（低权重）
+    fprintf('[Bayesian_Optimization] 使用V3.5功能分区权重。\n');
 else
     scenes = options.scenes;
     fprintf('[Bayesian_Optimization] 使用自定义场景权重。\n');
 end
-fprintf('[Bayesian_Optimization]   straight_left/right=%.2f/%.2f, slope=%.2f, bumpy=%.2f, straight=%.2f\n', ...
-    scenes.straight_left_turn, scenes.straight_right_turn, scenes.slope, scenes.bumpy, scenes.straight);
+fprintf('[Bayesian_Optimization]   startup=%.2f, golden=%.2f, turn=%.2f, slope=%.2f, composite=%.2f, closure=%.2f\n', ...
+    scenes.startup, scenes.golden_test, scenes.pure_turn, scenes.pure_slope, scenes.composite, scenes.closure);
 
-% 目标函数封装
-obj = @(X) objective_wrapper(X, params, db, scenes);
+% === 步骤1修复：主进程预创建 base_ctrl，解决并行随机性 ===
+% 原方案：每个并行 worker 各自通过 persistent 变量在首次调用时初始化 base_ctrl，
+% 时序不可控导致同参数两次仿真 J 值差异可达 1 量级。
+% 新方案：在主进程（单线程）中创建唯一的 base_ctrl 实例，
+% 写入 frozen.base_ctrl 后随匿名函数广播到所有 worker（MATLAB 自动序列化）。
+fprintf('[Bayesian_Optimization] 主进程预创建基准控制器（消除并行随机性）...\n');
+base_opts_main = struct(...
+    'Np', 150, 'Nc', 50, ...          % 与 preloadfcn_v2 TARGET_NP/NC 对齐（1.5s/0.5s 时域）
+    'Q',[10,15,2,1], ...
+    'R',[1e-3,1e-3], ...
+    'dR',[1e-2,1e-2], ...
+    'umin',[-600; -1.2], ...
+    'umax',[600; 1.2], ...
+    'dumin',[-400; -0.9], ...
+    'dumax',[400; 0.9]);
+evalc('base_ctrl_main = mpc_setup_single_interp(db, base_opts_main);');
+frozen.base_ctrl = base_ctrl_main;
+fprintf('[Bayesian_Optimization] 基准控制器已写入 frozen.base_ctrl，各 worker 将复用此唯一实例。\n');
+
+% 目标函数封装（传入frozen以合并未优化的参数，含 base_ctrl）
+obj = @(X) objective_wrapper(X, frozen, params, db, scenes);
 
 %% bayesopt 配置
 % 默认配置：MaxObjectiveEvaluations=100, UseParallel=false
@@ -127,15 +249,18 @@ obj = @(X) objective_wrapper(X, params, db, scenes);
 %   options.save_history = true;           % 保存优化历史
 boOpts = struct();
 boOpts.AcquisitionFunctionName = 'expected-improvement-plus';
-boOpts.IsObjectiveDeterministic = true;
+boOpts.IsObjectiveDeterministic = false;  % V2.11: 并行仿真存在随机性，声明为false使代理模型使用噪声感知GP
 boOpts.Verbose = 1;
 boOpts.PlotFcn = [];
-boOpts.MaxObjectiveEvaluations = 3;  % 默认100次评估
-boOpts.UseParallel = false;
+boOpts.MaxObjectiveEvaluations = 10;  % V3.5快速验证（原3）
+boOpts.UseParallel = true;  % 启用并行计算（需先执行 parpool）
 
 % 从 options 中覆盖配置
 if isfield(options,'MaxObjectiveEvaluations')
     boOpts.MaxObjectiveEvaluations = options.MaxObjectiveEvaluations;
+end
+if isfield(options,'UseParallel')
+    boOpts.UseParallel = options.UseParallel;  % 用户配置并行开关
 end
 
 fprintf('[Bayesian_Optimization] 最大评估次数: %d\n', boOpts.MaxObjectiveEvaluations);
@@ -151,7 +276,7 @@ boResults = bayesopt(obj, vars, 'AcquisitionFunctionName', boOpts.AcquisitionFun
 % ★ 关键修复：选择实际观察到的最小代价点，而不是bestPoint预测的最优点
 % bestPoint返回的是代理模型预测的最优点，可能不是实际评估过的最小代价点
 bestRow_pred = bestPoint(boResults);  % 代理模型预测的最优点
-[bestJ_pred, best_pred] = objective_wrapper(bestRow_pred, params, db, scenes);
+[bestJ_pred, best_pred] = objective_wrapper(bestRow_pred, frozen, params, db, scenes);
 
 % 获取第一阶段实际观察到的最小代价点
 all_objectives_stage1 = boResults.ObjectiveTrace;
@@ -160,20 +285,16 @@ min_idx_stage1 = find(all_objectives_stage1 == min_objective_stage1, 1, 'first')
 min_row_stage1 = boResults.XTrace(min_idx_stage1,:);
 
 fprintf('[Bayesian_Optimization] 第一阶段完成：\n');
-fprintf('[Bayesian_Optimization]   bestPoint预测最优: J = %.6f\n', bestJ_pred);
-fprintf('[Bayesian_Optimization]   实际观察最小值: J = %.6f (迭代 #%d)\n', min_objective_stage1, min_idx_stage1);
+fprintf('[Bayesian_Optimization]   bestPoint预测最优: J = %.6f (仅供参考，不参与决策)\n', bestJ_pred);
+fprintf('[Bayesian_Optimization]   实际观察最小值: J = %.6f (迭代 #%d) ← 采用此值\n', min_objective_stage1, min_idx_stage1);
 
-% 选择实际观察到的最小代价点作为第一阶段最优
-if min_objective_stage1 < bestJ_pred
-    fprintf('[Bayesian_Optimization]   ✓ 选择实际观察最小值（比预测值更好: %.6f）\n', bestJ_pred - min_objective_stage1);
-    bestRow = min_row_stage1;
-    [bestJ, best] = objective_wrapper(bestRow, params, db, scenes);
-else
-    fprintf('[Bayesian_Optimization]   ◯ 使用bestPoint预测最优\n');
-    bestRow = bestRow_pred;
-    bestJ = bestJ_pred;
-    best = best_pred;
-end
+% V2.12修复：始终采用实际观测最优，不再与代理预测值比较
+% 原因：IsObjectiveDeterministic=false时代理模型预测值有较大不确定性，
+% 实际采样结果（min_objective_stage1）是唯一可信的真实评估结果。
+best = best_pred;  % 先赋初值，下面用 min_row_stage1 重新评估覆盖
+bestRow = min_row_stage1;
+[bestJ, best] = objective_wrapper(bestRow, frozen, params, db, scenes);
+fprintf('[Bayesian_Optimization]   ✓ 以实际观测最优点重新评估确认: J = %.6f\n', bestJ);
 
 %% 二阶段：局部精细搜索（围绕当前最优点收缩边界）
 % options.local_refine 可选配置：
@@ -186,8 +307,11 @@ else
     local_refine = options.local_refine;
 end
 if ~isfield(local_refine,'enable'),     local_refine.enable = true; end
-if ~isfield(local_refine,'shrink'),     local_refine.shrink = 0.35; end
-if ~isfield(local_refine,'num_evals')
+if ~isfield(local_refine,'shrink'),     local_refine.shrink = 0.5; end
+% 局部优化次数：优先使用 options.local_refine_evals，否则按比例计算
+if isfield(options, 'local_refine_evals') && options.local_refine_evals > 0
+    local_refine.num_evals = options.local_refine_evals;  % 用户手动指定
+elseif ~isfield(local_refine,'num_evals')
     local_refine.num_evals = max(10, min(30, round(0.3 * boOpts.MaxObjectiveEvaluations)));
 end
 if ~isfield(local_refine,'num_seeds'),  local_refine.num_seeds = 8; end
@@ -206,11 +330,13 @@ if local_refine.enable
         glbHi(i) = vars(i).Range(2);
     end
 
-    % 局部边界（以 bestRow 为中心、按 shrink 收缩）
+    % 局部边界（以实际观测最优 min_row_stage1 为中心、按 shrink 收缩）
+    % V2.11修复: 原来以 bestRow（代理模型预测）为中心，但存在随机性时预测值不可信，
+    % 改为以第一阶段实际观测到的最小代价点为中心，确保局部搜索在有效区域展开。
     vars_local = optimizableVariable.empty(0, nVar);
     locLo = zeros(nVar,1); locHi = zeros(nVar,1);
     for i = 1:nVar
-        c  = bestRow.(varNames{i});
+        c  = min_row_stage1.(varNames{i});  % V2.11: 以实际观测最优为中心，而非代理模型预测的bestPoint
         hw = 0.5 * (glbHi(i) - glbLo(i)) * local_refine.shrink;
         lo = max(glbLo(i), c - hw);
         hi = min(glbHi(i), c + hw);
@@ -230,7 +356,7 @@ if local_refine.enable
 
     % 步骤1：验证第一阶段最优结果（相当于"第二次优化是为了复现第一阶段的最好结果"）
     fprintf('[LocalRefine]   步骤1: 验证第一阶段最优结果...\n');
-    [J_verify, result_verify] = objective_wrapper(bestRow, params, db, scenes);
+    [J_verify, result_verify] = objective_wrapper(bestRow, frozen, params, db, scenes);
     fprintf('[LocalRefine]     验证结果: J = %.6f (原始: %.6f, 差值: %.2e)\n', J_verify, bestJ_final, J_verify - bestJ_final);
 
     % 如果验证结果与第一阶段差异太大，发出警告
@@ -272,7 +398,7 @@ if local_refine.enable
     fprintf('[LocalRefine]   步骤4: 分析结果并确定最终最优...\n');
 
     bestRow2 = bestPoint(boResults2);
-    [bestJ2, best2] = objective_wrapper(bestRow2, params, db, scenes);
+    [bestJ2, best2] = objective_wrapper(bestRow2, frozen, params, db, scenes);
 
     % 获取第二阶段观察到的全局最小值
     all_objectives_stage2 = boResults2.ObjectiveTrace;
@@ -295,21 +421,21 @@ if local_refine.enable
         fprintf('[LocalRefine]     成功评估的最大代价: %.6f\n', max(all_objectives_stage2(all_objectives_stage2 < 1e6)));
     end
 
-    % 步骤5：按照您描述的情况确定最终结果
-    % 情况1：第二阶段没找到更好结果，保存第一阶段最优
-    % 情况2：第二阶段找到更好结果，保存该结果
+    % 步骤5：确定最终结果（V2.12修复：统一使用实际观测值比较，不再混入代理预测值）
+    % 情况1：第二阶段实际采样未优于第一阶段实际采样 → 保留第一阶段结果
+    % 情况2：第二阶段实际采样优于第一阶段实际采样 → 采用第二阶段结果
 
-    % 比较第一阶段最优与第二阶段全局最小
-    if isfinite(min_objective_stage2) && (min_objective_stage2 < bestJ_final)
-        % 情况2：第二阶段找到更好结果
-        fprintf('[LocalRefine] ✓ 情况2: 第二阶段找到更优解！采用全局最小结果（改进: %.6f）\n', bestJ_final - min_objective_stage2);
-        [bestJ_global, best_global] = objective_wrapper(min_row_stage2, params, db, scenes);
+    % 使用 min_objective_stage1（实际观测值）作为比较基准，而非 bestJ_final（可能含预测值）
+    if isfinite(min_objective_stage2) && (min_objective_stage2 < min_objective_stage1)
+        % 情况2：第二阶段找到更好结果（两个都是实际采样，比较可信）
+        fprintf('[LocalRefine] ✓ 情况2: 第二阶段找到更优解！采用全局最小结果（改进: %.6f）\n', min_objective_stage1 - min_objective_stage2);
+        [bestJ_global, best_global] = objective_wrapper(min_row_stage2, frozen, params, db, scenes);
         boResults_final = boResults2; best_final = best_global; bestJ_final = bestJ_global; bestRow_final = min_row_stage2;
     else
-        % 情况1：第二阶段没找到更好结果，保存第一阶段最优
-        fprintf('[LocalRefine] ◯ 情况1: 第二阶段未找到更好结果，采用第一阶段最优结果\n');
-        fprintf('[LocalRefine]   第二阶段最小: J = %.6f, 第一阶段: J = %.6f\n', min_objective_stage2, bestJ_final);
-        % 保持第一阶段结果（best_final, bestJ_final, bestRow_final 已设置为第一阶段结果）
+        % 情况1：第二阶段没找到更好结果，保存第一阶段实际最优
+        fprintf('[LocalRefine] ◯ 情况1: 第二阶段未找到更好结果，采用第一阶段实际最优\n');
+        fprintf('[LocalRefine]   第二阶段实际最小: J = %.6f, 第一阶段实际最小: J = %.6f\n', min_objective_stage2, min_objective_stage1);
+        % best_final/bestJ_final/bestRow_final 已在第266行基于min_row_stage1设置，直接保留
     end
 end
 
@@ -322,8 +448,10 @@ save(maps_best_file,'maps_best');
 % 通过 options.save_history = true 启用
 % 默认：false（不保存）
 if isfield(options,'save_history') && options.save_history
-    history_dir = results_dir('bo/history');
+    history_dir = fullfile(results_dir, 'bo', 'history');
+    if ~exist(history_dir, 'dir'), mkdir(history_dir); end
     history_file = fullfile(history_dir, sprintf('bo_history_%s.mat', datestr(now,'yyyymmdd_HHMMSS')));
+    boResults = boResults_final; %#ok<NASGU>
     save(history_file, 'boResults');
     fprintf('[Bayesian_Optimization] 优化历史已保存: %s\n', history_file);
 else
@@ -341,25 +469,65 @@ boResults = boResults_final;
 
 end
 
-function [J, out] = objective_wrapper(X, params, db, scenes)
-% 将 X 解包到 cfg 与 ctrl maps 的映射
-persistent base_ctrl;  % 持久变量：只创建一次基准控制器
+function [J, out] = objective_wrapper(X, frozen, params, db, scenes)
+% =============================
+% objective_wrapper - 目标函数封装
+%
+% 输入:
+%   X      - bayesopt优化变量（table类型，只包含当前阶段变量）
+%   frozen - 冻结参数（struct类型，包含所有不参与优化的固定值）
+%   params - 系统参数
+%   db     - LPV模型数据库
+%   scenes - 场景权重配置
+%
+% 核心机制:
+%   bayesopt的X只包含当前Phase被优化的变量。
+%   frozen包含所有其他变量的固定值。
+%   合并后的P包含完整的参数集。
+% =============================
 
+% [步骤2修复] 已删除 persistent base_ctrl，改为从 frozen.base_ctrl（即P.base_ctrl）读取。
+% 原 persistent 方案在并行 worker 中各自独立初始化，时序不可控，引入大幅随机性。
+
+%% === 关键修复：合并优化变量X与冻结参数frozen ===
+% 1. 首先复制frozen作为基础
+P = frozen;
+
+% 2. 用X中的优化变量覆盖P中的同名变量
+% 注意：X是table类型（bayesopt特性），需逐个字段覆盖
+if istable(X)
+    var_names = X.Properties.VariableNames;
+    for i = 1:length(var_names)
+        vn = var_names{i};
+        P.(vn) = X.(vn);
+    end
+elseif isstruct(X)
+    % 如果X是struct（手动调用时可能发生）
+    fn = fieldnames(X);
+    for i = 1:length(fn)
+        P.(fn{i}) = X.(fn{i});
+    end
+end
+
+%% 从合并后的P读取所有参数（而非从X直接读取）
 cfg = struct();
-cfg.tau = X.tau;
+cfg.tau = P.tau;
+% [新增] 传递路径配置到 Cost_Function
+if isfield(P, 'path_file'), cfg.path_file = P.path_file; end
+if isfield(P, 'zones'), cfg.zones = P.zones; end
 
 % 权重与范围
-Q0 = [X.q_y, X.q_psi, X.q_v, X.q_omega];
-R0 = [10^(X.log10_r_F), 10^(X.log10_r_omega)];
-dR0= [10^(X.log10_rdF), 10^(X.log10_rdw)];
+Q0 = [P.q_y, P.q_psi, P.q_v, P.q_omega];
+R0 = [10^(P.log10_r_F), 10^(P.log10_r_omega)];
+dR0= [10^(P.log10_rdF), 10^(P.log10_rdw)];
 
 % 形状参数:强制 alpha <= beta（修正非法值）
-alpha_Q_val = min(X.alpha_Q, X.beta_Q);  % 取小者作为 alpha
-beta_Q_val  = max(X.alpha_Q, X.beta_Q);  % 取大者作为 beta
-alpha_R_val = min(X.alpha_R, X.beta_R);
-beta_R_val  = max(X.alpha_R, X.beta_R);
-alpha_dR_val= min(X.alpha_dR, X.beta_dR);
-beta_dR_val = max(X.alpha_dR, X.beta_dR);
+alpha_Q_val = min(P.alpha_Q, P.beta_Q);  % 取小者作为 alpha
+beta_Q_val  = max(P.alpha_Q, P.beta_Q);  % 取大者作为 beta
+alpha_R_val = min(P.alpha_R, P.beta_R);
+beta_R_val  = max(P.alpha_R, P.beta_R);
+alpha_dR_val= min(P.alpha_dR, P.beta_dR);
+beta_dR_val = max(P.alpha_dR, P.beta_dR);
 
 alpha_Q = repmat(alpha_Q_val, 1, 4);
 beta_Q  = repmat(beta_Q_val, 1, 4);
@@ -368,32 +536,29 @@ beta_R  = repmat(beta_R_val, 1, 2);
 alpha_dR= repmat(alpha_dR_val, 1, 2);
 beta_dR = repmat(beta_dR_val, 1, 2);
 
-% 约束缩放（示例：两端缩放均一）
-scale_umin_lo = [X.scale_umin_lo, X.scale_umin_lo];
-scale_umin_hi = [X.scale_umin_hi, X.scale_umin_hi];
-scale_umax_lo = [X.scale_umax_lo, X.scale_umax_lo];
-scale_umax_hi = [X.scale_umax_hi, X.scale_umax_hi];
+% 约束缩放（使用冻结的固定值）
+scale_umin_lo = [P.scale_umin_lo, P.scale_umin_lo];
+scale_umin_hi = [P.scale_umin_hi, P.scale_umin_hi];
+scale_umax_lo = [P.scale_umax_lo, P.scale_umax_lo];
+scale_umax_hi = [P.scale_umax_hi, P.scale_umax_hi];
 
 % 构建 ctrl（只在第一次调用时创建基准控制器，后续复用）
 if isempty(db)
-    fprintf('[Bayesian_Optimization] db 为空，生成默认 3x3x3 网格...\n');
-    grid.V_grid = [0.8; 1.0; 1.2];
-    grid.W_grid = [-0.2; 0.0; 0.2];  % 有符号 ω
-    grid.T_grid = [-0.2; 0.0; 0.2];  % 匹配颠簸幅值 0.2 rad
+    fprintf('[Bayesian_Optimization] db 为空，生成默认 7x7x5 网格...\n');
+    root = project_root();
+    data_models_dir = fullfile(root, 'data', 'models');
+    grid.V_grid = linspace(0.1, 1.2, 7)';   % 速度 [m/s]，覆盖启动/减速
+    grid.W_grid = linspace(-1.2, 1.2, 7)';  % 角速度 [rad/s]，与 MPC omega_cmd 约束一致
+    grid.T_grid = linspace(-0.2, 0.2, 7)';% 坡度 [rad]，覆盖±11.5°
     lin_opts = struct('coord','path','disc','zoh','keep_E',true, ...
-        'export_mat', fullfile(data_models_dir, 'plant_grid.mat'));
+        'export_mat', fullfile(data_models_dir, 'plant_grid_test.mat'));
     db = lin_agv_grid(params, grid, lin_opts);
     fprintf('[Bayesian_Optimization] 默认网格生成完成。\n');
 end
 
-% 只在第一次调用时创建基准控制器（使用持久变量避免重复创建）
-if isempty(base_ctrl)
-    fprintf('[Bayesian_Optimization] 首次评估：创建基准控制器...\n');
-    % 使用中等偏保守的默认权重创建控制器（不影响后续maps覆盖）
-    base_opts = struct('Q',[10,15,2,1],'R',[1e-3,1e-3],'dR',[1e-2,1e-2]);
-    evalc('base_ctrl = mpc_setup_single_interp(db, base_opts);');
-    fprintf('[Bayesian_Optimization] 基准控制器创建完成（后续评估将复用此控制器）\n');
-end
+% [步骤2修复] base_ctrl 由主进程预创建并通过 frozen.base_ctrl 传入，此处直接读取。
+% 所有并行 worker 共享同一个预创建的控制器实例，消除初始化时序随机性。
+base_ctrl = P.base_ctrl;
 
 % 深拷贝基准控制器（避免 mpcobj 对象被后续评估污染）
 % 方法：每次重新创建 mpcobj（从 base_ctrl 的模型和参数）
@@ -457,19 +622,19 @@ ctrl.maps.rho_min = [db.grid.V(1); db.grid.W(1); db.grid.T(1)];
 ctrl.maps.rho_max = [db.grid.V(end); db.grid.W(end); db.grid.T(end)];
 
 % 滤波时间常数（用于rho一阶滤波）
-ctrl.maps.tau = X.tau;
+ctrl.maps.tau = P.tau;
 
-% 场景自适应参数（方案B+C）
-ctrl.maps.omega_threshold          = X.omega_threshold;
-ctrl.maps.transition_width        = X.transition_width;
-ctrl.maps.q_y_gain_max           = X.q_y_gain_max;
-ctrl.maps.theta_threshold        = X.theta_threshold;
-ctrl.maps.theta_transition_width = X.theta_transition_width;
-ctrl.maps.q_v_gain_max           = X.q_v_gain_max;
-ctrl.maps.R_F_gain_max_uphill    = X.R_F_gain_max_uphill;
-ctrl.maps.R_F_gain_max_downhill  = X.R_F_gain_max_downhill;
-ctrl.maps.dR_F_gain_max_uphill   = X.dR_F_gain_max_uphill;
-ctrl.maps.dR_F_gain_max_downhill = X.dR_F_gain_max_downhill;
+% 场景自适应参数（从合并后的P读取）
+ctrl.maps.omega_threshold          = P.omega_threshold;
+ctrl.maps.transition_width        = P.transition_width;
+ctrl.maps.q_y_gain_max           = P.q_y_gain_max;
+ctrl.maps.theta_threshold        = P.theta_threshold;
+ctrl.maps.theta_transition_width = P.theta_transition_width;
+ctrl.maps.q_v_gain_max           = P.q_v_gain_max;
+ctrl.maps.R_F_gain_max_uphill    = P.R_F_gain_max_uphill;
+ctrl.maps.R_F_gain_max_downhill  = P.R_F_gain_max_downhill;
+ctrl.maps.dR_F_gain_max_uphill   = P.dR_F_gain_max_uphill;
+ctrl.maps.dR_F_gain_max_downhill = P.dR_F_gain_max_downhill;
 
 % 评估（将ctrl和ctrl_maps传入cfg，避免重复创建控制器）
 cfg.ctrl = ctrl;

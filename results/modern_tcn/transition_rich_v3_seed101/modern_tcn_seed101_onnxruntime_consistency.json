@@ -1,0 +1,26 @@
+{
+  "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn\\transition_rich_v3_seed101\\modern_tcn_seed101.onnx",
+  "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn\\transition_rich_v3_seed101\\modern_tcn_seed101_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 5.245208740234375e-06,
+      "mean_abs_error": 1.5354404467871063e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 5.7220458984375e-06,
+      "mean_abs_error": 1.2790163737008697e-06,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 5.960464477539063e-08,
+      "mean_abs_error": 1.3271346688270569e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

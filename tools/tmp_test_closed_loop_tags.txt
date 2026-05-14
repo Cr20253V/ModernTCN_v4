@@ -1,0 +1,97 @@
+BLOCK: test_closed_loop/Adaptive MPC Controller
+  Type: SubSystem
+
+BLOCK: test_closed_loop/Constant2
+  Type: Constant
+  Value: 0.05
+
+BLOCK: test_closed_loop/Constant3
+  Type: Constant
+  Value: 0.4
+
+BLOCK: test_closed_loop/Demux
+  Type: Demux
+
+BLOCK: test_closed_loop/Demux1
+  Type: Demux
+
+BLOCK: test_closed_loop/Demux2
+  Type: Demux
+
+BLOCK: test_closed_loop/Demux3
+  Type: Demux
+
+BLOCK: test_closed_loop/Demux4
+  Type: Demux
+
+BLOCK: test_closed_loop/Demux5
+  Type: Demux
+
+BLOCK: test_closed_loop/Demux6
+  Type: Demux
+
+BLOCK: test_closed_loop/From
+  Type: From
+  GotoTag: B
+
+BLOCK: test_closed_loop/From1
+  Type: From
+  GotoTag: C
+
+BLOCK: test_closed_loop/From10
+  Type: From
+  GotoTag: E
+
+BLOCK: test_closed_loop/From11
+  Type: From
+  GotoTag: E
+
+BLOCK: test_closed_loop/From2
+  Type: From
+  GotoTag: D
+
+BLOCK: test_closed_loop/From3
+  Type: From
+  GotoTag: C
+
+BLOCK: test_closed_loop/From6
+  Type: From
+  GotoTag: E
+
+BLOCK: test_closed_loop/Global2PathError
+  Type: SubSystem
+
+BLOCK: test_closed_loop/Goto
+  Type: Goto
+  GotoTag: A
+
+BLOCK: test_closed_loop/Goto1
+  Type: Goto
+  GotoTag: D
+
+BLOCK: test_closed_loop/Goto2
+  Type: Goto
+  GotoTag: E
+
+BLOCK: test_closed_loop/Goto3
+  Type: Goto
+  GotoTag: F
+
+BLOCK: test_closed_loop/Mux
+  Type: Mux
+
+BLOCK: test_closed_loop/Mux1
+  Type: Mux
+
+BLOCK: test_closed_loop/Mux2
+  Type: Mux
+
+BLOCK: test_closed_loop/RhoFilter
+  Type: SubSystem
+
+BLOCK: test_closed_loop/Subsystem
+  Type: SubSystem
+
+BLOCK: test_closed_loop/UpdatePlantModel
+  Type: SubSystem
+

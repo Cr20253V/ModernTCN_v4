@@ -1,0 +1,115 @@
+{
+  "name": "ModernTCN current training dataset",
+  "status": "canonical_current",
+  "created_at": "2026-05-03 22:29:18",
+  "updated_by_codex": "2026-05-04",
+  "model_family": "ModernTCN",
+  "candidate_model": "transition_rich_v3_theta_head_E_online_aug_seed73",
+  "feature_contract": "GRU_compatible_observable_19",
+  "sample_time_sec": 0.01,
+  "sequence_length": 128,
+  "source_paths": {
+    "pattern": "data/paths/path_train_tcn_v3_*.mat",
+    "count": 40,
+    "manifest": "data/paths/path_train_tcn_v3_manifest.csv"
+  },
+  "generation_flow": [
+    {
+      "stage": "path_generation",
+      "script": "src/paths/gen_tcn_training_paths_v3_transition_rich.m",
+      "output": "data/paths/path_train_tcn_v3_*.mat",
+      "note": "Generates fixed reference geometry: v_ref, omega_ref, theta_ref, X_ref, Y_ref, psi_ref."
+    },
+    {
+      "stage": "continuous_simulation",
+      "script": "src/TCN/TCN_gen_train_data_v3_transition_rich.m",
+      "output": "data/tcn/TCN_train_data_v3_transition_rich_full.mat",
+      "runs_per_path": 4,
+      "note": "Each repeat keeps path geometry fixed and varies noise seed/profile plus slip/load_change/stall injection windows and strengths."
+    },
+    {
+      "stage": "clean_turn_augmentation",
+      "output": "data/tcn/TCN_train_data_v3_clean_turn_aug.mat",
+      "merged_output": "data/tcn/TCN_train_data_v3_transition_rich_clean_turn_aug_full.mat",
+      "note": "Extra flat/low-load/closure turn runs used to reduce false slope on flat turns."
+    },
+    {
+      "stage": "window_dataset",
+      "script": "src/TCN/TCN_prepare_dataset_v3_transition_rich.m",
+      "output": "data/tcn/TCN_dataset_v3_transition_rich_clean_turn_aug.mat",
+      "split_file": "data/tcn/TCN_GRU_shared_run_split_v3_transition_rich_clean_turn_aug.mat",
+      "scaler_file": "data/tcn/TCN_scaler_v3_transition_rich_clean_turn_aug.mat"
+    }
+  ],
+  "canonical_files": {
+    "path_manifest": {
+      "path": "data/paths/path_train_tcn_v3_manifest.csv",
+      "bytes": 9483,
+      "last_write_time": "2026-05-03 15:59:46"
+    },
+    "base_mother_dataset": {
+      "path": "data/tcn/TCN_train_data_v3_transition_rich_full.mat",
+      "bytes": 102076236,
+      "last_write_time": "2026-05-03 17:26:36"
+    },
+    "clean_turn_aug_dataset": {
+      "path": "data/tcn/TCN_train_data_v3_clean_turn_aug.mat",
+      "bytes": 9358394,
+      "last_write_time": "2026-05-03 22:28:32"
+    },
+    "merged_mother_dataset": {
+      "path": "data/tcn/TCN_train_data_v3_transition_rich_clean_turn_aug_full.mat",
+      "bytes": 111391486,
+      "last_write_time": "2026-05-03 22:29:04"
+    },
+    "windowed_dataset": {
+      "path": "data/tcn/TCN_dataset_v3_transition_rich_clean_turn_aug.mat",
+      "bytes": 365756110,
+      "last_write_time": "2026-05-03 22:29:18"
+    },
+    "split_file": {
+      "path": "data/tcn/TCN_GRU_shared_run_split_v3_transition_rich_clean_turn_aug.mat",
+      "bytes": 9189,
+      "last_write_time": "2026-05-03 22:29:10"
+    },
+    "scaler_file": {
+      "path": "data/tcn/TCN_scaler_v3_transition_rich_clean_turn_aug.mat",
+      "bytes": 1189,
+      "last_write_time": "2026-05-03 22:29:18"
+    },
+    "window_report": {
+      "path": "data/tcn/TCN_prepare_dataset_v3_transition_rich_clean_turn_aug_report.md",
+      "bytes": 2965,
+      "last_write_time": "2026-05-03 22:29:18"
+    }
+  },
+  "known_noncanonical_files": [
+    "data/tcn/TCN_dataset_v3_transition_rich.mat",
+    "data/tcn/TCN_dataset_v2_transition_rich.mat",
+    "data/tcn/TCN_dataset_processed.mat",
+    "data/tcn/TCN_dataset_processed_turn_tail_tmp.mat",
+    "data/tcn/TCN_train_data_full.mat",
+    "data/tcn/TCN_train_data_smoke.mat",
+    "data/tcn/TCN_train_data_v3_smoke.mat"
+  ],
+  "recommended_expansion_policy": {
+    "primary": "Add more initial reference path families and parameterized path variants within the final safe range.",
+    "secondary": "Use data-generation repeats for nuisance variation: noise, slip, load change, stall, and limited plant-parameter variation.",
+    "avoid": "Do not change omega_ref, theta_ref, or v_ref during simulation without regenerating X_ref, Y_ref, psi_ref and labels."
+  },
+  "v4_industrial_pipeline": {
+    "status": "paths_generated_candidate_not_canonical",
+    "path_generation_script": "src/paths/gen_modern_tcn_paths_v4_industrial.m",
+    "build_script": "src/ModernTCN/build_modern_tcn_dataset_v4_industrial.m",
+    "path_pattern": "data/paths/path_modern_tcn_v4_*.mat",
+    "manifest": "data/paths/path_modern_tcn_v4_manifest.csv",
+    "train_data": "data/tcn/ModernTCN_train_data_v4_industrial.mat",
+    "dataset": "data/tcn/ModernTCN_dataset_v4_industrial.mat",
+    "scaler": "data/tcn/ModernTCN_scaler_v4_industrial.mat",
+    "split": "data/tcn/ModernTCN_shared_run_split_v4_industrial.mat",
+    "expected_paths": 188,
+    "runs_per_path": 4,
+    "clean_turn_policy": "Integrated in path_generation as v4_clean_turn path tier instead of post-generated augmentation.",
+    "paper_slope_dense_set": "Deferred; do not mix the -10..10 deg at 0.1 deg plotting set into the main training dataset."
+  }
+}

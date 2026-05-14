@@ -1,0 +1,48 @@
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+MODEL=E:\Matlab\Simulink\S-Function_16\simulink\LPVMPC_AGV_simulink_GRU.slx
+
+============================================================
+LPVMPC_AGV preload (GRU standalone)
+============================================================
+
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+[Step 0/5] Load basic parameters...
+  OK parameters() (Ts=0.010s, m=200.0kg, L=2.00m)
+
+[Step 1/5] Load LPV database...
+  OK file loaded: E:\Matlab\Simulink\S-Function_16\data\models\lin_agv_db.mat
+  use db struct format
+  OK grid 11 x 15 x 21, nx=4, nu=2, nd=1, Ts=0.010s
+
+[Step 2/5] Create MPCPlantBus...
+  OK MPCPlantBus created (nu_md=3 = 2 MV + 1 MD)
+
+[Step 3/5] Load BO maps / ctrl...
+  OK BO maps loaded (phase2_best)
+  OK ctrl loaded (Np=150)
+  copied 21 BO map fields to ctrl.maps
+
+[Step 4/5] Load GRU model...
+  OK GRU model loaded: E:\Matlab\Simulink\S-Function_16\data\models\GRU_model_mamba_control_strict.mat
+  OK GRU meta loaded: E:\Matlab\Simulink\S-Function_16\data\models\GRU_meta_mamba_control_strict.mat
+
+[Step 5/5] Summary
+  ================================================
+  basic params:   loaded (Ts=0.010s)
+  LPV database:   E:\Matlab\Simulink\S-Function_16\data\models\lin_agv_db.mat (11 x 15 x 21)
+  MPCPlantBus:    created
+  GRU model:      ready
+  BO maps:        loaded (phase2_best)
+  MPC controller: E:\Matlab\Simulink\S-Function_16\data\models\ctrl.mat (Np=150, Nc=50)
+  ================================================
+
+Initialization completed (optimized BO maps + GRU).
+
+[preloadfcn_gru] done
+
+BEFORE_SIM
+   Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.

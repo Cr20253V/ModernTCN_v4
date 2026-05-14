@@ -1,0 +1,26 @@
+{
+  "onnx_file": "results\\modern_tcn\\transition_rich_v3_seed42\\modern_tcn_seed42.onnx",
+  "sample_file": "results\\modern_tcn\\transition_rich_v3_seed42\\modern_tcn_seed42_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 2.86102294921875e-06,
+      "mean_abs_error": 1.0045865792562836e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 7.62939453125e-06,
+      "mean_abs_error": 1.4780089259147644e-06,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 4.0978193283081055e-08,
+      "mean_abs_error": 1.973239704966545e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

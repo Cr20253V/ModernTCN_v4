@@ -31,7 +31,7 @@ if nargin < 3
 end
 
 % 默认参数
-T_end = getFieldOrDefault(opts, 'T_end', 20.0);
+T_end = getFieldOrDefault(opts, 'T_end', 120.0);
 R = getFieldOrDefault(opts, 'R', 10.0);
 v0 = getFieldOrDefault(opts, 'v0', 1.0);
 theta_slope = getFieldOrDefault(opts, 'theta_slope', deg2rad(5));

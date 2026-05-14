@@ -1,0 +1,797 @@
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+
+[theta10 paths] planned paths: 51
+  output_dir : E:\Matlab\Simulink\S-Function_16\data\paths\agv_theta10_uniform_v2
+  write_files: 1
+[001/051] long_complete_01                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[002/051] long_complete_02                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[003/051] long_complete_03                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[004/051] long_complete_04                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[005/051] long_complete_05                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[006/051] long_complete_06                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[007/051] long_complete_07                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[008/051] long_complete_08                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[009/051] long_complete_09                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[010/051] long_complete_10                           theta=[ -9.50,  9.50] deg, R=[ 6.0,20.0]
+[011/051] compound_bin01_m09p5_v084_R06_08_LR        theta=[ -9.75, -9.25] deg, R=[ 6.0, 8.0]
+[012/051] compound_bin02_m08p5_v096_R08_10_RL        theta=[ -8.75, -8.25] deg, R=[ 8.0,10.0]
+[013/051] compound_bin03_m07p5_v108_R10_12_LR        theta=[ -7.75, -7.25] deg, R=[10.0,12.0]
+[014/051] compound_bin04_m06p5_v090_115_R12_16_RL    theta=[ -6.75, -6.25] deg, R=[12.0,16.0]
+[015/051] compound_bin05_m05p5_v116_R16_20_LR        theta=[ -5.75, -5.25] deg, R=[16.0,20.0]
+[016/051] compound_bin06_m04p5_v084_R06_08_LR        theta=[ -4.75, -4.25] deg, R=[ 6.0, 8.0]
+[017/051] compound_bin07_m03p5_v096_R08_10_RL        theta=[ -3.75, -3.25] deg, R=[ 8.0,10.0]
+[018/051] compound_bin08_m02p5_v108_R10_12_LR        theta=[ -2.75, -2.25] deg, R=[10.0,12.0]
+[019/051] compound_bin09_m01p5_v090_115_R12_16_RL    theta=[ -1.75, -1.25] deg, R=[12.0,16.0]
+[020/051] compound_bin10_m00p5_v116_R16_20_LR        theta=[ -0.75, -0.25] deg, R=[16.0,20.0]
+[021/051] compound_bin11_p00p5_v084_R06_08_LR        theta=[  0.25,  0.75] deg, R=[ 6.0, 8.0]
+[022/051] compound_bin12_p01p5_v096_R08_10_RL        theta=[  1.25,  1.75] deg, R=[ 8.0,10.0]
+[023/051] compound_bin13_p02p5_v108_R10_12_LR        theta=[  2.25,  2.75] deg, R=[10.0,12.0]
+[024/051] compound_bin14_p03p5_v090_115_R12_16_RL    theta=[  3.25,  3.75] deg, R=[12.0,16.0]
+[025/051] compound_bin15_p04p5_v116_R16_20_LR        theta=[  4.25,  4.75] deg, R=[16.0,20.0]
+[026/051] compound_bin16_p05p5_v084_R06_08_LR        theta=[  5.25,  5.75] deg, R=[ 6.0, 8.0]
+[027/051] compound_bin17_p06p5_v096_R08_10_RL        theta=[  6.25,  6.75] deg, R=[ 8.0,10.0]
+[028/051] compound_bin18_p07p5_v108_R10_12_LR        theta=[  7.25,  7.75] deg, R=[10.0,12.0]
+[029/051] compound_bin19_p08p5_v090_115_R12_16_RL    theta=[  8.25,  8.75] deg, R=[12.0,16.0]
+[030/051] compound_bin20_p09p5_v116_R16_20_LR        theta=[  9.25,  9.75] deg, R=[16.0,20.0]
+[031/051] short_bin01_m09p5_straight_accdec          theta=[ -9.90, -9.10] deg, R=[ NaN, NaN]
+[032/051] short_bin02_m08p5_left_R06                 theta=[ -8.90, -8.10] deg, R=[ 6.0, 6.0]
+[033/051] short_bin03_m07p5_right_R06                theta=[ -7.90, -7.10] deg, R=[ 6.0, 6.0]
+[034/051] short_bin04_m06p5_left_R12                 theta=[ -6.90, -6.10] deg, R=[12.0,12.0]
+[035/051] short_bin05_m05p5_right_R12                theta=[ -5.90, -5.10] deg, R=[12.0,12.0]
+[036/051] short_bin06_m04p5_theta_edge_speed_R16     theta=[ -4.90, -4.10] deg, R=[16.0,16.0]
+[037/051] short_bin07_m03p5_straight_accdec          theta=[ -3.90, -3.10] deg, R=[ NaN, NaN]
+[038/051] short_bin08_m02p5_left_R06                 theta=[ -2.90, -2.10] deg, R=[ 6.0, 6.0]
+[039/051] short_bin09_m01p5_right_R06                theta=[ -1.90, -1.10] deg, R=[ 6.0, 6.0]
+[040/051] short_bin10_m00p5_left_R12                 theta=[ -0.90, -0.10] deg, R=[12.0,12.0]
+[041/051] short_bin11_p00p5_right_R12                theta=[  0.10,  0.90] deg, R=[12.0,12.0]
+[042/051] short_bin12_p01p5_theta_edge_speed_R16     theta=[  1.10,  1.90] deg, R=[16.0,16.0]
+[043/051] short_bin13_p02p5_straight_accdec          theta=[  2.10,  2.90] deg, R=[ NaN, NaN]
+[044/051] short_bin14_p03p5_left_R06                 theta=[  3.10,  3.90] deg, R=[ 6.0, 6.0]
+[045/051] short_bin15_p04p5_right_R06                theta=[  4.10,  4.90] deg, R=[ 6.0, 6.0]
+[046/051] short_bin16_p05p5_left_R12                 theta=[  5.10,  5.90] deg, R=[12.0,12.0]
+[047/051] short_bin17_p06p5_right_R12                theta=[  6.10,  6.90] deg, R=[12.0,12.0]
+[048/051] short_bin18_p07p5_theta_edge_speed_R16     theta=[  7.10,  7.90] deg, R=[16.0,16.0]
+[049/051] short_bin19_p08p5_straight_accdec          theta=[  8.10,  8.90] deg, R=[ NaN, NaN]
+[050/051] short_bin20_p09p5_left_R06                 theta=[  9.10,  9.90] deg, R=[ 6.0, 6.0]
+[051/051] true_zero_hold_balanced_turn               theta=[  0.00,  0.00] deg, R=[ 8.0,12.0]
+[theta10 paths] wrote manifest: E:\Matlab\Simulink\S-Function_16\data\paths\agv_theta10_uniform_v2\agv_theta10_uniform_v2_manifest.csv
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+
+========== TCN ѵ��ĸ������ ==========
+ģ��: GRU_DataGen
+·����: 51
+ÿ·�� runs: 2
+���: E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_train_data_agv_dualsteer_theta10_uniform_conf_h0_v2.mat
+=====================================
+
+
+�X�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�[
+�U     LPVMPC_AGV ģ�ͳ�ʼ�� (PreLoadFcn, V3.4, 2026-01-22)   �U
+�^�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�a
+
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+[���� 0/5] ���ػ�������...
+  ? parameters() ���سɹ� (Ts=0.010s, m=200.0kg, L=2.00m)
+
+[���� 1/5] ���� LPV ���ݿ�...
+  ? �ļ����سɹ�: E:\Matlab\Simulink\S-Function_16\data\models\lin_agv_db.mat
+  �� ʹ�� db �ṹ���ʽ
+  ? ����: 11��15��25 (�� 4125 ��), nx=4, nu=2, nd=1, Ts=0.010s
+
+[���� 2/5] ���� MPCPlantBus...
+  ? MPCPlantBus �����ɹ� (nu_md=3 = 2 MV + 1 MD)
+
+[���� 3/5] �����Ż�Ȩ�� / ctrl...
+  ? Ȩ�ؼ��سɹ� (phase2_best)
+  ? �� ctrl.mat ���ؿ����� (Np=150)
+  �� �ѽ� 21 ���Ż�����ע�� ctrl.maps
+
+[���� 4/5] ���� GRU ģ��...
+  ? GRU_model ���سɹ� (E:\Matlab\Simulink\S-Function_16\data\models\GRU_model.mat)
+
+[���� 5/5] ��ʼ���ܽ�
+  �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
+  ? ��������:     �Ѽ��� (Ts=0.010s)
+  ? LPV ���ݿ�:   E:\Matlab\Simulink\S-Function_16\data\models\lin_agv_db.mat (11��15��25)
+  ? MPCPlantBus:  �Ѵ���
+  ? GRU ģ��:     ����
+  ? �Ż�Ȩ��:     �Ѽ��� (phase2_best)
+  ? MPC ������:   E:\Matlab\Simulink\S-Function_16\data\models\ctrl.mat (Np=150, Nc=50)
+  �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
+
+? ��ʼ���ɹ���ʹ���Ż�Ȩ���� GRU ����
+
+[PreLoadFcn] ���
+
+[TCN] Preparing runtime workspace for GRU_DataGen
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+
+�X�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�[
+�U     LPVMPC_AGV ģ�ͳ�ʼ�� (PreLoadFcn, V3.4, 2026-01-22)   �U
+�^�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�a
+
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+[���� 0/5] ���ػ�������...
+  ? parameters() ���سɹ� (Ts=0.010s, m=200.0kg, L=2.00m)
+
+[���� 1/5] ���� LPV ���ݿ�...
+  ? �ļ����سɹ�: E:\Matlab\Simulink\S-Function_16\data\models\lin_agv_db.mat
+  �� ʹ�� db �ṹ���ʽ
+  ? ����: 11��15��25 (�� 4125 ��), nx=4, nu=2, nd=1, Ts=0.010s
+
+[���� 2/5] ���� MPCPlantBus...
+  ? MPCPlantBus �����ɹ� (nu_md=3 = 2 MV + 1 MD)
+
+[���� 3/5] �����Ż�Ȩ�� / ctrl...
+  ? Ȩ�ؼ��سɹ� (phase2_best)
+  ? �� ctrl.mat ���ؿ����� (Np=150)
+  �� �ѽ� 21 ���Ż�����ע�� ctrl.maps
+
+[���� 4/5] ���� GRU ģ��...
+  ? GRU_model ���سɹ� (E:\Matlab\Simulink\S-Function_16\data\models\GRU_model.mat)
+
+[���� 5/5] ��ʼ���ܽ�
+  �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
+  ? ��������:     �Ѽ��� (Ts=0.010s)
+  ? LPV ���ݿ�:   E:\Matlab\Simulink\S-Function_16\data\models\lin_agv_db.mat (11��15��25)
+  ? MPCPlantBus:  �Ѵ���
+  ? GRU ģ��:     ����
+  ? �Ż�Ȩ��:     �Ѽ��� (phase2_best)
+  ? MPC ������:   E:\Matlab\Simulink\S-Function_16\data\models\ctrl.mat (Np=150, Nc=50)
+  �T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T�T
+
+? ��ʼ���ɹ���ʹ���Ż�Ȩ���� GRU ����
+
+[PreLoadFcn] ���
+
+[001/102] agv_theta10_uniform_v2_001_long_complete_01 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2595 stall=204 slope=12202 turn=6145 slip=0 load=218
+[002/102] agv_theta10_uniform_v2_001_long_complete_01 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2799 stall=0 slope=12202 turn=6145 slip=154 load=0
+[003/102] agv_theta10_uniform_v2_002_long_complete_02 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2810 stall=159 slope=12032 turn=7064 slip=0 load=243
+[004/102] agv_theta10_uniform_v2_002_long_complete_02 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2810 stall=0 slope=12191 turn=7064 slip=0 load=171
+[005/102] agv_theta10_uniform_v2_003_long_complete_03 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=0 slope=12190 turn=7148 slip=329 load=0
+[006/102] agv_theta10_uniform_v2_003_long_complete_03 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=197 slope=11993 turn=7148 slip=154 load=0
+[007/102] agv_theta10_uniform_v2_004_long_complete_04 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2675 stall=136 slope=12190 turn=7192 slip=0 load=221
+[008/102] agv_theta10_uniform_v2_004_long_complete_04 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2623 stall=188 slope=12190 turn=7192 slip=101 load=0
+[009/102] agv_theta10_uniform_v2_005_long_complete_05 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=0 slope=12190 turn=6195 slip=136 load=0
+[010/102] agv_theta10_uniform_v2_005_long_complete_05 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=0 slope=12190 turn=6195 slip=0 load=229
+[011/102] agv_theta10_uniform_v2_006_long_complete_06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=0 slope=12190 turn=7112 slip=0 load=276
+[012/102] agv_theta10_uniform_v2_006_long_complete_06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=258 slope=11932 turn=7112 slip=0 load=208
+[013/102] agv_theta10_uniform_v2_007_long_complete_07 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=0 slope=12190 turn=7172 slip=158 load=0
+[014/102] agv_theta10_uniform_v2_007_long_complete_07 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2558 stall=253 slope=12190 turn=7172 slip=0 load=0
+[015/102] agv_theta10_uniform_v2_008_long_complete_08 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=0 slope=12190 turn=7094 slip=0 load=199
+[016/102] agv_theta10_uniform_v2_008_long_complete_08 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=2811 stall=187 slope=12003 turn=7094 slip=0 load=0
+[017/102] agv_theta10_uniform_v2_009_long_complete_09 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=4172 stall=156 slope=10673 turn=6145 slip=0 load=0
+[018/102] agv_theta10_uniform_v2_009_long_complete_09 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=4172 stall=233 slope=10596 turn=6145 slip=144 load=0
+[019/102] agv_theta10_uniform_v2_010_long_complete_10 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=3812 stall=172 slope=11017 turn=7064 slip=0 load=218
+[020/102] agv_theta10_uniform_v2_010_long_complete_10 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=15001 | flat=3812 stall=250 slope=10939 turn=7064 slip=152 load=0
+[021/102] agv_theta10_uniform_v2_011_compound_bin01_m09p5_v084_R06_08_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=195 slope=4206 turn=2033 slip=0 load=0
+[022/102] agv_theta10_uniform_v2_011_compound_bin01_m09p5_v084_R06_08_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=2033 slip=0 load=142
+[023/102] agv_theta10_uniform_v2_012_compound_bin02_m08p5_v096_R08_10_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=204 slope=4197 turn=2013 slip=0 load=0
+[024/102] agv_theta10_uniform_v2_012_compound_bin02_m08p5_v096_R08_10_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=164 slope=4237 turn=2013 slip=0 load=0
+[025/102] agv_theta10_uniform_v2_013_compound_bin03_m07p5_v108_R10_12_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1997 slip=192 load=162
+[026/102] agv_theta10_uniform_v2_013_compound_bin03_m07p5_v108_R10_12_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1997 slip=0 load=203
+[027/102] agv_theta10_uniform_v2_014_compound_bin04_m06p5_v090_115_R12_16_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1879 slip=156 load=0
+[028/102] agv_theta10_uniform_v2_014_compound_bin04_m06p5_v090_115_R12_16_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1879 slip=141 load=0
+[029/102] agv_theta10_uniform_v2_015_compound_bin05_m05p5_v116_R16_20_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=201 slope=4200 turn=1883 slip=0 load=0
+[030/102] agv_theta10_uniform_v2_015_compound_bin05_m05p5_v116_R16_20_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1883 slip=192 load=0
+[031/102] agv_theta10_uniform_v2_016_compound_bin06_m04p5_v084_R06_08_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=2033 slip=0 load=150
+[032/102] agv_theta10_uniform_v2_016_compound_bin06_m04p5_v084_R06_08_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=162 slope=4239 turn=2033 slip=185 load=0
+[033/102] agv_theta10_uniform_v2_017_compound_bin07_m03p5_v096_R08_10_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=2013 slip=148 load=0
+[034/102] agv_theta10_uniform_v2_017_compound_bin07_m03p5_v096_R08_10_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=2013 slip=0 load=272
+[035/102] agv_theta10_uniform_v2_018_compound_bin08_m02p5_v108_R10_12_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=193 slope=4208 turn=1997 slip=0 load=208
+[036/102] agv_theta10_uniform_v2_018_compound_bin08_m02p5_v108_R10_12_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1997 slip=0 load=155
+[037/102] agv_theta10_uniform_v2_019_compound_bin09_m01p5_v090_115_R12_16_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4401 stall=0 slope=0 turn=1879 slip=122 load=139
+[038/102] agv_theta10_uniform_v2_019_compound_bin09_m01p5_v090_115_R12_16_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4401 stall=0 slope=0 turn=1879 slip=0 load=196
+[039/102] agv_theta10_uniform_v2_020_compound_bin10_m00p5_v116_R16_20_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4401 stall=0 slope=0 turn=1883 slip=0 load=186
+[040/102] agv_theta10_uniform_v2_020_compound_bin10_m00p5_v116_R16_20_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4217 stall=184 slope=0 turn=1883 slip=0 load=0
+[041/102] agv_theta10_uniform_v2_021_compound_bin11_p00p5_v084_R06_08_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4270 stall=131 slope=0 turn=2033 slip=0 load=0
+[042/102] agv_theta10_uniform_v2_021_compound_bin11_p00p5_v084_R06_08_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4401 stall=0 slope=0 turn=2033 slip=178 load=0
+[043/102] agv_theta10_uniform_v2_022_compound_bin12_p01p5_v096_R08_10_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4200 stall=201 slope=0 turn=2013 slip=160 load=0
+[044/102] agv_theta10_uniform_v2_022_compound_bin12_p01p5_v096_R08_10_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=4200 stall=201 slope=0 turn=2013 slip=0 load=0
+[045/102] agv_theta10_uniform_v2_023_compound_bin13_p02p5_v108_R10_12_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1997 slip=0 load=151
+[046/102] agv_theta10_uniform_v2_023_compound_bin13_p02p5_v108_R10_12_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1997 slip=134 load=0
+[047/102] agv_theta10_uniform_v2_024_compound_bin14_p03p5_v090_115_R12_16_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1879 slip=163 load=0
+[048/102] agv_theta10_uniform_v2_024_compound_bin14_p03p5_v090_115_R12_16_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1879 slip=127 load=0
+[049/102] agv_theta10_uniform_v2_025_compound_bin15_p04p5_v116_R16_20_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=131 slope=4270 turn=1883 slip=0 load=0
+[050/102] agv_theta10_uniform_v2_025_compound_bin15_p04p5_v116_R16_20_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=331 slope=4070 turn=1883 slip=0 load=0
+[051/102] agv_theta10_uniform_v2_026_compound_bin16_p05p5_v084_R06_08_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=188 slope=4213 turn=2033 slip=153 load=0
+[052/102] agv_theta10_uniform_v2_026_compound_bin16_p05p5_v084_R06_08_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=2033 slip=0 load=201
+[053/102] agv_theta10_uniform_v2_027_compound_bin17_p06p5_v096_R08_10_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=2013 slip=146 load=0
+[054/102] agv_theta10_uniform_v2_027_compound_bin17_p06p5_v096_R08_10_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=2013 slip=0 load=276
+[055/102] agv_theta10_uniform_v2_028_compound_bin18_p07p5_v108_R10_12_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=256 slope=4145 turn=1997 slip=0 load=0
+[056/102] agv_theta10_uniform_v2_028_compound_bin18_p07p5_v108_R10_12_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1997 slip=0 load=201
+[057/102] agv_theta10_uniform_v2_029_compound_bin19_p08p5_v090_115_R12_16_RL | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=133 slope=4268 turn=1879 slip=0 load=210
+[058/102] agv_theta10_uniform_v2_029_compound_bin19_p08p5_v090_115_R12_16_RL | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=134 slope=4267 turn=1879 slip=0 load=0
+[059/102] agv_theta10_uniform_v2_030_compound_bin20_p09p5_v116_R16_20_LR | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1883 slip=171 load=0
+[060/102] agv_theta10_uniform_v2_030_compound_bin20_p09p5_v116_R16_20_LR | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=4401 | flat=0 stall=0 slope=4401 turn=1883 slip=132 load=0
+[061/102] agv_theta10_uniform_v2_031_short_bin01_m09p5_straight_accdec | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=0 load=201
+[062/102] agv_theta10_uniform_v2_031_short_bin01_m09p5_straight_accdec | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=0 load=182
+[063/102] agv_theta10_uniform_v2_032_short_bin02_m08p5_left_R06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=198
+[064/102] agv_theta10_uniform_v2_032_short_bin02_m08p5_left_R06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=163 load=0
+[065/102] agv_theta10_uniform_v2_033_short_bin03_m07p5_right_R06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=132 slope=2519 turn=1121 slip=0 load=0
+[066/102] agv_theta10_uniform_v2_033_short_bin03_m07p5_right_R06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=201
+[067/102] agv_theta10_uniform_v2_034_short_bin04_m06p5_left_R12 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=176 slope=2475 turn=1085 slip=0 load=0
+[068/102] agv_theta10_uniform_v2_034_short_bin04_m06p5_left_R12 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1085 slip=0 load=244
+[069/102] agv_theta10_uniform_v2_035_short_bin05_m05p5_right_R12 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1085 slip=118 load=0
+[070/102] agv_theta10_uniform_v2_035_short_bin05_m05p5_right_R12 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1085 slip=0 load=171
+[071/102] agv_theta10_uniform_v2_036_short_bin06_m04p5_theta_edge_speed_R16 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=0 load=217
+[072/102] agv_theta10_uniform_v2_036_short_bin06_m04p5_theta_edge_speed_R16 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=148 slope=2503 turn=0 slip=126 load=0
+[073/102] agv_theta10_uniform_v2_037_short_bin07_m03p5_straight_accdec | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=335 slope=2316 turn=0 slip=0 load=0
+[074/102] agv_theta10_uniform_v2_037_short_bin07_m03p5_straight_accdec | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=0 load=276
+[075/102] agv_theta10_uniform_v2_038_short_bin08_m02p5_left_R06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=226 slope=2425 turn=1121 slip=0 load=213
+[076/102] agv_theta10_uniform_v2_038_short_bin08_m02p5_left_R06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=220
+[077/102] agv_theta10_uniform_v2_039_short_bin09_m01p5_right_R06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2459 stall=192 slope=0 turn=1121 slip=150 load=0
+[078/102] agv_theta10_uniform_v2_039_short_bin09_m01p5_right_R06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2450 stall=201 slope=0 turn=1121 slip=130 load=0
+[079/102] agv_theta10_uniform_v2_040_short_bin10_m00p5_left_R12 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2651 stall=0 slope=0 turn=1085 slip=186 load=0
+[080/102] agv_theta10_uniform_v2_040_short_bin10_m00p5_left_R12 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2651 stall=0 slope=0 turn=1085 slip=0 load=130
+[081/102] agv_theta10_uniform_v2_041_short_bin11_p00p5_right_R12 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2651 stall=0 slope=0 turn=1085 slip=189 load=0
+[082/102] agv_theta10_uniform_v2_041_short_bin11_p00p5_right_R12 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2509 stall=142 slope=0 turn=1085 slip=0 load=0
+[083/102] agv_theta10_uniform_v2_042_short_bin12_p01p5_theta_edge_speed_R16 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2651 stall=0 slope=0 turn=0 slip=172 load=0
+[084/102] agv_theta10_uniform_v2_042_short_bin12_p01p5_theta_edge_speed_R16 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=2287 stall=364 slope=0 turn=0 slip=0 load=0
+[085/102] agv_theta10_uniform_v2_043_short_bin13_p02p5_straight_accdec | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=177 load=0
+[086/102] agv_theta10_uniform_v2_043_short_bin13_p02p5_straight_accdec | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=153 load=0
+[087/102] agv_theta10_uniform_v2_044_short_bin14_p03p5_left_R06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=236
+[088/102] agv_theta10_uniform_v2_044_short_bin14_p03p5_left_R06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=143
+[089/102] agv_theta10_uniform_v2_045_short_bin15_p04p5_right_R06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=212
+[090/102] agv_theta10_uniform_v2_045_short_bin15_p04p5_right_R06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=201
+[091/102] agv_theta10_uniform_v2_046_short_bin16_p05p5_left_R12 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1085 slip=0 load=201
+[092/102] agv_theta10_uniform_v2_046_short_bin16_p05p5_left_R12 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=211 slope=2440 turn=1085 slip=0 load=0
+[093/102] agv_theta10_uniform_v2_047_short_bin17_p06p5_right_R12 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1085 slip=0 load=224
+[094/102] agv_theta10_uniform_v2_047_short_bin17_p06p5_right_R12 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=158 slope=2493 turn=1085 slip=0 load=0
+[095/102] agv_theta10_uniform_v2_048_short_bin18_p07p5_theta_edge_speed_R16 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=193 load=0
+[096/102] agv_theta10_uniform_v2_048_short_bin18_p07p5_theta_edge_speed_R16 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=0 load=201
+[097/102] agv_theta10_uniform_v2_049_short_bin19_p08p5_straight_accdec | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=0 slip=105 load=0
+[098/102] agv_theta10_uniform_v2_049_short_bin19_p08p5_straight_accdec | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=132 slope=2519 turn=0 slip=0 load=0
+[099/102] agv_theta10_uniform_v2_050_short_bin20_p09p5_left_R06 | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=217 slope=2434 turn=1121 slip=0 load=160
+[100/102] agv_theta10_uniform_v2_050_short_bin20_p09p5_left_R06 | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=2651 | flat=0 stall=0 slope=2651 turn=1121 slip=0 load=242
+[101/102] agv_theta10_uniform_v2_051_true_zero_hold_balanced_turn | rep=1 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=3001 | flat=3001 stall=0 slope=0 turn=994 slip=106 load=0
+[102/102] agv_theta10_uniform_v2_051_true_zero_hold_balanced_turn | rep=2 ...    Assuming no disturbance added to measured output #1.
+-->Assuming output disturbance added to measured output #2 is integrated white noise.
+-->Assuming output disturbance added to measured output #3 is integrated white noise.
+-->Assuming output disturbance added to measured output #4 is integrated white noise.
+-->"Model.Noise" is empty. Assuming white noise on each measured output.
+ok N=3001 | flat=3001 stall=0 slope=0 turn=994 slip=0 load=365
+
+���� TCN ѵ��ĸ��: E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_train_data_agv_dualsteer_theta10_uniform_conf_h0_v2.mat
+�Լ챨��: E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_train_data_agv_dualsteer_theta10_uniform_conf_h0_v2_report.md
+��Ч runs: 102, ʧ�� runs: 0
+=====================================
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+
+========== TCN Dataset Preprocess ==========
+Input : E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_train_data_agv_dualsteer_theta10_uniform_conf_h0_v2.mat
+Output: E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2.mat
+seq_len=128, stride=64, skip_initial_sec=1.00
+===========================================
+
+
+[TCN] Preprocess done.
+  Train windows: 18349
+  Val windows  : 2915
+  Test windows : 3818
+  Feature dim  : 19
+  Saved dataset: E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2.mat
+  Saved scaler : E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_scaler_agv_dualsteer_theta10_uniform_conf_h0_v2.mat
+  Saved report : E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_prepare_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2_report.md
+  Saved contract: E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2_contract.json
+[init_project] Root: E:\Matlab\Simulink\S-Function_16
+[theta10 coverage] wrote E:\Matlab\Simulink\S-Function_16\results\modern_tcn\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2_coverage.md
+{����ʹ�� summarize_agv_theta10_uniform_coverage (�� 55 ��)
+Coverage gate failed for E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2.mat. See
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2_coverage.md.
+
+���� build_agv_theta10_uniform_dataset (�� 144 ��)
+    outputs.coverage = summarize_agv_theta10_uniform_coverage( ...
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+} 
+[����: �ر�ǰ�Ƿ񱣴�ģ�͹�����������?
+
+ģ�͹�����������Դ���ļ� ""��] 
+ERROR: MATLAB error Exit Status: 0x00000001

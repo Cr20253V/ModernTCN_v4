@@ -1,0 +1,18 @@
+# TCN theta10 V2 Multi-Seed Report
+
+- dataset: `E:\Matlab\Simulink\S-Function_16\data\tcn\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v2.mat`
+- run_tag: `tcn_theta10_uniform_h0_v2`
+- seeds: `21`
+- do_train: `0`
+- per-seed CSV: `E:\Matlab\Simulink\S-Function_16\results\tcn\train_logs_theta10_uniform_h0_v2\TCN_theta10_v2_multi_seed_summary.csv`
+- group CSV: `E:\Matlab\Simulink\S-Function_16\results\tcn\train_logs_theta10_uniform_h0_v2\TCN_theta10_v2_group_summary.csv`
+
+## Group Summary
+
+_No rows._
+
+## Per Seed
+
+| model | case_name | seed | status | best_epoch | base_best_epoch | train_seconds | acc_main | acc_turn | acc_turn_pure | acc_turn_transition | turn_right_recall | turn_left_recall | theta_mae_deg | theta_abs_le_10_p95_abs_err_deg | theta_neg_10_8_p95_abs_err_deg | theta_pos_8_10_p95_abs_err_deg | theta_neg_8_6_p95_abs_err_deg | theta_pos_6_8_p95_abs_err_deg | theta_neg_2_0p5_p95_abs_err_deg | theta_pos_0p5_2_p95_abs_err_deg | theta_near_flat_abs_p95_deg | theta_flat_abs_p95_deg | theta_flat_bias_deg | flat_recall | stall_recall | slope_recall | uphill_recall | downhill_recall | flat_as_slope | num_blocks | num_filters | kernel_size | head_pooling | turn_head_type | turn_head_source | lambda_turn | lambda_theta | lambda_theta_flat | theta_flat_loss_mode | model_file | meta_file | report_file | error_message |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| TCN | tcn96_rawtheta_sym | 21 | planned | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | NaN | 6 | 96 | 3 | last_mean_max_inputstats | mlp | inputstats | 0.08 | 0.55 | 0.12 | near_zero | E:\Matlab\Simulink\S-Function_16\data\models\TCN_model_tcn_theta10_uniform_h0_v2_tcn96_rawtheta_sym_seed21.mat | E:\Matlab\Simulink\S-Function_16\data\models\TCN_meta_tcn_theta10_uniform_h0_v2_tcn96_rawtheta_sym_seed21.mat | E:\Matlab\Simulink\S-Function_16\results\tcn\train_logs_theta10_uniform_h0_v2\tcn96_rawtheta_sym_seed21\TCN_train_report.md |  |

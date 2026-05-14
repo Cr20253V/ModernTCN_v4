@@ -1,0 +1,137 @@
+# TCN Training Data Generation Report
+
+- Generated: 2026-05-14 00:26:09
+- Output: `E:\Matlab\Simulink\S-Function_16\results\paper\modern_tcn_theta_sweep_plot\modern_tcn_theta10_uniform_h0_v2_seed21_multicond_shortpaths_v1_theta0p1\ModernTCN_theta_sweep_full_shortpaths_v1_data.mat`
+- Model: `GRU_DataGen`
+- Valid runs: 101
+- Failed runs: 0
+- Total samples: 450240
+
+## Label Distribution
+
+| label | count | ratio |
+|---|---:|---:|
+| flat | 87360 | 0.1940 |
+| stall | 0 | 0.0000 |
+| slope | 362880 | 0.8060 |
+| turn right | 0 | 0.0000 |
+| turn straight | 450240 | 1.0000 |
+| turn left | 0 | 0.0000 |
+| slip aux | 0 | 0.0000 |
+| stall aux | 0 | 0.0000 |
+| load_change aux | 0 | 0.0000 |
+
+## Transition Coverage
+
+- Runs with dynamic windows: 101
+- Dynamic window hits: 1306
+
+## Event Coverage
+
+- Runs with slip labels: 0
+- Runs with stall labels: 0
+- Runs with load-change labels: 0
+
+## Paths
+
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_001_m10p0_m09p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_002_m09p8_m09p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_003_m09p6_m09p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_004_m09p4_m09p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_005_m09p2_m09p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_006_m09p0_m08p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_007_m08p8_m08p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_008_m08p6_m08p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_009_m08p4_m08p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_010_m08p2_m08p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_011_m08p0_m07p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_012_m07p8_m07p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_013_m07p6_m07p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_014_m07p4_m07p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_015_m07p2_m07p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_016_m07p0_m06p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_017_m06p8_m06p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_018_m06p6_m06p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_019_m06p4_m06p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_020_m06p2_m06p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_021_m06p0_m05p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_022_m05p8_m05p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_023_m05p6_m05p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_024_m05p4_m05p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_025_m05p2_m05p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_026_m05p0_m04p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_027_m04p8_m04p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_028_m04p6_m04p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_029_m04p4_m04p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_030_m04p2_m04p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_031_m04p0_m03p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_032_m03p8_m03p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_033_m03p6_m03p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_034_m03p4_m03p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_035_m03p2_m03p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_036_m03p0_m02p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_037_m02p8_m02p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_038_m02p6_m02p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_039_m02p4_m02p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_040_m02p2_m02p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_041_m02p0_m01p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_042_m01p8_m01p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_043_m01p6_m01p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_044_m01p4_m01p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_045_m01p2_m01p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_046_m01p0_m00p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_047_m00p8_m00p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_048_m00p6_m00p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_049_m00p4_m00p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_050_m00p2_m00p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_051_p00p0_p00p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_052_p00p2_p00p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_053_p00p4_p00p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_054_p00p6_p00p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_055_p00p8_p00p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_056_p01p0_p01p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_057_p01p2_p01p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_058_p01p4_p01p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_059_p01p6_p01p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_060_p01p8_p01p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_061_p02p0_p02p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_062_p02p2_p02p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_063_p02p4_p02p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_064_p02p6_p02p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_065_p02p8_p02p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_066_p03p0_p03p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_067_p03p2_p03p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_068_p03p4_p03p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_069_p03p6_p03p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_070_p03p8_p03p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_071_p04p0_p04p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_072_p04p2_p04p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_073_p04p4_p04p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_074_p04p6_p04p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_075_p04p8_p04p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_076_p05p0_p05p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_077_p05p2_p05p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_078_p05p4_p05p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_079_p05p6_p05p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_080_p05p8_p05p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_081_p06p0_p06p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_082_p06p2_p06p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_083_p06p4_p06p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_084_p06p6_p06p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_085_p06p8_p06p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_086_p07p0_p07p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_087_p07p2_p07p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_088_p07p4_p07p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_089_p07p6_p07p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_090_p07p8_p07p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_091_p08p0_p08p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_092_p08p2_p08p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_093_p08p4_p08p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_094_p08p6_p08p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_095_p08p8_p08p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_096_p09p0_p09p1`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_097_p09p2_p09p3`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_098_p09p4_p09p5`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_099_p09p6_p09p7`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_100_p09p8_p09p9`
+- `path_modern_tcn_theta_sweep_multicond_shortpaths_v1_theta0p1_101_p10p0_p10p0`

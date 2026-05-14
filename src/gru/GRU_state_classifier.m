@@ -104,14 +104,23 @@ function state = initClassifier(params, model)
     % 序列长度和特征维度从model获取
     if isfield(model, 'seq_len')
         state.seq_len = model.seq_len;
+    elseif isfield(model, 'cfg') && isfield(model.cfg, 'seq_len')
+        state.seq_len = model.cfg.seq_len;
     else
         % 回退方案：假设seq_len=48（与GRU_prepare_dataset.m默认值一致）
         state.seq_len = 48;
         warning('model中未找到seq_len字段，使用默认值48');
     end
-    state.feat_dim = size(model.scaler.mean, 2);  % 特征维度
+    state.feat_dim = numel(model.scaler.mean);  % 特征维度
     state.buffer = zeros(state.seq_len, state.feat_dim);  % [seq_len, feat_dim]
     state.buffer_count = 0;  % 当前缓冲区样本数
+
+    if ~isfield(state.model, 'class_labels_main')
+        state.model.class_labels_main = {'flat', 'stall', 'slope'};
+    end
+    if ~isfield(state.model, 'class_labels_turn')
+        state.model.class_labels_turn = {'right', 'straight', 'left'};
+    end
     
     % 最小驻留时间配置（与 test_gru_latency 评估结果对齐）
     state.dwell_main = 0.20;     % 主分类驻留时间 [s]
@@ -391,4 +400,3 @@ function out = constructOutput(state)
     out.debug.step = state.step;
     out.debug.warning = 'Using default output (buffer not full or exception)';
 end
-

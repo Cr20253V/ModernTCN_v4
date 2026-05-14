@@ -1,0 +1,86 @@
+{
+  "checkpoint": "results\\modern_tcn\\transition_rich_v3_theta_head_E_online_aug_seed73\\modern_tcn_seed73.pt",
+  "dataset_file": "data\\tcn\\TCN_dataset_v3_transition_rich_clean_turn_aug.mat",
+  "split": "test",
+  "n": 3547,
+  "metrics": {
+    "loss_total": 0.15284048275003845,
+    "acc_main": 0.9751903016633775,
+    "acc_turn": 0.7893994925288976,
+    "acc_turn_pure": 0.8298162014976175,
+    "acc_turn_transition": 0.5944170771756979,
+    "flat_recall": 0.9867183176535694,
+    "stall_recall": 0.8851851851851852,
+    "slope_recall": 0.9775510204081632,
+    "recall_main": [
+      0.9867183176535694,
+      0.8851851851851852,
+      0.9775510204081632
+    ],
+    "turn_right_recall": 0.9564625850340136,
+    "turn_straight_recall": 0.6617137196631996,
+    "turn_left_recall": 0.9596469104665826,
+    "recall_turn": [
+      0.9564625850340136,
+      0.6617137196631996,
+      0.9596469104665826
+    ],
+    "cm_turn": [
+      [
+        703,
+        32,
+        0
+      ],
+      [
+        287,
+        1336,
+        396
+      ],
+      [
+        0,
+        32,
+        761
+      ]
+    ],
+    "n_turn_transition": 609,
+    "n_turn_pure": 2938,
+    "cm_main": [
+      [
+        1783,
+        2,
+        22
+      ],
+      [
+        16,
+        239,
+        15
+      ],
+      [
+        23,
+        10,
+        1437
+      ]
+    ],
+    "theta_mae_rad": 0.012552759610116482,
+    "theta_mae_deg": 0.7192201018333435,
+    "uphill_recall": 0.9669327251995439,
+    "downhill_recall": 0.9932546374367622,
+    "slope_sign_acc": 1.0,
+    "theta_flat_mae_deg": 0.32247138023376465,
+    "theta_flat_abs_p95_deg": 0.969150722026825,
+    "theta_flat_bias_deg": 0.007806075271219015,
+    "theta_flat_n": 1807.0,
+    "theta_near_flat_mae_deg": 0.27687597274780273,
+    "theta_near_flat_abs_p95_deg": 0.9691554307937622,
+    "theta_near_flat_bias_deg": 0.029093226417899132,
+    "theta_near_flat_n": 1647.0,
+    "theta_flat_turn_mae_deg": 0.18675990402698517,
+    "theta_flat_turn_abs_p95_deg": 0.6469419002532959,
+    "theta_flat_turn_bias_deg": -0.03135218098759651,
+    "theta_flat_turn_n": 535.0,
+    "theta_slope_control_mae_deg": 0.7192201018333435,
+    "theta_slope_control_abs_p95_deg": 6.037403583526611,
+    "theta_slope_control_bias_deg": -0.02433088794350624,
+    "theta_slope_control_n": 1470.0
+  }
+}
