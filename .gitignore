@@ -1,6 +1,22 @@
-# 大型训练数据（避免上传至仓库）
+# Python 虚拟环境
+.venv/
+
+# IDE 配置
+.cursor/
+
+# 大型数据目录（训练路径、模型权重、训练数据）
+data/paths/
+data/models/
+data/mamba/
+data/gru/
+data/tcn/*.mat
+data/tcn/*.npz
+
+# 大型输出文件
 GRU_train_data_full.mat
 GRU_dataset_processed.mat
+GRU_out.mat
+ModernTCN_out.mat
 
 # Simulink 生成文件
 **/slprj/
@@ -10,6 +26,3 @@ GRU_dataset_processed.mat
 # MATLAB 临时文件
 *.asv
 *.mex*
-
-# 输出结果目录（可选忽略）
-# results/
