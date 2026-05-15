@@ -35,6 +35,30 @@ assignin(mw, 'results_paths', results_paths);
 assignin(mw, 'env_paths', env_paths);
 % Do not save ModelWorkspace during PreLoadFcn; this can block load_system in batch mode.
 
+preload_model_name = '';
+try
+    preload_model_name = bdroot;
+catch
+    preload_model_name = '';
+end
+
+skip_gru_model = false;
+if ~isempty(preload_model_name)
+    skip_gru_model = contains(lower(preload_model_name), 'imu');
+end
+if evalin('base', 'exist(''preload_skip_gru_model'', ''var'')==1')
+    skip_gru_model = logical(evalin('base', 'preload_skip_gru_model'));
+end
+
+% ThetaModeSelect uses this scalar when the IMU baseline model is run:
+%   1 -> nominal theta=0, 2 -> IMU estimate, 3 -> oracle true theta.
+if evalin('base', 'exist(''theta_mode'', ''var'')==0')
+    assignin('base', 'theta_mode', 2);
+end
+theta_mode = double(evalin('base', 'theta_mode'));
+assignin('base', 'theta_mode', theta_mode);
+assignin(mw, 'theta_mode', theta_mode);
+
 %% ===== 目标预测时域配置 =====
 TARGET_NP = 150;  % 1.5s 预测时域（适应 S弯大曲率）
 TARGET_NC = 50;   % 0.5s 控制时域
@@ -292,59 +316,70 @@ end
 fprintf('\n');
 
 %% 步骤4：加载 GRU 模型
-fprintf('[步骤 4/5] 加载 GRU 模型...\n');
 gru_model = [];
 gru_scaler = [];
+gru_status = '跳过（无神经网络基线）';
 
-base_dirs_gru = {data_models_dir, data_gru_dir, root};
-gru_files = {};
-for d = 1:numel(base_dirs_gru)
-    gru_files{end+1} = fullfile(base_dirs_gru{d}, 'GRU_model.mat'); %#ok<AGROW>
-end
-gru_files = unique(gru_files, 'stable');
-
-for i = 1:numel(gru_files)
-    if exist(gru_files{i}, 'file')
-        Sg = load(gru_files{i});
-        if isfield(Sg, 'model')
-            gru_model = Sg.model;
-            fprintf('  ✓ GRU_model 加载成功 (%s)\n', gru_files{i});
-            if isfield(gru_model, 'seq_len')
-                fprintf('    - 序列长度: %d\n', gru_model.seq_len);
-            end
-            if isfield(gru_model, 'scaler')
-                gru_scaler = gru_model.scaler;
-            end
-            break;
-        end
+if skip_gru_model
+    fprintf('[步骤 4/5] 跳过 GRU 模型加载...\n');
+    if ~isempty(preload_model_name)
+        fprintf('  → 当前模型: %s\n', preload_model_name);
     end
-end
+    fprintf('  → IMU / nominal / oracle 基线不依赖 GRU_model.mat\n');
+else
+    fprintf('[步骤 4/5] 加载 GRU 模型...\n');
 
-if isempty(gru_model)
-    error('[PreLoadFcn] ❌ 未找到 GRU_model.mat');
-end
+    base_dirs_gru = {data_models_dir, data_gru_dir, root};
+    gru_files = {};
+    for d = 1:numel(base_dirs_gru)
+        gru_files{end+1} = fullfile(base_dirs_gru{d}, 'GRU_model.mat'); %#ok<AGROW>
+    end
+    gru_files = unique(gru_files, 'stable');
 
-scaler_files = {};
-for d = 1:numel(base_dirs_gru)
-    scaler_files{end+1} = fullfile(base_dirs_gru{d}, 'GRU_scaler.mat'); %#ok<AGROW>
-end
-scaler_files = unique(scaler_files, 'stable');
-if isempty(gru_scaler)
-    for i = 1:numel(scaler_files)
-        if exist(scaler_files{i}, 'file')
-            Ss = load(scaler_files{i});
-            if isfield(Ss, 'scaler')
-                gru_scaler = Ss.scaler;
-                fprintf('  ✓ GRU_scaler 加载成功 (%s)\n', scaler_files{i});
+    for i = 1:numel(gru_files)
+        if exist(gru_files{i}, 'file')
+            Sg = load(gru_files{i});
+            if isfield(Sg, 'model')
+                gru_model = Sg.model;
+                fprintf('  ✓ GRU_model 加载成功 (%s)\n', gru_files{i});
+                if isfield(gru_model, 'seq_len')
+                    fprintf('    - 序列长度: %d\n', gru_model.seq_len);
+                end
+                if isfield(gru_model, 'scaler')
+                    gru_scaler = gru_model.scaler;
+                end
                 break;
             end
         end
     end
-end
 
-assignin('base', 'gru_model', gru_model);
-if ~isempty(gru_scaler)
-    assignin('base', 'gru_scaler', gru_scaler);
+    if isempty(gru_model)
+        error('[PreLoadFcn] ❌ 未找到 GRU_model.mat');
+    end
+
+    scaler_files = {};
+    for d = 1:numel(base_dirs_gru)
+        scaler_files{end+1} = fullfile(base_dirs_gru{d}, 'GRU_scaler.mat'); %#ok<AGROW>
+    end
+    scaler_files = unique(scaler_files, 'stable');
+    if isempty(gru_scaler)
+        for i = 1:numel(scaler_files)
+            if exist(scaler_files{i}, 'file')
+                Ss = load(scaler_files{i});
+                if isfield(Ss, 'scaler')
+                    gru_scaler = Ss.scaler;
+                    fprintf('  ✓ GRU_scaler 加载成功 (%s)\n', scaler_files{i});
+                    break;
+                end
+            end
+        end
+    end
+
+    assignin('base', 'gru_model', gru_model);
+    if ~isempty(gru_scaler)
+        assignin('base', 'gru_scaler', gru_scaler);
+    end
+    gru_status = '就绪';
 end
 fprintf('\n');
 
@@ -354,7 +389,7 @@ fprintf('  ═══════════════════════
 fprintf('  ✓ 基础参数:     已加载 (Ts=%.3fs)\n', params.Ts);
 fprintf('  ✓ LPV 数据库:   %s (%d×%d×%d)\n', loaded_db_file, Nv, Nw, Nt);
 fprintf('  ✓ MPCPlantBus:  已创建\n');
-fprintf('  ✓ GRU 模型:     就绪\n');
+fprintf('  ✓ GRU 模型:     %s\n', gru_status);
 
 if maps_loaded
     [~, fname, ~] = fileparts(maps_source_file);
@@ -373,7 +408,11 @@ fprintf('  ═══════════════════════
 
 % 最终状态判定
 if maps_loaded && ~isempty(ctrl)
-    fprintf('\n✓ 初始化成功！使用优化权重与 GRU 调度\n');
+    if skip_gru_model
+        fprintf('\n✓ 初始化成功！使用优化权重，无神经网络基线调度\n');
+    else
+        fprintf('\n✓ 初始化成功！使用优化权重与 GRU 调度\n');
+    end
 elseif ~isempty(ctrl)
     fprintf('\n⚠ 初始化完成，使用默认权重\n');
 else

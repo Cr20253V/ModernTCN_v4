@@ -1,5 +1,5 @@
-function result = compare_tcn_gru_modern_closed_loop_out(modern_file, gru_file, tcn_file, path_file, out_dir, modern_label)
-%COMPARE_TCN_GRU_MODERN_CLOSED_LOOP_OUT Compare three closed-loop simulation logs.
+function result = compare_tcn_gru_modern_closed_loop_out(modern_file, gru_file, tcn_file, path_file, out_dir, modern_label, extra_runs, report_title, file_prefix)
+%COMPARE_TCN_GRU_MODERN_CLOSED_LOOP_OUT Compare closed-loop simulation logs.
 
 if nargin < 1 || isempty(modern_file)
     modern_file = fullfile(local_project_root(), 'ModernTCN_out.mat');
@@ -20,6 +20,15 @@ end
 if nargin < 6 || isempty(modern_label)
     modern_label = "ModernTCN";
 end
+if nargin < 7
+    extra_runs = [];
+end
+if nargin < 8 || isempty(report_title)
+    report_title = 'TCN、GRU 与 ModernTCN 闭环仿真对比报告';
+end
+if nargin < 9 || isempty(file_prefix)
+    file_prefix = 'tcn_gru_modern_closed_loop';
+end
 
 if exist('init_project', 'file') == 2
     init_project();
@@ -39,20 +48,21 @@ P = load(path_file, 'ref');
 ref = P.ref;
 zones = local_get_zones(ref);
 
-runs = [ ...
-    local_analyze_one(string(modern_label), modern_file, zones), ...
-    local_analyze_one("GRU", gru_file, zones), ...
-    local_analyze_one("TCN", tcn_file, zones)];
+run_specs = local_build_run_specs(modern_label, modern_file, gru_file, tcn_file, extra_runs);
+runs = struct([]);
+for i = 1:numel(run_specs)
+    runs = [runs, local_analyze_one(run_specs(i).label, run_specs(i).file, zones)]; %#ok<AGROW>
+end
 
 summary_table = struct2table([runs.summary]);
 zone_table = struct2table([runs.zones]);
 rank_table = local_rank_table(summary_table);
 
-summary_file = fullfile(out_dir, 'tcn_gru_modern_closed_loop_summary.csv');
-zone_file = fullfile(out_dir, 'tcn_gru_modern_closed_loop_zones.csv');
-rank_file = fullfile(out_dir, 'tcn_gru_modern_closed_loop_rank.csv');
-mat_file = fullfile(out_dir, 'tcn_gru_modern_closed_loop_compare.mat');
-report_file = fullfile(out_dir, 'tcn_gru_modern_closed_loop_report.md');
+summary_file = fullfile(out_dir, [char(file_prefix) '_summary.csv']);
+zone_file = fullfile(out_dir, [char(file_prefix) '_zones.csv']);
+rank_file = fullfile(out_dir, [char(file_prefix) '_rank.csv']);
+mat_file = fullfile(out_dir, [char(file_prefix) '_compare.mat']);
+report_file = fullfile(out_dir, [char(file_prefix) '_report.md']);
 
 writetable(summary_table, summary_file);
 writetable(zone_table, zone_file);
@@ -63,6 +73,8 @@ result.modern_file = modern_file;
 result.gru_file = gru_file;
 result.tcn_file = tcn_file;
 result.path_file = path_file;
+result.run_specs = run_specs;
+result.report_title = report_title;
 result.summary_table = summary_table;
 result.zone_table = zone_table;
 result.rank_table = rank_table;
@@ -84,6 +96,53 @@ disp(summary_table(:, {'controller','ey_rmse','ey_peak','epsi_rmse', ...
     'ev_rmse','eomega_rmse','xy_rmse','j_du','viol_rate', ...
     'theta_mae_deg','main_acc_pct','turn_acc_pct'}));
 disp(rank_table);
+end
+
+function specs = local_build_run_specs(modern_label, modern_file, gru_file, tcn_file, extra_runs)
+specs = struct('label', {}, 'file', {});
+specs(end+1) = struct('label', string(modern_label), 'file', char(modern_file));
+specs(end+1) = struct('label', "GRU", 'file', char(gru_file));
+specs(end+1) = struct('label', "TCN", 'file', char(tcn_file));
+
+if isempty(extra_runs)
+    return;
+end
+
+if isstruct(extra_runs)
+    for i = 1:numel(extra_runs)
+        if isfield(extra_runs, 'label')
+            label = string(extra_runs(i).label);
+        elseif isfield(extra_runs, 'controller')
+            label = string(extra_runs(i).controller);
+        else
+            error('compare_tcn_gru_modern:BadExtraRuns', ...
+                'extra_runs(%d) is missing label/controller.', i);
+        end
+
+        if isfield(extra_runs, 'file')
+            file = char(extra_runs(i).file);
+        elseif isfield(extra_runs, 'mat_file')
+            file = char(extra_runs(i).mat_file);
+        else
+            error('compare_tcn_gru_modern:BadExtraRuns', ...
+                'extra_runs(%d) is missing file/mat_file.', i);
+        end
+
+        specs(end+1) = struct('label', label, 'file', file); %#ok<AGROW>
+    end
+    return;
+end
+
+if iscell(extra_runs) && size(extra_runs, 2) >= 2
+    for i = 1:size(extra_runs, 1)
+        specs(end+1) = struct('label', string(extra_runs{i, 1}), ...
+            'file', char(extra_runs{i, 2})); %#ok<AGROW>
+    end
+    return;
+end
+
+error('compare_tcn_gru_modern:BadExtraRuns', ...
+    'extra_runs must be a struct array or an Nx2 cell array.');
 end
 
 function run = local_analyze_one(controller, mat_file, zones)
@@ -403,6 +462,12 @@ if numel(tin) == numel(tout) && max(abs(tin(:) - tout(:))) < 1e-12
     return;
 end
 data = NaN(numel(tout), size(d, 2));
+if numel(tin) < 2
+    for c = 1:size(d, 2)
+        data(:, c) = d(1, c);
+    end
+    return;
+end
 for c = 1:size(d, 2)
     data(:, c) = interp1(tin, d(:, c), tout, method, 'extrap');
 end
@@ -523,10 +588,11 @@ R = result.rank_table;
 fid = fopen(report_file, 'w', 'n', 'UTF-8');
 cleanup = onCleanup(@() fclose(fid)); %#ok<NASGU>
 
-fprintf(fid, '# TCN、GRU 与 ModernTCN 闭环仿真对比报告\n\n');
-fprintf(fid, '- ModernTCN 输出文件：`%s`\n', result.modern_file);
-fprintf(fid, '- GRU 输出文件：`%s`\n', result.gru_file);
-fprintf(fid, '- TCN 输出文件：`%s`\n', result.tcn_file);
+fprintf(fid, '# %s\n\n', char(result.report_title));
+fprintf(fid, '- 输出文件：\n');
+for i = 1:numel(result.run_specs)
+    fprintf(fid, '  - %s: `%s`\n', char(result.run_specs(i).label), result.run_specs(i).file);
+end
 fprintf(fid, '- 展示路径文件：`%s`\n\n', result.path_file);
 
 fprintf(fid, '## 排序\n\n');
