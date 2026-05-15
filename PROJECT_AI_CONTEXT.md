@@ -12,7 +12,7 @@
 - 转向方向分类：`right`、`straight`、`left`；
 - 坡度角或调度坡度量回归：`theta_hat`。
 
-当前论文主线算法为 `ModernTCN`，主要对照算法为 `GRU` 和 `TCN`。三者使用同一份统一数据集，均已完成训练和闭环仿真验证。用户已在清理后重新运行三个闭环仿真，均无问题。后续又完成了 `causal ModernTCN` 消融实验；该实验用于讨论因果卷积约束与闭环鲁棒性的关系，不替代当前默认部署的 ModernTCN seed 21。最新补充实验加入了无 AI LPV-MPC 基线和 true-theta oracle 上界，用于回答“相对传统/无感知 LPV-MPC 到底提升多少”。
+当前论文主线算法为 `ModernTCN`，主要对照算法为 `GRU` 和 `TCN`。三者使用同一份统一数据集，均已完成训练和闭环仿真验证。用户已在清理后重新运行三个闭环仿真，均无问题。后续又完成了 `causal ModernTCN` 消融实验；该实验用于讨论因果卷积约束与闭环鲁棒性的关系，不替代当前默认部署的 ModernTCN seed 21。最新补充实验加入了无 AI LPV-MPC 基线和 true-theta oracle 上界，并完成多路径/扰动鲁棒性闭环补充实验，用于回答“相对传统/无感知 LPV-MPC 到底提升多少”以及“ModernTCN 是否只在单一路径和名义工况有效”。
 
 ## 2. 当前主线结论
 
@@ -457,6 +457,153 @@ seed 21 的选择依据：
 
 推荐论文表述：`LPV-MPC_oracle_theta` 作为 true-theta 上界，`LPV-MPC_theta0` 和 `LPV-MPC_IMU_theta` 作为无 AI 感知基线；ModernTCN 相比无 AI 基线带来数量级闭环提升，并在横向跟踪上接近真实坡度调度上界。
 
+### 12.2 多路径闭环补充实验
+
+本轮新增了多路径闭环补充实验，用于回答“ModernTCN 是否只在单一路径上有效”。正式主结果采用 3 条路径：
+
+- `data/paths/path_factory_logistics_showcase_theta10_v3.mat`：当前主路径，复用已有完整六链路结果；
+- `data/paths/path_closed_loop_long_updown_theta10_v1.mat`：紧凑长坡度上/下坡路径，强调坡度调度；
+- `data/paths/path_closed_loop_sharp_turn_transition_theta10_v1.mat`：坡度耦合转向过渡路径，强调转向过渡与坡度切换。
+
+新增自动化入口：
+
+- `src/paths/gen_closed_loop_eval_paths.m`：生成补充闭环路径、路径预览图和 manifest；
+- `src/Compare/run_multi_path_closed_loop_benchmark.m`：执行或复用多路径闭环结果，并汇总 6 条链路；
+- `src/Compare/run_closed_loop_model_once.m`：新增 `stop_time_override` 支持，并清理默认 ModernTCN 运行时的外部配置残留；
+- `src/Compare/compare_tcn_gru_modern_closed_loop_out.m`：支持从 `ref.meta.stall_windows` 读取 stall 真值窗口，供后续 mixed disturbance 路径使用。
+
+输出目录：
+
+- `results/compare/multipath_closed_loop/`
+
+核心结果文件：
+
+- `multipath_closed_loop_summary.csv`
+- `multipath_closed_loop_rank.csv`
+- `multipath_closed_loop_aggregate.csv`
+- `multipath_closed_loop_report.md`
+
+三路径综合排序如下。该排序允许 `LPV-MPC_oracle_theta` 在部分跟踪/控制指标上优于 ModernTCN，因为它使用真实坡度；但综合闭环排名中 ModernTCN 在 3/3 条路径均优于 GRU 和 TCN。
+
+| controller | path_count | overall_rank_mean | overall_rank_worst | ey_rmse_mean | xy_rmse_mean | j_du_mean |
+|---|---:|---:|---:|---:|---:|---:|
+| ModernTCN | 3 | 1.0000 | 1 | 0.0319 | 0.4889 | 13.313 |
+| LPV-MPC_oracle_theta | 3 | 2.0000 | 2 | 0.0347 | 0.3951 | 0.4386 |
+| GRU | 3 | 3.3333 | 4 | 0.0483 | 0.9358 | 3.3528 |
+| TCN | 3 | 3.6667 | 4 | 0.0489 | 1.0695 | 313.92 |
+| LPV-MPC_IMU_theta | 3 | 5.0000 | 5 | 8.8930 | 12.178 | 579.76 |
+| LPV-MPC_theta0 | 3 | 6.0000 | 6 | 8.8276 | 12.253 | 644.06 |
+
+逐路径综合排名：
+
+| path | rank 1 | rank 2 | rank 3 | rank 4 |
+|---|---|---|---|---|
+| `path_factory_logistics_showcase_theta10_v3` | ModernTCN | LPV-MPC_oracle_theta | TCN | GRU |
+| `path_closed_loop_long_updown_theta10_v1` | ModernTCN | LPV-MPC_oracle_theta | GRU | TCN |
+| `path_closed_loop_sharp_turn_transition_theta10_v1` | ModernTCN | LPV-MPC_oracle_theta | GRU | TCN |
+
+实验边界：
+
+- `mixed disturbance` 路径生成能力已保留为可选项，但未纳入正式三路径主结果；当前闭环 plant 尚未接入时变 `stall_load` 输入，因此 mixed 路径更适合作为后续扩展而非本轮主结论；
+- 新增两条补充路径是紧凑高覆盖路径，目的是降低 Simulink 批跑耗时，同时在 38-52 s 内覆盖坡度和转向过渡；
+- 后续写论文时可将本节作为“多路径闭环鲁棒性补充实验”：ModernTCN 不只在 factory showcase 主路径上综合最优，在新增坡度主导和坡度耦合转向过渡路径上也保持综合排名第一。
+
+### 12.3 扰动鲁棒性自动化闭环实验
+
+本轮新增了扰动鲁棒性自动化闭环实验，用于在路径扰动、测量噪声和 plant 参数偏差下验证 ModernTCN 相比 GRU/TCN 的闭环稳定优势。
+
+自动化入口：
+
+- `src/Compare/run_closed_loop_robustness_experiment.m`：默认批跑 `path_closed_loop_long_updown_theta10_v1` 和 `path_closed_loop_sharp_turn_transition_theta10_v1` 两条紧凑补充路径，控制器为 `ModernTCN/GRU/TCN`，扰动等级为 `[0 1 2]`，随机种子为 `21`；
+- `src/Compare/run_closed_loop_model_once.m`：新增 `params_override`、`ff_rt_override` 和 `robustness_case` 支持，可将扰动参数同时写入 base workspace 和 model workspace，供 Simulink 批处理复现实验。
+
+扰动定义：
+
+- `d=0`：名义工况，复用多路径实验输出并重新按三算法排序；
+- `d=1`：中等测量噪声与 plant 参数扰动，`noise_scale=1.0`，`process_scale=0.35`；
+- `d=2`：强测量噪声与 plant 参数扰动，`noise_scale=1.5`，`process_scale=0.70`；
+- plant 参数扰动包括质量、摩擦、滚阻、空气阻力、前后侧偏刚度和最大加速度的联合偏移。
+
+输出目录：
+
+- `results/compare/robustness_closed_loop/`
+
+核心结果文件：
+
+- `robustness_closed_loop_cases.csv`
+- `robustness_closed_loop_summary.csv`
+- `robustness_closed_loop_rank.csv`
+- `robustness_closed_loop_aggregate.csv`
+- `robustness_closed_loop_report.md`
+
+三档扰动聚合结果如下。`case_count=2` 表示每档扰动包含长坡路径和急转过渡路径各一条。
+
+| d | controller | case_count | overall_rank_mean | overall_rank_worst | ey_rmse_mean | xy_rmse_mean | j_du_mean | viol_rate_mean |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 0 | ModernTCN | 2 | 1.000 | 1 | 0.03555 | 0.33155 | 19.67 | 0 |
+| 0 | GRU | 2 | 2.000 | 2 | 0.04126 | 0.57156 | 1.514 | 0 |
+| 0 | TCN | 2 | 3.000 | 3 | 0.05520 | 0.92733 | 353.04 | 0 |
+| 1 | ModernTCN | 2 | 1.000 | 1 | 0.06182 | 1.2880 | 205.78 | 0 |
+| 1 | GRU | 2 | 2.500 | 3 | 0.07648 | 1.3874 | 307.31 | 0 |
+| 1 | TCN | 2 | 2.500 | 3 | 0.06863 | 1.4244 | 669.08 | 0 |
+| 2 | ModernTCN | 2 | 1.000 | 1 | 0.08192 | 1.6587 | 709.76 | 0 |
+| 2 | GRU | 2 | 2.000 | 2 | 0.11699 | 1.8842 | 292.18 | 0 |
+| 2 | TCN | 2 | 3.000 | 3 | 0.09565 | 1.8597 | 1101.81 | 0 |
+
+关键结论：
+
+- ModernTCN 在 `6/6` 个 path x disturbance case 中按 per-case overall rank 均优于 GRU 和 TCN；
+- 随扰动增强，三算法误差都上升，但 ModernTCN 的 `overall_rank_mean` 与 `overall_rank_worst` 始终为 1；
+- d=2 强扰动下，ModernTCN 的 `ey_rmse_mean=0.0819`、`xy_rmse_mean=1.6587`，仍优于 GRU 和 TCN 的对应聚合误差；TCN 在部分单项控制指标或局部跟踪指标上可能接近，但综合控制/感知/跟踪排序仍落后。
+
+论文中可将该实验作为“扰动鲁棒性补充实验”：ModernTCN 的优势不依赖单一主路径，也不只存在于名义 plant 参数下；在中等/强扰动闭环下仍保持三算法综合第一。
+
+### 12.4 实时性补充实验
+
+本轮新增了实时性补充实验，用于回答 ModernTCN 是否具备闭环在线部署的计算余量。该实验刻意区分“部署核心计算链路”和“桌面 MATLAB/Simulink 仿真开销”，避免把 extrinsic MATLAB 调用误写成嵌入式实时能力。
+
+自动化入口：
+
+- `src/Compare/benchmark_modern_tcn_onnx_runtime.py`：使用 ONNXRuntime `CPUExecutionProvider`、batch size 1、输入 `[1,128,19]` 测量 ModernTCN 单窗口推理时间；
+- `src/Compare/run_realtime_benchmark.m`：回放闭环 `diag.y_raw` 统计 MATLAB 在线 wrapper 调用时间，并从闭环输出的 `diag_solve_time_ms` 汇总 MPC 求解时间。
+
+输出目录：
+
+- `results/compare/realtime_benchmark/`
+
+核心结果文件：
+
+- `realtime_onnx_runtime_summary.csv`
+- `realtime_matlab_replay_summary.csv`
+- `realtime_mpc_solve_summary.csv`
+- `realtime_simulink_wall_summary.csv`
+- `realtime_summary.csv`
+- `realtime_report.md`
+
+实验配置：
+
+- 控制采样周期：`Ts=10 ms`；
+- ONNXRuntime：`sample_count=512`、`warmup=200`、`repeat=5000`、`batch_size=1`；
+- MATLAB replay：使用 `ModernTCN_state_classifier('update', ...)` 回放一条闭环 `diag.y_raw`，滑窗 ready 后剔除前 20 次 predict 的首次执行开销；
+- MPC solve time：读取两条补充闭环路径 ModernTCN 输出中的 `diag_solve_time_ms`，剔除前 `1 s` warmup。
+
+核心结果：
+
+| metric | mean ms | p50 ms | p95 ms | max ms | p95 margin vs Ts | pass p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| ONNXRuntime single window | 0.3804 | 0.3659 | 0.4507 | 1.8839 | 9.5493 | yes |
+| MPC solve time | 0.0268 | 0.0243 | 0.0416 | 2.1766 | 9.9584 | yes |
+| ONNXRuntime + MPC | 0.4072 | 0.3902 | 0.4923 | 4.0605 | 9.5077 | yes |
+| MATLAB replay wrapper steady | 17.1346 | 15.2057 | 28.3888 | 42.4473 | -18.3888 | no |
+| MATLAB replay + MPC | 17.1613 | 15.2300 | 28.4304 | 44.6239 | -18.4304 | no |
+| Simulink desktop wall per step | 29.3024 | 29.3024 | 30.0940 | 30.0940 | -20.0940 | no |
+
+结论和论文边界：
+
+- 可用于论文主张的是部署核心链路：`ONNXRuntime single window + MPC solve time` 的 p95 总周期约 `0.492 ms`，远小于 `Ts=10 ms`，说明 ModernTCN 的推理计算量相对控制周期有充足余量；
+- MATLAB/Simulink 当前通过 extrinsic 和 MATLAB dlnetwork wrapper 调用 ONNX，桌面 replay p95 约 `28.4 ms`，不满足 `10 ms` 硬实时；它应作为“桌面仿真/调试开销”报告，不能表述为嵌入式部署实时性；
+- 推荐论文表述：ModernTCN 的 ONNX 部署核心推理耗时低，和 MPC 求解时间相加后满足 10 ms 控制周期；当前 MATLAB/Simulink extrinsic 封装主要用于闭环仿真验证，不代表最终部署实现。
+
 ## 13. Causal ModernTCN 消融实验
 
 该消融实验的目标是检查 ModernTCN 中 temporal depthwise convolution 从 symmetric/same padding 改为 causal padding 后，对离线测试和闭环部署的影响。实现方式是给 `ModernTCNConfig` 增加 `temporal_padding="same"|"causal"`，默认仍为 `"same"`，因此当前最优 ModernTCN seed 21 不受影响。causal 实现使用 ONNX 友好的 `Conv1d(padding=kernel_size-1) + Slice`，并在 MATLAB 侧使用独立 namespace `modern_tcn_causal_onnx_layers`，避免覆盖默认 ModernTCN 的 generated layers。
@@ -548,6 +695,8 @@ python src/ModernTCN/run_modern_tcn_theta10_v2_multiseed.py ^
 | 表 4 | 三算法闭环总体指标 | `tcn_gru_modern_closed_loop_summary.csv` |
 | 表 5 | 三算法闭环综合排序 | `tcn_gru_modern_closed_loop_rank.csv` |
 | 表 6 | AI 感知增强 LPV-MPC、无 AI LPV-MPC 和 true-theta oracle 闭环对比 | `results/compare/lpvmpc_theta_baseline/path_factory_logistics_showcase_theta10_v3/tcn_gru_modern_lpvmpc_theta_baseline_summary.csv` |
+| 表 7 | 多路径和扰动鲁棒性闭环综合排序 | `results/compare/multipath_closed_loop/multipath_closed_loop_aggregate.csv`、`results/compare/robustness_closed_loop/robustness_closed_loop_aggregate.csv` |
+| 表 8 | 实时性补充实验：ONNXRuntime 推理、MATLAB replay、MPC 求解和总周期余量 | `results/compare/realtime_benchmark/realtime_summary.csv` |
 | 图 1 | 系统框图：AGV + LPV-MPC + 时序神经网络调度 | 需要新画 |
 | 图 2 | ModernTCN 多任务结构图 | 需要新画或由代码抽象绘制 |
 | 图 3 | 展示路径轨迹和分区 | `path_factory_logistics_showcase_theta10_v3.mat`、zones CSV |

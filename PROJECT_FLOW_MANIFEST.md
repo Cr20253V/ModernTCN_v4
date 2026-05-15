@@ -160,6 +160,7 @@
 | theta10 uniform 路径 | `src/paths/gen_agv_theta10_uniform_paths.m` | `data/paths/agv_theta10_uniform_v*` | `KEEP_ACTIVE` |
 | ModernTCN v4 工业路径 | `src/paths/gen_modern_tcn_paths_v4_industrial.m` | `data/paths/path_modern_tcn_v4_*.mat` | `ARCHIVE_LEGACY` |
 | 闭环展示路径 | `src/paths/gen_factory_logistics_showcase_path.m` | `path_factory_logistics_showcase_theta10_v*.mat` | `KEEP_RESULT` |
+| 多路径闭环补充路径 | `src/paths/gen_closed_loop_eval_paths.m` | `path_closed_loop_long_updown_theta10_v1.mat`, `path_closed_loop_sharp_turn_transition_theta10_v1.mat` | `KEEP_RESULT` |
 | ModernTCN 演示路径 | `src/paths/gen_modern_tcn_demo_path.m` | `path_modern_tcn_demo_loop_v*.mat` | `KEEP_RESULT` |
 | theta sweep 路径 | `src/paths/gen_modern_tcn_theta_sweep_plot_path.m`, `src/paths/gen_modern_tcn_theta_sweep_short_paths.m` | 论文坡度评估路径 | `KEEP_RESULT` |
 
@@ -368,6 +369,10 @@ TCN seed 21 的选择依据：
 | 单模型闭环运行 | `src/Compare/run_closed_loop_model_once.m` | `KEEP_ACTIVE` |
 | ModernTCN/GRU 闭环对比 | `src/Compare/compare_modern_tcn_gru_closed_loop_out.m` | `KEEP_ACTIVE` |
 | ModernTCN/GRU/TCN 三算法闭环对比 | `src/Compare/compare_tcn_gru_modern_closed_loop_out.m` | `KEEP_ACTIVE` |
+| 多路径闭环补充实验 | `src/Compare/run_multi_path_closed_loop_benchmark.m` | `KEEP_ACTIVE` |
+| 扰动鲁棒性闭环补充实验 | `src/Compare/run_closed_loop_robustness_experiment.m` | `KEEP_ACTIVE` |
+| ModernTCN ONNXRuntime 实时性测试 | `src/Compare/benchmark_modern_tcn_onnx_runtime.py` | `KEEP_ACTIVE` |
+| 实时性汇总实验 | `src/Compare/run_realtime_benchmark.m` | `KEEP_ACTIVE` |
 | 批量闭环对比旧链路 | `src/Compare/run_compare_mamba2_gru_imu_batch.m` | `ARCHIVE_LEGACY` |
 | 统计分析旧链路 | `src/Compare/analyze_compare_mamba2_gru_imu_stats.m` | `ARCHIVE_LEGACY` |
 | 扰动有效性检查 | `src/Compare/check_compare_disturbance_effectiveness.m` | `ARCHIVE_LEGACY` |
@@ -380,6 +385,9 @@ TCN seed 21 的选择依据：
 |---|---|---|
 | `results/compare/modern_tcn_gru_closed_loop/` | ModernTCN vs GRU 闭环指标、分区表和报告 | `KEEP_RESULT` |
 | `results/compare/tcn_gru_modern_closed_loop/path_factory_logistics_showcase_theta10_v3/` | ModernTCN/GRU/TCN 三算法闭环指标、排序表和报告 | `KEEP_RESULT` |
+| `results/compare/multipath_closed_loop/` | 多路径六链路闭环补充实验，ModernTCN 在 3/3 路径综合排名第一 | `KEEP_RESULT` |
+| `results/compare/robustness_closed_loop/` | 两条补充路径三档扰动鲁棒性闭环实验，ModernTCN 在 6/6 个 path x disturbance case 综合排名第一 | `KEEP_RESULT` |
+| `results/compare/realtime_benchmark/` | 实时性补充实验，ONNXRuntime+MPC p95 总周期约 0.492 ms，小于 Ts=10 ms | `KEEP_RESULT` |
 | `ModernTCN_out.mat` | 根目录闭环输出，人工运行结果 | `REVIEW` |
 | `GRU_out.mat` | 根目录闭环输出，人工运行结果 | `REVIEW` |
 | `TCN_out.mat` | 根目录 TCN 闭环输出，人工运行结果 | `REVIEW` |

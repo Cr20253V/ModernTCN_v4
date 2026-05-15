@@ -51,7 +51,7 @@ zones = local_get_zones(ref);
 run_specs = local_build_run_specs(modern_label, modern_file, gru_file, tcn_file, extra_runs);
 runs = struct([]);
 for i = 1:numel(run_specs)
-    runs = [runs, local_analyze_one(run_specs(i).label, run_specs(i).file, zones)]; %#ok<AGROW>
+    runs = [runs, local_analyze_one(run_specs(i).label, run_specs(i).file, zones, ref)]; %#ok<AGROW>
 end
 
 summary_table = struct2table([runs.summary]);
@@ -145,7 +145,7 @@ error('compare_tcn_gru_modern:BadExtraRuns', ...
     'extra_runs must be a struct array or an Nx2 cell array.');
 end
 
-function run = local_analyze_one(controller, mat_file, zones)
+function run = local_analyze_one(controller, mat_file, zones, ref)
 S = load(mat_file, 'logsout');
 logs = S.logsout;
 
@@ -190,7 +190,7 @@ if isempty(sig.e_omega) && ~isempty(sig.omega) && ~isempty(sig.omega_ref)
     sig.e_omega = sig.omega - sig.omega_ref;
 end
 
-truth = local_make_truth(sig.theta_ground, sig.theta_ref, sig.omega_ref, t);
+truth = local_make_truth(sig.theta_ground, sig.theta_ref, sig.omega_ref, t, ref);
 
 zone_names = fieldnames(zones);
 rows = repmat(local_empty_row(), numel(zone_names) + 1, 1);
@@ -383,7 +383,7 @@ else
 end
 end
 
-function truth = local_make_truth(theta_ground, theta_ref, omega_ref, t)
+function truth = local_make_truth(theta_ground, theta_ref, omega_ref, t, ref)
 if ~isempty(theta_ground)
     theta = theta_ground(:);
 elseif ~isempty(theta_ref)
@@ -395,6 +395,7 @@ truth = struct();
 truth.theta = theta;
 truth.main = ones(size(t));
 truth.main(abs(theta) >= deg2rad(2.0)) = 3;
+truth.main = local_apply_stall_truth_windows(truth.main, t, ref);
 
 if isempty(omega_ref)
     truth.turn = NaN(size(t));
@@ -408,6 +409,58 @@ truth.turn = zeros(size(t));
 dwell_steps = max(1, round(0.40 / dt));
 for sgn = [-1, 1]
     truth.turn(local_apply_dwell(raw_turn == sgn, dwell_steps)) = sgn;
+end
+end
+
+function main = local_apply_stall_truth_windows(main, t, ref)
+if nargin < 3 || isempty(ref) || ~isstruct(ref) || ...
+        ~isfield(ref, 'meta') || ~isstruct(ref.meta)
+    return;
+end
+
+windows = [];
+if isfield(ref.meta, 'stall_windows')
+    windows = local_as_window_matrix(ref.meta.stall_windows);
+end
+if isempty(windows) && isfield(ref.meta, 'disturbance_windows')
+    dw = ref.meta.disturbance_windows;
+    if isstruct(dw) && isfield(dw, 'stall')
+        windows = local_as_window_matrix(dw.stall);
+    end
+end
+if isempty(windows)
+    return;
+end
+
+for i = 1:size(windows, 1)
+    if all(isfinite(windows(i, :))) && windows(i, 2) > windows(i, 1)
+        main(t >= windows(i, 1) & t < windows(i, 2)) = 2;
+    end
+end
+end
+
+function windows = local_as_window_matrix(x)
+windows = [];
+if isempty(x)
+    return;
+end
+if isnumeric(x)
+    if size(x, 2) == 2
+        windows = double(x);
+    elseif size(x, 1) == 2
+        windows = double(x.');
+    end
+    return;
+end
+if iscell(x)
+    tmp = [];
+    for i = 1:numel(x)
+        one = x{i};
+        if isnumeric(one) && numel(one) == 2
+            tmp(end+1, :) = double(one(:).'); %#ok<AGROW>
+        end
+    end
+    windows = tmp;
 end
 end
 

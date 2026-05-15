@@ -1,0 +1,20 @@
+{
+  "python": "3.10.9 (tags/v3.10.9:1dd9be6, Dec  6 2022, 20:01:21) [MSC v.1934 64 bit (AMD64)]",
+  "python_executable": "D:\\LenovoSoftstore\\install\\Python 3.10\\python.exe",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "cpu_count": 24,
+  "onnxruntime_version": "1.23.2",
+  "numpy_version": "2.2.6",
+  "input_name": "input_window",
+  "output_names": [
+    "logits_main",
+    "logits_turn",
+    "theta_hat"
+  ],
+  "windows_shape": [
+    512,
+    128,
+    19
+  ]
+}

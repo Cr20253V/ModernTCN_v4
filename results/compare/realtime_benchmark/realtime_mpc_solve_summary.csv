@@ -1,0 +1,2 @@
+metric,n,mean_ms,std_ms,min_ms,p50_ms,p95_ms,p99_ms,max_ms,overrun_rate_vs_Ts,margin_p95_ms,pass_p95,source_file,warmup_sec
+mpc_solve_time,9402,0.0267581950223357,0.0316984862122919,0.0072885,0.0243068,0.04159624,0.04864432,2.1765604,0,9.95840376,1,aggregate_closed_loop_files,1
