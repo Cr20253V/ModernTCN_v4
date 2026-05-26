@@ -1,0 +1,98 @@
+﻿order,relative_path,language,lines,include_status,module,reason
+1,init_project.m,MATLAB,21,included,项目初始化,初始化 MATLAB 搜索路径
+2,project_root.m,MATLAB,18,included,项目初始化,定位项目根目录
+3,results_dir.m,MATLAB,23,included,项目初始化,规范输出目录
+4,src/core/agv_model_sfunc.m,MATLAB,140,included,车辆模型与控制基础层,闭环仿真 AGV S-Function
+5,src/core/agv_model_sfunc_train_data.m,MATLAB,141,included,车辆模型与控制基础层,训练数据仿真 S-Function
+6,src/core/state_eq.m,MATLAB,590,included,车辆模型与控制基础层,非线性车辆状态方程
+7,src/core/output_eq.m,MATLAB,318,included,车辆模型与控制基础层,车辆输出与传感量计算
+8,src/core/state_eq_ref.m,MATLAB,612,included,车辆模型与控制基础层,参考模型状态方程
+9,src/core/output_eq_ref.m,MATLAB,372,included,车辆模型与控制基础层,参考模型输出方程
+10,src/core/state_eq_ref_train_data.m,MATLAB,256,included,车辆模型与控制基础层,训练数据参考状态方程
+11,src/core/output_eq_ref_train_data.m,MATLAB,257,included,车辆模型与控制基础层,训练数据参考输出方程
+12,src/core/parameters.m,MATLAB,94,included,车辆模型与控制基础层,车辆与控制参数定义
+13,src/core/UpdatePlantModel.m,MATLAB,243,included,车辆模型与控制基础层,Simulink 植物模型更新
+14,src/core/UpdatePlantModel_gru.m,MATLAB,221,included,车辆模型与控制基础层,GRU/对照链路植物模型更新
+15,src/core/preloadfcn_modern_tcn.m,MATLAB,8,included,车辆模型与控制基础层,ModernTCN 闭环预加载入口
+16,src/core/preloadfcn_gru.m,MATLAB,515,included,车辆模型与控制基础层,通用闭环预加载函数
+17,src/core/preloadfcn_tcn.m,MATLAB,8,included,车辆模型与控制基础层,TCN 闭环预加载入口
+18,src/lpv/lin_agv_at_point.m,MATLAB,227,included,LPV与MPC,单点线性化
+19,src/lpv/lin_agv_grid.m,MATLAB,314,included,LPV与MPC,LPV 网格线性化
+20,src/mpc/mpc_setup_single_interp.m,MATLAB,374,included,LPV与MPC,MPC 控制器构造
+21,src/mpc/mpc_update_from_rho.m,MATLAB,555,included,LPV与MPC,在线调度更新
+22,src/mpc/Cost_Function.m,MATLAB,422,included,LPV与MPC,控制代价计算
+23,src/paths/gen_agv_ref_path.m,MATLAB,397,included,路径生成,基础参考路径生成
+24,src/paths/gen_agv_theta10_uniform_paths.m,MATLAB,712,included,路径生成,theta10 uniform 训练路径
+25,src/paths/gen_factory_logistics_showcase_path.m,MATLAB,446,included,路径生成,工厂物流展示路径
+26,src/paths/gen_closed_loop_eval_paths.m,MATLAB,660,included,路径生成,多路径闭环评估路径
+27,src/paths/gen_modern_tcn_demo_path.m,MATLAB,542,included,路径生成,ModernTCN 演示路径
+28,src/paths/gen_modern_tcn_theta_sweep_plot_path.m,MATLAB,283,included,路径生成,坡度 sweep 绘图路径
+29,src/paths/gen_modern_tcn_theta_sweep_short_paths.m,MATLAB,117,included,路径生成,坡度 sweep 短路径
+30,src/ModernTCN/modern_tcn_model.py,Python,292,included,ModernTCN主方法,ModernTCN-small 多任务网络定义
+31,src/ModernTCN/modern_tcn_data.py,Python,259,included,ModernTCN主方法,数据集读取与契约检查
+32,src/ModernTCN/modern_tcn_metrics.py,Python,653,included,ModernTCN主方法,多任务损失和指标
+33,src/ModernTCN/train_modern_tcn.py,Python,559,included,ModernTCN主方法,单 seed 训练入口
+34,src/ModernTCN/run_modern_tcn_theta10_v2_multiseed.py,Python,327,included,ModernTCN主方法,多 seed 训练入口
+35,src/ModernTCN/export_modern_tcn_onnx.py,Python,99,included,ModernTCN主方法,ONNX 导出
+36,src/ModernTCN/check_onnxruntime_consistency.py,Python,105,included,ModernTCN主方法,ONNXRuntime 一致性检查
+37,src/ModernTCN/ModernTCN_check_matlab_onnx.m,MATLAB,173,included,ModernTCN主方法,MATLAB ONNX 一致性检查
+38,src/ModernTCN/ModernTCN_default_config.m,MATLAB,38,included,ModernTCN主方法,默认部署配置
+39,src/ModernTCN/ModernTCN_load_predictor.m,MATLAB,80,included,ModernTCN主方法,MATLAB 预测器加载
+40,src/ModernTCN/ModernTCN_predict_window.m,MATLAB,119,included,ModernTCN主方法,窗口预测
+41,src/ModernTCN/ModernTCN_online_step.m,MATLAB,281,included,ModernTCN主方法,在线逐步推理
+42,src/ModernTCN/ModernTCN_state_classifier.m,MATLAB,382,included,ModernTCN主方法,在线状态分类器
+43,src/ModernTCN/ModernTCN_State_Classifier_sim.m,MATLAB,67,included,ModernTCN主方法,Simulink 包装函数
+44,src/ModernTCN/ModernTCN_analyze_closed_loop_out.m,MATLAB,575,included,ModernTCN主方法,闭环输出分析
+45,src/ModernTCN/ModernTCN_replay_closed_loop_yraw.m,MATLAB,440,included,ModernTCN主方法,闭环 yraw 回放
+46,src/ModernTCN/plot_modern_tcn_theta_scatter.m,MATLAB,311,included,ModernTCN主方法,坡度散点评估
+47,src/ModernTCN/eval_modern_tcn_theta_sweep_plot.m,MATLAB,978,included,ModernTCN主方法,坡度 sweep 评估
+48,src/Compare/run_closed_loop_model_once.m,MATLAB,143,included,对照算法与闭环比较,单次闭环运行
+49,src/Compare/compare_modern_tcn_gru_closed_loop_out.m,MATLAB,529,included,对照算法与闭环比较,ModernTCN/GRU 闭环对比
+50,src/Compare/compare_tcn_gru_modern_closed_loop_out.m,MATLAB,711,included,对照算法与闭环比较,三算法闭环对比
+51,src/Compare/run_lpvmpc_theta_baseline_experiment.m,MATLAB,226,included,对照算法与闭环比较,LPV-MPC theta 基线与 oracle
+52,src/Compare/run_multi_path_closed_loop_benchmark.m,MATLAB,488,included,对照算法与闭环比较,多路径闭环评估
+53,src/Compare/run_closed_loop_robustness_experiment.m,MATLAB,553,included,对照算法与闭环比较,扰动鲁棒性实验
+54,src/Compare/benchmark_modern_tcn_onnx_runtime.py,Python,221,included,对照算法与闭环比较,ONNXRuntime 实时性测试
+55,src/Compare/run_realtime_benchmark.m,MATLAB,527,included,对照算法与闭环比较,实时性汇总实验
+56,src/gru/GRU_train.m,MATLAB,1365,included,GRU对照模块,GRU 基线训练
+57,src/gru/run_GRU_train_theta10_v2_multi_seed.m,MATLAB,406,included,GRU对照模块,GRU 多 seed 训练
+58,src/gru/GRU_default_config.m,MATLAB,34,included,GRU对照模块,GRU 默认部署配置
+59,src/gru/GRU_infer.m,MATLAB,254,included,GRU对照模块,GRU 推理
+60,src/gru/GRU_state_classifier.m,MATLAB,402,included,GRU对照模块,GRU 在线分类器
+61,src/gru/GRU_State_Classifier_gru_sim.m,MATLAB,61,included,GRU对照模块,GRU Simulink 包装
+62,src/gru/GRU_load_default_to_base.m,MATLAB,60,included,GRU对照模块,GRU 默认模型加载
+63,src/TCN/TCN_train.m,MATLAB,1430,included,TCN对照模块,TCN 基线训练
+64,src/TCN/run_TCN_train_theta10_v2_multi_seed.m,MATLAB,428,included,TCN对照模块,TCN 多 seed 训练
+65,src/TCN/TCN_recommended_cfg.m,MATLAB,109,included,TCN对照模块,TCN 推荐配置
+66,src/TCN/TCN_default_config.m,MATLAB,44,included,TCN对照模块,TCN 默认部署配置
+67,src/TCN/TCN_load_predictor.m,MATLAB,74,included,TCN对照模块,TCN 预测器加载
+68,src/TCN/TCN_predict_window.m,MATLAB,167,included,TCN对照模块,TCN 窗口预测
+69,src/TCN/TCN_state_classifier.m,MATLAB,346,included,TCN对照模块,TCN 在线分类器
+70,src/TCN/TCN_State_Classifier_sim.m,MATLAB,57,included,TCN对照模块,TCN Simulink 包装
+71,src/TCN/configure_tcn_simulink_model.m,MATLAB,60,included,TCN对照模块,TCN Simulink 配置
+72,src/tests/test_simulink_closed_loop.m,MATLAB,444,included,测试验证,Simulink 闭环测试
+73,src/tests/test_GRU_workflow.m,MATLAB,272,included,测试验证,GRU 工作流测试
+74,src/tests/test_gru_performance.m,MATLAB,463,included,测试验证,GRU 性能测试
+75,src/tests/test_gru_latency.m,MATLAB,377,included,测试验证,GRU 延迟测试
+76,src/tests/test_gru_filter_constants.m,MATLAB,234,included,测试验证,GRU 滤波常数测试
+77,src/tests/test_agv_open_loop.m,MATLAB,319,included,测试验证,AGV 开环测试
+78,src/tests/test_industrial_open_loop_items.m,MATLAB,511,included,测试验证,工业开环项目测试
+79,.git/,directory,,excluded_cache,排除范围,版本控制目录，不纳入源码鉴别材料
+80,.github/,directory,,excluded_cache,排除范围,仓库平台配置，不纳入源码鉴别材料
+81,.kilo/,directory,,excluded_cache,排除范围,IDE/代理计划缓存，不纳入源码鉴别材料
+82,.cursor/,directory,,excluded_cache,排除范围,IDE 配置，不纳入源码鉴别材料
+83,.venv/,directory,,excluded_third_party,排除范围,虚拟环境和第三方依赖，不纳入源码鉴别材料
+84,slprj/,directory,,excluded_cache,排除范围,Simulink 自动生成缓存，不纳入源码鉴别材料
+85,**/__pycache__/,directory,,excluded_cache,排除范围,Python 字节码缓存，不纳入源码鉴别材料
+86,src/ModernTCN/generated_layers/,directory,,excluded_third_party,排除范围,MATLAB ONNX 导入自动生成兼容层，默认排除
+87,data/**/*.mat,pattern,,excluded_binary_or_data,排除范围,训练数据、模型和中间数据，不作为源程序
+88,data/**/*.csv,pattern,,excluded_binary_or_data,排除范围,数据表和清单文件，不作为源程序
+89,results/**,directory,,excluded_result,排除范围,运行结果、报告、图表和模型输出，不作为源程序
+90,figures/**,directory,,excluded_result,排除范围,图片和路径预览，不作为源程序
+91,docs/**,directory,,excluded_result,排除范围,说明文档和历史记录，不作为源程序鉴别材料
+92,*.slx,pattern,,excluded_binary_or_data,排除范围,Simulink 二进制模型，仅在说明书中引用
+93,*.slxc,pattern,,excluded_cache,排除范围,Simulink 缓存文件，不纳入源码鉴别材料
+94,*.pt,pattern,,excluded_binary_or_data,排除范围,PyTorch 权重文件，不作为源程序
+95,*.onnx,pattern,,excluded_binary_or_data,排除范围,ONNX 模型文件，不作为源程序
+96,*.pdf,pattern,,excluded_result,排除范围,PDF 文档或图表，不作为源码材料
+97,*.docx,pattern,,excluded_result,排除范围,Word 文档，不作为源码材料

@@ -1,0 +1,31 @@
+domain,metric,metric_label,metric_kind,variant,raw_value,relative_to_default
+offline,acc_main,"Main
+acc.",accuracy,ModernTCN,0.9807125636,1
+offline,acc_main,"Main
+acc.",accuracy,ModernTCN_causal,0.9783016341,0.9975416553
+offline,acc_turn,"Turn
+acc.",accuracy,ModernTCN,0.9022234128,1
+offline,acc_turn,"Turn
+acc.",accuracy,ModernTCN_causal,0.9006161264,0.9982185273
+offline,acc_turn_transition,"Trans.
+turn",accuracy,ModernTCN,0.7757009346,1
+offline,acc_turn_transition,"Trans.
+turn",accuracy,ModernTCN_causal,0.7906542056,1.019277108
+offline,theta_mae_deg,"Slope
+MAE",error,ModernTCN,0.2518547475,1
+offline,theta_mae_deg,"Slope
+MAE",error,ModernTCN_causal,0.2507186532,0.9954890891
+closed_loop,ey_rmse,"$e_y$
+RMSE",error,ModernTCN,0.02458746093,1
+closed_loop,ey_rmse,"$e_y$
+RMSE",error,ModernTCN_causal,23.131826,940.7976716
+closed_loop,epsi_rmse,"$e_\psi$
+RMSE",error,ModernTCN,0.04375451181,1
+closed_loop,epsi_rmse,"$e_\psi$
+RMSE",error,ModernTCN_causal,1.273409039,29.10349095
+closed_loop,xy_rmse,"XY
+RMSE",error,ModernTCN,0.8035502694,1
+closed_loop,xy_rmse,"XY
+RMSE",error,ModernTCN_causal,27.48385334,34.20302922
+closed_loop,j_du,$J_{\Delta u}$,error,ModernTCN,0.5990764105,1
+closed_loop,j_du,$J_{\Delta u}$,error,ModernTCN_causal,268.8677552,448.803776

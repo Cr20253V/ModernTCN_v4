@@ -3,6 +3,7 @@
 
 # IDE 配置
 .cursor/
+.kilo/
 
 # 大型数据目录（训练路径、模型权重、训练数据）
 data/paths/
@@ -33,6 +34,25 @@ src/Mamba/results/
 # MATLAB 临时文件
 *.asv
 *.mex*
+texput.log
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# LaTeX 编译临时文件（保留 .tex/.bib/.cls/.sty/.pdf 等源稿和成果文件）
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+missfont.log
 
 # 编译产物和外部/历史子模块缓存
 *.so

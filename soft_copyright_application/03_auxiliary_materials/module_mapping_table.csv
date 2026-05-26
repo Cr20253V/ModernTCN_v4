@@ -1,0 +1,11 @@
+﻿模块,主要文件,功能说明,输入,输出
+项目初始化,"init_project.m, project_root.m, results_dir.m",设置路径与结果目录,项目根目录,MATLAB搜索路径、结果路径
+车辆模型,src/core/*.m,AGV动力学与输出计算,状态、控制量、参数,状态导数、输出量
+LPV线性化,src/lpv/*.m,建立调度点线性模型,AGV状态点、参数,LPV网格模型
+MPC控制,src/mpc/*.m,构造与更新MPC控制器,LPV模型、调度量、约束,控制输入
+路径生成,src/paths/*.m,生成训练和闭环路径,路径参数,ref结构、路径mat文件
+ModernTCN训练,src/ModernTCN/*.py,训练多任务时序模型,数据集mat文件,checkpoint、指标、ONNX
+ModernTCN部署,src/ModernTCN/*.m,MATLAB端加载和在线预测,ONNX模型、在线窗口,工况、转向、坡度输出
+Simulink闭环,"simulink/*.slx, preloadfcn*.m",闭环控制仿真,控制器、模型、路径,logsout、闭环结果
+对照实验,"src/gru, src/TCN, src/Compare",基线训练与闭环对比,统一数据集、路径,指标表、报告
+测试验证,src/tests/*.m,流程检查和性能测试,模型与配置,测试报告

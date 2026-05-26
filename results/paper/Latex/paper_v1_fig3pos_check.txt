@@ -1,0 +1,1554 @@
+Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.
+Digital Object Identifier 10.1109/ACCESS.2026.DOI
+
+Multi-Task Temporal-Perception-Enhanced
+LPV-MPC for Path Tracking of a Diagonal
+Dual-Steer AGV
+AUTHOR NAME1
+1
+
+Affiliation placeholder.
+
+Corresponding author: Author Name (e-mail: email@example.com).
+
+ABSTRACT
+This paper proposes a multi-task temporal-perception-enhanced linear parameter-varying model predictive
+control (LPV-MPC) framework for path tracking of a diagonal dual-steer automated guided vehicle (AGV)
+under sloped and turning-transition operating conditions, with abnormal resistance included as an auxiliary
+operating-condition perception target. In conventional LPV-MPC, inaccurate scheduling variables, especially slope-related information, may cause model mismatch and degrade closed-loop tracking performance.
+To address this issue, a lightweight ModernTCN-based temporal perception module is developed to estimate
+the operating condition, steering direction, and slope-related scheduling variable from a short history
+of proprioceptive measurements. The estimated information is incorporated into the online scheduling
+process of the LPV-MPC controller while retaining the constraint-handling capability and interpretability
+of the model-based controller. The proposed method is evaluated on a MATLAB/Simulink closed-loop
+simulation platform against zero-slope LPV-MPC, IMU-based LPV-MPC, true-slope oracle LPV-MPC,
+GRU, and conventional TCN baselines. The experiments include closed-loop baseline comparison, multiroute benchmarking, robustness tests under measurement noise and plant parameter perturbations, and a
+causal ModernTCN ablation. The results show that ModernTCN provides the most robust overall closedloop performance among the learning-based methods, substantially improves tracking quality over nonAI scheduling baselines, and maintains its advantage across multiple routes and disturbance levels. These
+findings suggest that multi-task temporal perception is an effective scheduling enhancement for LPV-MPC,
+while also highlighting the necessity of closed-loop validation beyond offline perception metrics.
+INDEX TERMS
+Automated guided vehicle, closed-loop validation, diagonal dual-steer vehicle, linear parameter-varying
+model predictive control, ModernTCN, multi-task learning, path tracking, slope estimation, temporal
+perception.
+
+I. INTRODUCTION
+A. BACKGROUND AND MOTIVATION
+
+A
+
+UTOMATED guided vehicles (AGVs) are widely used
+in factory logistics, warehouse transportation, and flexible manufacturing systems. In these applications, an AGV is
+required to track prescribed paths accurately while satisfying
+actuator constraints and maintaining smooth motion under
+varying operating conditions. Compared with conventional
+road vehicles, industrial AGVs often operate in confined
+spaces with frequent turning transitions, uneven ground, slope
+changes, load variations, and abnormal resistance. These factors may significantly affect the longitudinal, lateral, and yaw
+VOLUME 11, 2023
+
+dynamics of the vehicle, especially when the vehicle adopts
+a multi-actuated steering and driving configuration.
+This paper focuses on a diagonal dual-steer AGV, where the
+left-front and right-rear wheels are active drive-steer wheels,
+while the other two wheels serve as passive support wheels.
+This configuration provides good maneuverability for factory
+logistics routes, but it also introduces coupling among longitudinal motion, yaw motion, steering dynamics, and load
+transfer. Therefore, the path-tracking controller should not
+only reduce lateral and heading errors, but also maintain reasonable control smoothness and constraint satisfaction under
+sloped and transitional operating conditions.
+1
+
+Model predictive control (MPC) is a suitable control framework for constrained path tracking because it can explicitly
+consider future reference information, multi-variable dynamics, actuator limits, and input-rate constraints []. For nonlinear
+vehicle systems, linear parameter-varying MPC (LPV-MPC)
+provides a practical compromise between nonlinear model
+fidelity and online computational tractability []. By updating
+the prediction model according to measurable or estimable
+scheduling variables, LPV-MPC can adapt the local prediction model to different operating conditions without solving
+a full nonlinear optimization problem online.
+B. SCHEDULING MISMATCH IN LPV-MPC
+
+Although LPV-MPC is attractive for real-time vehicle path
+tracking, its closed-loop performance depends strongly on the
+accuracy of the scheduling variables. In the considered AGV
+system, the scheduling variables are not merely auxiliary
+signals. They directly influence the prediction model used by
+the MPC controller. In particular, the road slope affects the
+longitudinal resistance, load transfer, and the local dynamic
+model used in the LPV prediction. If the scheduled slope
+differs from the actual slope, the controller may predict an
+inconsistent vehicle response and generate unsuitable control
+actions.
+This scheduling mismatch problem becomes more evident
+in factory routes that include slope changes, turning transitions, and possible abnormal resistance. A nominal zeroslope scheduler may be acceptable for flat-road operation,
+but it can become insufficient when the AGV enters a sloped
+segment. A simplified sensor-based slope estimate may also
+be biased by vehicle acceleration, transient pitch motion,
+sensor noise, or turning-induced coupling. Therefore, reliable
+scheduling information is important for improving the closedloop quality of LPV-MPC.
+The central problem considered in this paper is thus
+not how to replace LPV-MPC with a neural network controller, but how to enhance the scheduling process of LPVMPC using temporal perception. The learning component
+is introduced as an auxiliary perception layer that estimates
+scheduling-related intermediate variables from historical proprioceptive measurements. The final control command is still
+generated by the constrained LPV-MPC controller.
+
+The proposed temporal perception module uses a short
+history of vehicle measurements rather than a single instantaneous signal. This design is motivated by the fact that slope
+transitions, stall-like abnormal resistance, and turning maneuvers are temporal phenomena. A window of recent acceleration, yaw rate, steering state, wheel speed, motor-currentrelated quantities, and derived diagnostic features can provide
+richer information than an instantaneous measurement. Based
+on this observation, a lightweight multi-task ModernTCNbased estimator is adapted for scheduling perception. The
+estimator jointly predicts the operating condition, steering
+direction, and slope-related scheduling quantity. The sloperelated estimate is conditioned and incorporated into the
+LPV-MPC scheduler, while the classification outputs provide
+auxiliary operating-condition information for the multi-task
+representation. The overall structure of the proposed method
+is shown in Fig. 1.
+
+C. TEMPORAL PERCEPTION AS SCHEDULING ASSISTANCE
+
+Recent learning-enhanced MPC studies have shown that datadriven models can be combined with predictive control in several ways, such as learning vehicle dynamics, learning model
+residuals, estimating uncertainty, adapting cost and constraint
+parameters, or accelerating optimization []. In contrast to
+these approaches, this work learns interpretable schedulingrelated perception variables for LPV-MPC. The learning
+module does not directly output the driving force command or
+yaw-rate command. Instead, it estimates the main operating
+condition, steering direction, and slope-related scheduling
+variable.
+2
+
+VOLUME 11, 2023
+
+AGV measurements
+acceleration | yaw rate
+steering angles | wheel speeds
+current-related features
+velocity / pitch-related features
+
+Historical window
+
+Zk ∈ R128×19
+128 steps, 19 features
+Ts = 0.01 s
+
+Temporal perception
+ModernTCN-based estimator
+multi-task outputs
+
+Main condition
+flat / stall / slope
+Steering direction
+right / straight / left
+Slope-related estimate
+
+proprioceptive
+feedback
+uk=[Fcmd,ωcmd]T
+LPV-MPC
+Nonlinear diagonal
+controller
+dual-steer AGV plant
+constrained optimization
+
+LPV-MPC
+scheduler
+
+Scheduling conditioning
+magnitude/rate limits
+dead-zone
+
+FIGURE 1. Overall framework of the proposed temporal-perception-enhanced LPV-MPC. The ModernTCN-based estimator provides multi-task
+scheduling-related perception outputs from a historical proprioceptive window. The slope-related estimate is conditioned and incorporated into the
+LPV-MPC scheduling vector, while the final control commands are generated by the constrained LPV-MPC controller.
+
+D. CONTRIBUTIONS
+
+E. PAPER ORGANIZATION
+
+The main contributions of this paper are summarized as follows.
+
+The remainder of this paper is organized as follows. Section II reviews related work on MPC and LPV-MPC for
+vehicle path tracking, learning-enhanced MPC, AGV path
+tracking, and temporal neural networks. Section III introduces
+the diagonal dual-steer AGV model and LPV-MPC formulation. Section IV presents the multi-task temporal scheduling perception method. Section V describes the simulationbased closed-loop experimental design. Section VI reports
+and discusses the closed-loop results, robustness tests, ablation study, and limitations. Section VII concludes the paper.
+
+A multi-task temporal-perception-enhanced LPV-MPC
+framework is proposed for diagonal dual-steer AGV path
+tracking under sloped and turning-transition operating
+conditions, with abnormal resistance included as an auxiliary operating-condition perception task. The learning
+module estimates interpretable scheduling-related variables rather than replacing the vehicle model, the MPC
+optimizer, or the control law.
+• A lightweight ModernTCN-based multi-task estimator
+is adapted for LPV-MPC scheduling perception. From
+historical proprioceptive measurements, the estimator
+jointly predicts the main operating condition, the steering direction, and the slope-related scheduling variable
+required by the LPV-MPC update.
+• A closed-loop simulation benchmark is established to
+evaluate the influence of scheduling perception on path
+tracking. The proposed method is compared with zeroslope LPV-MPC, IMU-based LPV-MPC, true-slope oracle LPV-MPC, GRU, and conventional TCN under the
+same nonlinear AGV plant and LPV-MPC controller.
+• A causal ModernTCN ablation is used to analyze
+the mismatch between offline perception metrics and
+closed-loop control quality. The result highlights that
+window-level classification and regression metrics are
+not sufficient for evaluating learning-enhanced MPC
+systems, and closed-loop validation is necessary.
+•
+
+VOLUME 11, 2023
+
+II. RELATED WORK
+A. MPC AND LPV-MPC FOR VEHICLE PATH TRACKING
+
+MPC has been widely studied for vehicle and mobile robot
+path tracking because it can explicitly handle multi-variable
+dynamics, future reference trajectories, actuator constraints,
+and input-rate limits []. For automated vehicles, MPC-based
+path-tracking controllers usually optimize tracking errors and
+control effort over a finite prediction horizon. Compared with
+classical feedback control, MPC can incorporate reference
+preview and constraint handling in a unified optimization
+framework.
+For nonlinear vehicle systems, nonlinear MPC can provide
+high prediction accuracy, but its online computational burden
+may be high, especially when fast sampling and constrained
+optimization are required. LPV-MPC is a practical alternative
+that represents the nonlinear system by a family of local
+linear models parameterized by scheduling variables []. By
+updating the prediction model according to velocity, yaw rate,
+road condition, or other operating variables, LPV-MPC can
+3
+
+preserve part of the nonlinear behavior while keeping the
+online optimization problem tractable.
+Existing LPV-MPC path-tracking studies usually assume
+that the main scheduling variables can be measured directly or
+estimated reliably from physical sensors. However, for industrial AGVs operating on sloped routes and turning transitions,
+the scheduling variables may be biased, delayed, or affected
+by transient motion. This paper addresses this issue by introducing a temporal perception layer to improve scheduling
+information for LPV-MPC.
+B. LPV AND ROBUST CONTROL FOR AGVS AND SLOPED
+VEHICLES
+
+AGV path tracking has also been studied using LPV control,
+robust control, observer-based control, and coordinated steering control methods []. Multi-actuated ground vehicles, such
+as four-wheel-steering or distributed-drive platforms, provide
+additional control authority but also introduce stronger coupling between longitudinal, lateral, and yaw dynamics. When
+slope roads or load-transfer effects are considered, the control problem becomes more challenging because the vehicle
+model changes with both motion state and road condition.
+For sloped vehicles, the road grade or slope angle affects the longitudinal force balance and the available tire
+forces. Some existing works address slope-road path tracking
+through model updating, LPV modeling, or robust optimization []. These studies show that slope-related information is
+important for maintaining tracking performance. However,
+the problem of learning scheduling-related perception variables for LPV-MPC, especially under a multi-task temporal
+perception framework, remains less explored.
+The present work differs from robust LPV-MPC methods
+that enlarge the uncertainty set or design tube-based constraints. Instead, it aims to reduce scheduling mismatch by
+providing more informative slope- and condition-related estimates to the LPV-MPC scheduler. The MPC formulation and
+constraints remain model-based, while the temporal neural
+network acts as a scheduling perception module.
+C. LEARNING-ENHANCED MPC
+
+Learning-enhanced MPC combines data-driven components
+with model predictive control. Existing approaches can be
+broadly classified into learning the prediction model, learning
+model residuals, estimating uncertainty, adapting the cost
+function or constraints, and accelerating the online optimization process []. These methods have shown that learning
+components can improve model accuracy or computational
+efficiency while retaining some advantages of MPC, such as
+constraint handling and receding-horizon optimization.
+In autonomous vehicle path tracking, learning-enhanced
+MPC has been used to learn vehicle dynamics, compensate modeling errors, or improve real-time optimization [].
+Such methods typically focus on improving the prediction
+model or the optimizer. In contrast, the present work does
+not replace the nonlinear AGV model, the LPV model, or
+the MPC optimizer. The learning module estimates inter4
+
+pretable scheduling-related quantities, including operating
+condition, steering direction, and slope-related scheduling
+information. Therefore, the proposed method can be regarded
+as a scheduling-perception-enhanced LPV-MPC framework
+rather than an end-to-end neural control method.
+D. TEMPORAL NEURAL NETWORKS FOR SCHEDULING
+PERCEPTION
+
+Temporal neural networks are widely used for sequence modeling, time-series classification, and regression. GRU is a
+representative recurrent neural network with gated memory,
+and it is often used as a compact baseline for sequence modeling []. Temporal convolutional networks provide an alternative sequence modeling structure based on one-dimensional
+convolutions, residual connections, and finite receptive fields
+[]. ModernTCN further revisits pure convolutional structures
+for general time-series analysis by using modern large-kernel
+temporal convolution and channel-mixing designs [].
+Although these temporal models have been evaluated in
+many offline time-series tasks, their behavior inside closedloop control systems requires additional care. In a feedback
+system, perception errors can change the future state distribution, which may further affect subsequent predictions and
+control actions. Therefore, high offline classification accuracy or low regression error does not necessarily imply robust
+closed-loop behavior. This paper evaluates GRU, conventional TCN, ModernTCN, and a causal ModernTCN ablation
+not only by offline metrics, but also by closed-loop tracking
+performance, control smoothness, constraint behavior, and
+robustness under disturbances.
+III. DIAGONAL DUAL-STEER AGV MODELING AND
+LPV-MPC FORMULATION
+A. VEHICLE CONFIGURATION AND PATH-TRACKING
+VARIABLES
+
+The considered platform is a diagonal dual-steer drive AGV.
+The left-front and right-rear wheels are active drive-steer
+wheels, while the right-front and left-rear wheels are passive
+support wheels. The vehicle motion is described in both the
+global frame and the body-fixed frame. The path-tracking
+objective is to follow a reference path while regulating lateral error, heading error, velocity-related error, and yaw-raterelated error. The vehicle configuration is illustrated in Fig. 2.
+
+VOLUME 11, 2023
+
+The output vector contains vehicle states and measurable or
+derived signals used for closed-loop diagnostics and temporal perception. These signals include acceleration, yaw rate,
+steering angles, wheel speeds, motor-current-related quantities, velocity estimates, pitch-related estimates, and diagnostic variables. The same nonlinear plant is used for all controllers in the closed-loop comparisons, so that differences in
+results are caused by the scheduling and perception methods
+rather than by different plant models.
+C. LPV REPRESENTATION AND SCHEDULING VARIABLES
+
+To obtain an online tractable predictive controller, the nonlinear AGV model is represented by an LPV prediction model.
+Around the current operating point, the local prediction model
+is expressed as
+xk+1 = A(ρk )xk + B(ρk )uk + E(ρk )dk ,
+yk = C(ρk )xk + D(ρk )uk ,
+FIGURE 2. Configuration of the diagonal dual-steer AGV. The LF and RR
+wheels are active drive-steer wheels, while the RF and LR wheels are
+passive support wheels. The main motion variables and road grade angle
+are indicated in the figure.
+
+
+x= X
+
+Y
+
+ψ
+
+v
+
+ω
+
+δlf
+
+δrr
+
+β
+
+T
+
+,
+
+(1)
+
+where X and Y are the global positions, ψ is the heading
+angle, v is the longitudinal velocity, ω is the yaw rate, δlf and
+δrr are the steering angles of the left-front and right-rear active
+wheels, and β is the sideslip angle. The control input is
+
+u = Fcmd
+
+ωcmd
+
+T
+
+,
+
+ωk
+
+θksch
+
+T
+
+,
+
+(6)
+
+where θksch is the scheduled slope used by the LPV-MPC
+controller. Different controller variants use different sources
+of θksch :
+
+0,
+
+
+
+θimu ,
+k
+θksch =
+true
+
+θ
+
+k ,
+
+
+S(θ̂k ),
+
+(2)
+
+where Fcmd is the driving force command and ωcmd is the
+yaw-rate command. The road slope angle is denoted by θ. The
+main vehicle parameters and model variables are summarized
+in Table 1.
+
+(5)
+
+where ρk is the scheduling vector, dk denotes measured or
+estimated disturbances, and yk is the controlled output vector.
+In this work, the scheduling vector is defined as
+
+ρk = v k
+
+The discrete vehicle state is defined as
+
+(4)
+
+zero-slope LPV-MPC,
+IMU-based LPV-MPC,
+oracle LPV-MPC,
+learning-enhanced LPV-MPC.
+
+(7)
+
+Here, θ̂k is the slope-related estimate provided by the temporal perception module, and S(·) denotes the scheduling
+conditioning operation.
+D. MPC OPTIMIZATION PROBLEM
+
+Placeholder: Vehicle parameters and model variables.
+
+At each sampling instant, the LPV-MPC controller updates
+the prediction model according to the current scheduling
+vector and solves a finite-horizon constrained optimization
+problem. The cost function is written as
+
+TABLE 1. Vehicle parameters and model variables.
+
+B. NONLINEAR VEHICLE MODEL
+
+The nonlinear discrete-time AGV model is written in compact
+form as
+
+Jk =
+
+Np
+X
+i=1
+
+xk+1 = f (xk , uk , θk , p),
+
+(3)
+
+where p denotes the vehicle and environment parameters.
+The simulation model includes the main effects required
+for closed-loop evaluation, such as drive-force distribution,
+steering actuator dynamics, rolling resistance, aerodynamic
+drag, slope-induced resistance, load-transfer-related effects,
+and tire-force limitations.
+VOLUME 11, 2023
+
+2
+
+yk+i|k − yref
+k+i +
+Q
+
+NX
+c −1
+i=0
+
+2
+
+uk+i|k R +
+
+NX
+c −1
+
+2
+
+∆uk+i|k R ,
+∆
+
+i=0
+
+(8)
+where Np is the prediction horizon, Nc is the control horizon, Q, R, and R∆ are weighting matrices, and
+∆uk+i|k = uk+i|k − uk+i−1|k .
+
+(9)
+
+The optimization is subject to the LPV prediction model
+and input constraints,
+5
+
+IV. MULTI-TASK TEMPORAL SCHEDULING PERCEPTION
+
+umin ≤ uk+i|k ≤ umax ,
+
+(10)
+
+∆umin ≤ ∆uk+i|k ≤ ∆umax .
+
+(11)
+
+Placeholder: LPV-MPC settings and constraints.
+
+A. SCHEDULING-RELATED PERCEPTION TARGETS
+
+The proposed perception module is designed for LPV-MPC
+scheduling assistance. It estimates three types of information
+from historical vehicle signals. The first task is the main
+operating-condition classification,
+
+TABLE 2. LPV-MPC settings and constraints.
+
+cmain
+∈ {flat, stall, slope}.
+k
+Additional state or output constraints can be included according to the implementation. In the present work, all compared controllers use the same MPC formulation and constraint settings, as detailed in Table 2. Therefore, the closedloop comparison focuses on how different scheduling sources
+affect the LPV-MPC behavior.
+E. SCHEDULING MISMATCH MECHANISM
+
+Compared scheduling sources
+
+LPV-MPC local prediction
+
+(13)
+
+The second task is the steering-direction classification,
+
+cturn
+∈ {right, straight, left}.
+k
+
+(14)
+
+The third task is the slope-related regression,
+Mismatch propagation
+
+Zero-slope
+
+θ̂k ∈ R.
+
+Scheduling error
+
+LPV-MPC
+prediction model
+
+(15)
+
+IMU-based
+Model mismatch
+
+used by the optimizer
+
+Oracle
+
+uk=[Fcmd,ωcmd]T
+
+local model differs from
+true grade dynamics
+
+Inaccurate prediction
+biased state prediction
+
+Learned + conditioning
+measured feedback for scheduling
+
+True nonlinear
+AGV plant
+grade condition:
+measured states close the loop
+
+Closed-loop effect
+
+tracking degradation /
+increased control variation
+
+Only the oracle uses θktrue directly; the other schedulers provide compared θksch signals to the same LPV-MPC.
+
+FIGURE 3. LPV-MPC scheduling mismatch mechanism. Different slope
+scheduling sources provide different θksch signals to the same LPV-MPC
+prediction model. When θksch deviates from the true road grade θktrue , the
+local prediction model becomes inconsistent with the nonlinear plant,
+which may lead to biased prediction, tracking degradation, and increased
+control variation.
+
+The LPV-MPC prediction model depends on the scheduled
+slope θksch , as illustrated in Fig. 3. If θksch differs from the true
+slope θktrue , the prediction model may not represent the actual
+vehicle dynamics accurately. The scheduling error is defined
+as
+eθ,k = θksch − θktrue .
+
+(12)
+
+When eθ,k is large, the predicted longitudinal resistance,
+load-transfer-related terms, and yaw-motion coupling may
+deviate from the true plant behavior. Consequently, the predicted path-tracking errors may become inconsistent with
+the actual future errors, and the optimizer may generate
+commands that provide insufficient compensation or increase
+control variation.
+This mechanism explains why zero-slope scheduling can
+fail on sloped routes and why a simplified IMU-based scheduler may not be sufficient in transient conditions. It also motivates the proposed multi-task temporal perception module,
+which aims to provide a more informative estimate of the
+scheduling condition using recent vehicle measurements.
+6
+
+These tasks are jointly considered because they represent complementary aspects of the operating condition.
+The main-condition task helps distinguish flat-road, slope,
+and abnormal-resistance regimes. The steering-direction task
+provides information about turning transitions. The sloperegression task provides the scheduling quantity that directly
+enters the LPV-MPC update.
+B. HISTORICAL PROPRIOCEPTIVE WINDOW
+
+The temporal estimator uses a fixed-length historical window
+of proprioceptive and derived signals,
+
+
+Zk = zk−L+1
+
+zk−L+2
+
+···
+
+zk
+
+T
+
+∈ RL×F ,
+
+(16)
+
+where L = 128 and F = 19. With a sampling time of
+Ts = 0.01 s, each input window covers 1.28 s of recent
+vehicle motion.
+The input features are selected from measurable or derived
+vehicle signals, including longitudinal acceleration, yaw rate,
+motor-current-related quantities, wheel speeds, steering angles, pitch-related estimation, velocity-related quantities, and
+diagnostic features. These signals are used as proprioceptive
+measurements and are available from the simulation platform.
+The learning-based methods use the same input features and
+the same normalization policy to ensure fair comparison.
+The temporal input window, train-set normalization, shared
+encoder, and multi-task heads are illustrated in Fig. 4. The
+input definition and task settings are summarized in Table 3.
+VOLUME 11, 2023
+
+D. MULTI-TASK LOSS FUNCTION
+Input window and preprocessing
+
+ModernTCN shared encoder
+
+Task-specific heads
+Main-condition
+classification
+
+ModernTCN encoder
+
+Historical window
+
+flat | stall | slope
+
+features
+
+stem
+
+Normalization
+train-set scaler
+
+time
+Zk ∈ R128×19
+128 steps | Ts = 0.01 s
+19 proprioceptive / derived features
+
+large-kernel
+temporal convolution
+
+Shared temporal
+representation
+
+channel
+mixing
+
+temporal readout
+
+Steering-direction
+classification
+right | straight | left
+
+Slope-related
+regression
+
+residual
+blocks
+
+Scheduling link
+→ scheduling conditioning in Fig. 1
+
+FIGURE 4. ModernTCN-based multi-task temporal estimator for LPV-MPC
+scheduling perception. A train-set-normalized historical window is
+encoded by the ModernTCN encoder and mapped to three task-specific
+heads for main-condition classification, steering-direction classification,
+and slope-related regression.
+
+The proposed temporal estimator is a lightweight ModernTCNbased multi-task network. Its input is the normalized historical window Zk , and its outputs are the main-condition
+probability, steering-direction probability, and slope-related
+regression value:
+(17)
+
+where gϕ (·) denotes the trained temporal estimator. As
+shown in Fig. 4, the normalized input window is processed
+by a ModernTCN encoder and then mapped to three taskspecific heads.
+The network follows the general design idea of modern temporal convolutional models []. Large-kernel temporal
+convolution is used to extract history-dependent patterns,
+while pointwise channel mixing is used to capture coupling
+among different vehicle signals. A generic residual temporal
+block can be written as
+(18)
+
+where T (ℓ) (·) denotes temporal convolution, and M(ℓ) (·)
+denotes channel mixing and nonlinear transformation. The
+residual connection helps stabilize the stacked temporal representation.
+The shared temporal representation is then passed to
+three task heads. The classification heads output the maincondition and steering-direction probabilities, while the regression head outputs the slope-related scheduling estimate.
+The network is not used as a direct controller. Its output is
+used only to assist LPV-MPC scheduling.
+VOLUME 11, 2023
+
+where Lmain and Lturn are classification losses for the main
+operating condition and steering direction, respectively, and
+Lθ is the slope-regression loss. The weights λmain , λturn , and
+λθ balance the three tasks.
+This multi-task structure is adopted because the three outputs are related to the same underlying operating condition.
+Joint learning can encourage the shared temporal encoder to
+extract features that are useful for both condition recognition
+and slope scheduling estimation.
+
+θksch = S(θ̂k ),
+
+C. MODERNTCN-BASED MULTI-TASK ESTIMATOR
+
+
+
+
+H (ℓ+1) = H (ℓ) + M(ℓ) T (ℓ) H (ℓ) ,
+
+(19)
+
+The raw slope estimate is not directly used as a control input.
+Before entering the LPV-MPC scheduler, it is processed by a
+conditioning function:
+
+TABLE 3. Temporal perception input and task definition.
+
+h
+i
+ôk = p̂main
+, p̂turn
+k
+k , θ̂k .
+
+L = λmain Lmain + λturn Lturn + λθ Lθ ,
+
+E. SCHEDULING CONDITIONING
+
+Placeholder: Temporal perception input and task definition.
+
+ôk = gϕ (Zk ),
+
+The temporal estimator is trained with a weighted multi-task
+loss,
+
+(20)
+
+where S(·) includes magnitude limiting, rate limiting, and
+dead-zone filtering. The magnitude limit prevents unrealistically large scheduled slope values. The rate limit reduces
+abrupt changes in the scheduled model. The dead-zone prevents small slope fluctuations from unnecessarily changing
+the LPV model.
+These safeguards are engineering measures to reduce
+scheduling discontinuities. They should not be interpreted as
+a formal stability proof. The constrained LPV-MPC remains
+the final controller that determines the AGV control command.
+F. BASELINE TEMPORAL MODELS
+
+Two temporal neural network baselines are considered. The
+first is GRU, which represents a recurrent sequence modeling method with gated memory. The second is conventional TCN, which represents a standard convolutional sequence baseline. Both baselines use the same input window,
+task definitions, and closed-loop controller as the proposed
+ModernTCN-based estimator. Therefore, the comparison focuses on whether the ModernTCN-based temporal representation provides better scheduling perception and closed-loop
+behavior under the same LPV-MPC framework. The main
+model configurations are listed in Table 4.
+Placeholder: Model configurations of GRU, TCN and
+ModernTCN.
+TABLE 4. Model configurations of GRU, TCN and ModernTCN.
+
+V. SIMULATION-BASED CLOSED-LOOP EXPERIMENTAL
+DESIGN
+7
+
+TABLE 5. Baseline controllers and estimators.
+
+Category
+No-slope baseline
+Sensor baseline
+Oracle baseline
+Learning baseline
+Learning baseline
+Proposed method
+Ablation
+
+Method
+LPV-MPC theta0
+LPV-MPC IMU theta
+LPV-MPC oracle theta
+GRU
+TCN
+ModernTCN
+Causal ModernTCN
+
+Role
+Nominal zero-slope scheduling
+Simplified sensor-based scheduling
+True-slope scheduling upper bound
+Recurrent temporal estimator
+Conventional convolutional estimator
+Multi-task temporal scheduling estimator
+Offline–closed-loop mismatch analysis
+
+A. SIMULATION PLATFORM
+
+All closed-loop experiments are conducted on a MATLAB/Simulink simulation platform consisting of a nonlinear
+diagonal dual-steer AGV plant and an LPV-MPC controller.
+The nonlinear plant is used as the closed-loop simulation
+object, while the LPV-MPC controller uses the scheduled
+local prediction model for online optimization. The learningbased perception modules are called inside the closed-loop
+simulation to provide scheduling-related estimates.
+The current study is simulation-based. No hardware-inthe-loop or physical AGV experiment is included. Therefore,
+the experimental conclusions should be interpreted as closedloop simulation evidence rather than hardware deployment
+validation.
+B. BASELINE CONTROLLERS AND ESTIMATORS
+
+The compared controllers and estimators are summarized in
+Table 5. The zero-slope LPV-MPC baseline evaluates the
+performance of nominal scheduling. The IMU-based LPVMPC baseline evaluates whether a simplified physical slope
+estimate is sufficient. The oracle LPV-MPC uses the true
+slope and provides an upper-bound reference for scheduling
+quality. GRU and TCN are learning-based temporal baselines.
+ModernTCN is the proposed temporal scheduling perception
+method. The causal ModernTCN is used only for ablation
+analysis.
+C. CLOSED-LOOP SCENARIOS
+
+The closed-loop evaluation includes three route types, as
+shown in Fig. 5. The first route is a factory logistics showcase path, which contains representative curved and sloped
+segments. The second route is a long up/down slope path,
+which emphasizes slope scheduling. The third route is a sharp
+turn transition path, which emphasizes the coupling between
+turning transition and slope-related scheduling.
+
+8
+
+VOLUME 11, 2023
+
+Reference path
+
+(a) Factory logistics showcase
+
+Start
+
+End
+
+Travel direction
+
+(b) Long up/down slope
+
+(c) Sharp turn transition
+
+16
+0
+
+16
+
+−20
+
+Y (m)
+
+Y (m)
+
+Y (m)
+
+8
+0
+
+8
+0
+
+−40
+−8
+0
+
+30
+
+60
+
+90
+
+0
+
+15
+
+X (m)
+
+30
+
+X (m)
+
+0
+
+15
+
+30
+
+X (m)
+
+FIGURE 5. Closed-loop simulation routes used for evaluation: (a) factory logistics showcase, (b) long up/down slope, and (c) sharp turn transition. The
+arrows indicate the travel direction along the reference path.
+
+These routes are used to test whether the proposed scheduling perception method is effective beyond a single trajectory.
+The factory logistics path is used as the main showcase route,
+while the other two routes are used for multi-route generalization and disturbance robustness evaluation.
+
+Separating these metrics is important because some methods, such as zero-slope LPV-MPC and oracle LPV-MPC,
+are not classifiers. Therefore, perception metrics should be
+interpreted only for learning-based methods, while the oracle
+method should be interpreted primarily as a tracking and
+control upper-bound reference.
+
+D. DISTURBANCE AND ROBUSTNESS SETTINGS
+
+Robustness is evaluated under designed disturbance levels.
+The nominal level corresponds to the baseline closed-loop
+simulation without additional disturbance. Higher disturbance levels introduce measurement noise and plant parameter perturbations. The perturbations include changes in vehicle and environment parameters that affect the closed-loop
+plant behavior.
+The robustness study is intended to compare the relative
+closed-loop behavior of ModernTCN, GRU, and TCN under
+the same disturbance protocol. It does not cover all possible
+real-world sensor noise or plant uncertainty distributions.
+Broader validation with additional random seeds, real sensor
+noise, and hardware experiments remains future work.
+
+F. FAIRNESS AND REPRODUCIBILITY PROTOCOL
+
+All learning-based methods use the same input features, same
+task definitions, same training and testing protocol, and same
+LPV-MPC controller. The temporal input length is 128 steps,
+the input dimension is 19, and the sampling time is 0.01 s. A
+run-level split is adopted to avoid placing highly overlapping
+windows from the same simulation run into both training
+and testing sets. The normalization statistics are fitted on
+the training set only and then applied to validation, test, and
+closed-loop inference.
+This protocol is included to ensure fair comparison among
+GRU, TCN, and ModernTCN. It is not presented as a separate
+dataset contribution.
+
+E. EVALUATION METRICS
+
+G. COMPUTATIONAL FEASIBILITY CHECK
+
+The evaluation metrics are divided into four groups. The first
+group measures tracking performance:
+
+A computational feasibility check is included to measure
+the core inference time of the temporal estimator and the
+MPC solve time. This experiment is used only as an implementation feasibility indicator. Since no embedded controller
+or physical AGV is tested, the timing result should not be
+interpreted as a hardware deployment validation. Desktop
+MATLAB/Simulink wrapper overhead is reported separately
+when applicable.
+
+Mtrack = {ey,RMSE , eψ,RMSE , eXY ,RMSE , ey,peak } .
+
+(21)
+
+The second group measures control effort and smoothness:
+Mcontrol = {J∆u , Fpeak , ωcmd,peak } .
+
+(22)
+
+The third group measures constraint behavior, including
+violation rate and saturation-related events. The fourth group
+measures perception and scheduling performance, including
+main-condition accuracy, steering-direction accuracy, sloperelated error, and scheduled-slope smoothness.
+VOLUME 11, 2023
+
+VI. RESULTS AND DISCUSSION
+A. DOES SCHEDULING MISMATCH MATTER?
+
+The main closed-loop comparison is designed to examine
+whether slope-related scheduling mismatch significantly affects LPV-MPC path tracking. Fig. 6 shows the trajectory
+9
+
+and tracking error comparison, and Table 6 summarizes the
+main-route results for the proposed method and the baseline
+controllers. For readability, the XY trajectory panel includes
+all compared methods, whereas the lateral-error and headingerror panels focus on the learning-based methods and the
+oracle baseline. The large tracking errors of the zero-slope
+and IMU-based baselines are quantified in Table 6.
+
+10
+
+VOLUME 11, 2023
+
+Reference
+LPV-MPC theta0
+
+ModernTCN
+LPV-MPC IMU theta
+
+GRU
+LPV-MPC oracle theta
+
+(b) Lateral error
+
+(a) XY trajectory
+
+(c) Heading error
+
+0.45
+
+20
+
+0.6
+
+0
+
+0.3
+
+−40
+
+−60
+20
+
+40
+
+60
+
+80
+
+Heading error eψ (rad)
+
+−20
+
+Lateral error ey (m)
+
+Y (m)
+
+0.30
+
+0
+
+TCN
+
+0.15
+
+0.00
+
+0.0
+
+−0.3
+
+X (m)
+−0.6
+−0.15
+0
+
+40
+
+80
+
+120
+
+160
+
+0
+
+40
+
+Time (s)
+
+80
+
+120
+
+160
+
+Time (s)
+
+FIGURE 6. Main-route closed-loop comparison on the factory logistics showcase path: (a) XY trajectory of all compared methods, (b) lateral error of the
+learning-based methods and oracle baseline, and (c) heading error of the learning-based methods and oracle baseline. The zero-slope and IMU-based
+LPV-MPC baselines produce much larger tracking errors, which are quantified in Table 6.
+
+The zero-slope and simplified IMU-based LPV-MPC baselines show large tracking errors on the showcase route. This
+indicates that the scheduled slope is not a negligible auxiliary
+signal on this route. When the LPV-MPC uses an inaccurate
+slope-related scheduling variable, the prediction model becomes inconsistent with the nonlinear plant and the resulting
+closed-loop path tracking deteriorates significantly.
+The oracle LPV-MPC achieves the best scheduling reference because it uses the true slope. ModernTCN obtains a
+lateral-error RMSE close to the oracle result on the main
+path. This result suggests that the learned temporal perception
+module can provide useful scheduling information for LPVMPC. However, the gap between ModernTCN and oracle remains visible in global position error and control smoothness.
+Therefore, the proposed method should be interpreted as an
+effective scheduling enhancement rather than a replacement
+for perfect slope information.
+
+TABLE 6. Main closed-loop results on the factory logistics showcase path.
+
+Controller
+ModernTCN
+GRU
+TCN
+LPV-MPC theta0
+LPV-MPC IMU theta
+LPV-MPC oracle theta
+
+ey RMSE
+0.0246
+0.0623
+0.0364
+26.2527
+26.4718
+0.0236
+
+eψ RMSE
+0.0438
+0.1714
+0.1061
+1.6517
+1.6155
+0.0315
+
+XY RMSE
+0.8036
+1.6641
+1.3538
+32.0981
+32.1210
+0.5602
+
+J∆u
+0.5991
+7.0298
+235.6737
+285.9290
+285.8180
+0.0609
+
+obtains a smaller scheduled-slope MAE than ModernTCN on
+the main route, but its tracking errors are larger. TCN obtains
+favorable values in some local scheduling or steering-related
+metrics, but it shows a much larger control smoothness cost
+and a nonzero violation rate. Therefore, the conclusion is not
+that ModernTCN is uniformly superior in every single metric.
+Rather, ModernTCN gives the most robust overall closedloop performance among the learning-based methods.
+
+B. LEARNING-BASED CONTROLLER COMPARISON
+
+C. MULTI-ROUTE GENERALIZATION
+
+Among the learning-based controllers, ModernTCN provides
+the best overall closed-loop tradeoff on the main route.
+It achieves the smallest lateral-error RMSE, heading-error
+RMSE, and global position RMSE among GRU, TCN, and
+ModernTCN. It also maintains a low control smoothness cost
+and zero violation rate in the reported summary.
+The comparison also shows that a single perception metric
+is not sufficient to rank the learning-based controllers. GRU
+
+Table 7 summarizes the aggregate results over three closedloop routes. The benchmark includes the factory logistics
+showcase path, the long up/down slope path, and the sharp
+turn transition path.
+ModernTCN obtains the best mean overall rank across the
+three paths. This result reduces the possibility that the mainroute result is caused only by trajectory-specific tuning. The
+oracle method remains a strong upper-bound reference in
+
+VOLUME 11, 2023
+
+11
+
+Vi
+
+5.27
+
+TABLE 7. Aggregate closed-loop results over three routes.
+
+Controller
+ModernTCN
+LPV-MPC oracle theta
+GRU
+TCN
+LPV-MPC IMU theta
+LPV-MPC theta0
+
+Paths
+3
+3
+3
+3
+3
+3
+
+ey RMSE mean
+0.0319
+0.0347
+0.0483
+0.0489
+8.8930
+8.8276
+
+eψ RMSE mean
+0.0321
+0.0294
+0.0851
+0.0814
+0.6669
+0.6891
+
+XY RMSE mean
+0.4889
+0.3951
+0.9358
+1.0695
+12.1776
+12.2527
+
+J∆u mean
+13.3133
+0.4386
+3.3528
+313.9197
+579.7648
+644.0558
+
+Overall rank mean
+1.0000
+2.0000
+3.3333
+3.6667
+5.0000
+6.0000
+
+terms of global position error and control smoothness, but
+ModernTCN is the most consistent learning-based controller
+over the multi-route benchmark.
+The multi-route results also show that the zero-slope
+and IMU-based LPV-MPC baselines remain weak on routes
+where slope scheduling is important. This supports the central motivation of the paper: reliable scheduling information
+is necessary for LPV-MPC path tracking under sloped and
+transitional conditions.
+D. SCHEDULING BEHAVIOR ANALYSIS
+
+12
+
+VOLUME 11, 2023
+
+True slope
+LPV-MPC theta0
+
+ModernTCN θ sch
+LPV-MPC IMU theta
+
+GRU θ sch
+LPV-MPC oracle theta
+
+TCN θ sch
+
+Scheduled slope
+θ sch (deg)
+
+(a) Scheduled slope comparison
+8
+4
+0
+−4
+−8
+
+Scheduling error
+θ sch − θ true (deg)
+
+(b) Slope scheduling error
+8
+4
+0
+−4
+−8
+0
+
+40
+
+80
+
+120
+
+160
+
+Time (s)
+
+FIGURE 7. Scheduled-slope behavior on the factory logistics showcase path: (a) scheduled slope signals actually used by the LPV-MPC controller after
+conditioning and (b) scheduling error with respect to the true slope. The oracle baseline uses the true slope directly, while the zero-slope baseline keeps
+the scheduled slope at zero.
+
+Fig. 7 compares the scheduled-slope signals actually used
+by the LPV-MPC controller. The oracle baseline follows
+the true slope, while the zero-slope and IMU-based schedulers show large scheduling errors over the sloped segments.
+Among the learning-based methods, ModernTCN does not
+always produce the smallest pointwise scheduled-slope error.
+In fact, GRU obtains a smaller scheduled-slope MAE on the
+main route, as reported in Table 6. However, its closed-loop
+tracking errors and control smoothness cost are larger than
+those of ModernTCN. This indicates that the closed-loop
+effect of a scheduling signal depends not only on pointwise
+slope accuracy, but also on its temporal behavior and interaction with the LPV-MPC prediction model and constraints.
+Therefore, ModernTCN should be interpreted as providing
+the most favorable closed-loop scheduling behavior among
+the learning-based methods, rather than as the most accurate
+slope estimator at every instant. This observation is consistent
+with the broader conclusion that learning-enhanced MPC
+modules must be evaluated in closed loop rather than only
+by offline or pointwise perception metrics.
+
+aggregate, as shown in Fig. 8. This indicates that local perception accuracy does not automatically translate into smooth
+closed-loop control.
+
+Placeholder: Control smoothness and constraint
+behavior.
+FIGURE 8. Control smoothness and constraint behavior comparison.
+
+The oracle LPV-MPC has the smallest control smoothness
+cost among the main-route methods because it uses the true
+slope for scheduling. ModernTCN is less smooth than the
+oracle, which suggests that residual slope-estimation error
+and scheduling discontinuity still affect the control input.
+Nevertheless, compared with the zero-slope and IMU-based
+baselines, ModernTCN substantially reduces both tracking
+error and constraint violations. This confirms that temporal
+scheduling perception improves not only the trajectory error
+but also the closed-loop control behavior.
+
+E. CONTROL SMOOTHNESS AND CONSTRAINT BEHAVIOR
+
+Control smoothness and constraint behavior are important
+for evaluating a path-tracking controller. A controller that
+achieves low tracking error with excessive input variation
+may not be desirable for industrial AGV operation. The results show that TCN can achieve competitive values in some
+perception metrics, but it produces a much larger control
+smoothness cost on the main route and in the multi-route
+VOLUME 11, 2023
+
+F. ROBUSTNESS UNDER DISTURBANCE AND PARAMETER
+PERTURBATION
+
+Robustness is evaluated on two route types under three disturbance levels. Table 8 reports the aggregate results, and
+Fig. 9 visualizes the robustness trends. Each disturbance level
+contains the long up/down slope path and the sharp turn
+transition path.
+13
+
+TABLE 8. Robustness aggregate results under disturbance levels.
+
+Level
+0
+0
+0
+1
+1
+1
+2
+2
+2
+
+Controller
+ModernTCN
+GRU
+TCN
+ModernTCN
+GRU
+TCN
+ModernTCN
+GRU
+TCN
+
+Cases
+2
+2
+2
+2
+2
+2
+2
+2
+2
+
+ey RMSE mean
+0.0355
+0.0413
+0.0552
+0.0618
+0.0765
+0.0686
+0.0819
+0.1170
+0.0957
+
+XY RMSE mean
+0.3316
+0.5716
+0.9273
+1.2880
+1.3874
+1.4244
+1.6587
+1.8842
+1.8597
+
+Placeholder: Robustness under disturbance levels.
+FIGURE 9. Robustness trends across disturbance levels d = 0, 1, 2.
+
+As the disturbance level increases, the tracking errors
+generally become larger for the learning-based controllers.
+The control smoothness cost also increases clearly for ModernTCN and TCN, while GRU shows a non-monotonic variation in J∆u . Nevertheless, ModernTCN maintains the best
+mean overall rank at all three disturbance levels. This result
+supports the relative robustness of ModernTCN under the
+designed disturbance settings.
+The robustness result should be interpreted carefully. The
+disturbance cases are finite simulation scenarios, not a complete representation of all real-world uncertainties. Additional
+random seeds, real sensor noise, hardware-in-the-loop tests,
+and physical AGV experiments are needed for stronger robustness claims.
+G. OFFLINE PERCEPTION METRICS ARE NOT ENOUGH
+
+Offline perception metrics are useful for understanding the
+temporal estimator, but they are not sufficient for evaluating
+a learning-enhanced controller. In the offline test, the default ModernTCN achieves high main-condition and steeringdirection accuracy. GRU achieves a competitive slope-related
+error in some metrics, while TCN can be locally competitive
+in steering-related metrics. However, their closed-loop results
+differ substantially.
+This discrepancy occurs because closed-loop control introduces feedback. A local perception error can change the
+scheduled model, which changes the control action, which
+further changes the future vehicle state and input window.
+Therefore, the distribution encountered by the temporal estimator during closed-loop operation may differ from the
+offline test distribution. For this reason, offline classification
+accuracy and regression error should be treated as explanatory
+metrics rather than the primary evidence of control performance.
+H. CAUSAL MODERNTCN ABLATION
+
+The causal ModernTCN ablation is included to examine
+whether a causal temporal padding design improves closedloop robustness. Its offline metrics are close to the default
+ModernTCN in several aspects, as shown in Table 9. However, its closed-loop behavior on the main route deteriorates
+14
+
+significantly. This shows a clear mismatch between offline
+perception performance and closed-loop control quality, as
+J∆u mean
+Overall rank mean
+illustrated
+in Fig. 10.
+
+19.6704
+1.0000
+1.5143
+2.0000
+353.0426 Placeholder: Offline
+3.0000 perception and causal ablation results.
+205.7775
+1.0000
+307.3123
+2.5000 and causal ablation results.
+TABLE 9. Offline perception
+669.0800
+2.5000
+709.7600
+1.0000
+292.1800
+2.0000
+1101.8100
+3.0000
+
+Placeholder: Offline–closed-loop mismatch for
+causal ablation.
+FIGURE 10. Offline–closed-loop mismatch for the causal ModernTCN
+ablation.
+
+This result should not be interpreted as a general conclusion that causal temporal convolution is unsuitable for
+control. It only indicates that the particular causalization and
+training setting tested in this work did not produce robust
+closed-loop scheduling behavior. The more important conclusion is methodological: learning-enhanced MPC modules
+must be evaluated in the closed loop. For scheduling perception, temporal continuity, feedback-induced distribution
+shift, and control sensitivity are as important as window-level
+accuracy.
+I. COMPUTATIONAL COST
+
+A computational feasibility check is reported in Table 10 to
+quantify the core inference and MPC solving cost. The result
+indicates that the core inference and MPC solve times are
+small compared with the control sampling period used in the
+simulation. However, MATLAB/Simulink desktop wrapper
+overhead is implementation-specific and should not be interpreted as embedded real-time performance.
+Placeholder: Computational feasibility check.
+TABLE 10. Computational feasibility check.
+
+Because no embedded controller, hardware-in-the-loop
+platform, or physical AGV experiment is included, the timing
+analysis is reported only as a computational feasibility indicator. A complete real-time deployment validation remains
+future work.
+J. LIMITATIONS
+
+Several limitations should be acknowledged. First, all results are based on MATLAB/Simulink closed-loop simulation. No hardware-in-the-loop or physical AGV experiment
+is included. Second, the current IMU-based scheduler is a
+simplified baseline and does not represent all possible sensorfusion methods for slope estimation. Third, the disturbance
+study covers designed simulation perturbations, but it does
+not fully represent real sensor noise, actuator delay, floor
+irregularities, or hardware uncertainty.
+VOLUME 11, 2023
+
+Fourth, this paper does not provide a formal closed-loop
+stability proof for the learning-enhanced LPV-MPC system.
+The neural network output is conditioned before entering
+the LPV-MPC scheduler, and the MPC still handles input
+and input-rate constraints, but these mechanisms should not
+be interpreted as a rigorous stability guarantee. Finally, the
+current temporal estimator is trained and evaluated under the
+available simulation data distribution. Its generalization to
+real AGV measurements requires additional validation.
+VII. CONCLUSION
+
+This paper proposed a multi-task temporal-perceptionenhanced LPV-MPC framework for path tracking of a diagonal dual-steer AGV under sloped and turning-transition
+operating conditions, with abnormal resistance included as an
+auxiliary operating-condition perception target. The proposed
+method addresses the scheduling mismatch problem of LPVMPC by estimating interpretable scheduling-related variables
+from historical proprioceptive measurements.
+A lightweight ModernTCN-based estimator was adapted
+to jointly predict the main operating condition, steering direction, and slope-related scheduling variable. The estimated
+scheduling information was incorporated into the LPV-MPC
+update, while the final control action remained generated by
+the constrained model predictive controller.
+Closed-loop simulation results showed that ModernTCN
+substantially improved tracking performance compared with
+zero-slope and simplified IMU-based LPV-MPC baselines.
+Compared with GRU and conventional TCN, ModernTCN
+provided the most robust overall closed-loop tradeoff across
+the main route, multiple routes, and designed disturbance levels. The oracle LPV-MPC results further indicated that ModernTCN approached the true-slope scheduling upper bound
+in lateral tracking, although gaps remained in global position
+error and control smoothness.
+The causal ModernTCN ablation demonstrated that strong
+offline perception metrics do not necessarily lead to robust
+closed-loop control. This result highlights the necessity of
+closed-loop validation for learning-enhanced MPC systems.
+Future work will focus on hardware-in-the-loop and physical AGV experiments, real sensor noise validation, broader
+random-seed robustness tests, formal stability or error-bound
+analysis, and safer fallback strategies for uncertain scheduling
+conditions.
+
+VOLUME 11, 2023
+
+15
+
+

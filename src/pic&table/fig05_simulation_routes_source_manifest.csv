@@ -1,0 +1,4 @@
+panel,title,path_file,duration_s,n_samples,distance_m,x_min_m,x_max_m,y_min_m,y_max_m,xlim_min_m,xlim_max_m,ylim_min_m,ylim_max_m,box_aspect_h_over_w
+(a),Factory logistics showcase,E:\Matlab\Simulink\S-Function_16\data\paths\path_factory_logistics_showcase_theta10_v3.mat,190.000,19001,170.800,0.000,81.204,-41.861,0.000,-6.496,95.821,-54.695,12.834,0.660
+(b),Long up/down slope,E:\Matlab\Simulink\S-Function_16\data\paths\path_closed_loop_long_updown_theta10_v1.mat,44.000,4401,38.490,0.000,37.385,0.000,6.098,-2.991,40.376,-11.262,17.360,0.660
+(c),Sharp turn transition,E:\Matlab\Simulink\S-Function_16\data\paths\path_closed_loop_sharp_turn_transition_theta10_v1.mat,52.000,5201,44.120,0.000,38.309,0.000,15.826,-3.065,41.374,-6.752,22.578,0.660

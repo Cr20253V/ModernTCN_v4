@@ -1,0 +1,18 @@
+﻿[
+    {
+        "key":  "source",
+        "docx":  "E:\\Matlab\\Simulink\\S-Function_16\\soft_copyright_application\\01_source_code_material\\ModernTCN_AGV_LPVMPC_V1_source_front35_back35.docx",
+        "pdf":  "E:\\Matlab\\Simulink\\S-Function_16\\soft_copyright_application\\01_source_code_material\\ModernTCN_AGV_LPVMPC_V1_source_front35_back35.pdf",
+        "pages":  70,
+        "ok":  true,
+        "error":  ""
+    },
+    {
+        "key":  "design",
+        "docx":  "E:\\Matlab\\Simulink\\S-Function_16\\soft_copyright_application\\02_software_document\\ModernTCN_AGV_LPVMPC_V1_软件设计说明书.docx",
+        "pdf":  "E:\\Matlab\\Simulink\\S-Function_16\\soft_copyright_application\\02_software_document\\ModernTCN_AGV_LPVMPC_V1_软件设计说明书.pdf",
+        "pages":  20,
+        "ok":  true,
+        "error":  ""
+    }
+]

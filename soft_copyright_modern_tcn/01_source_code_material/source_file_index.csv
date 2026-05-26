@@ -1,0 +1,51 @@
+order,relative_path,language,lines,include_status,module,role,reason
+1,init_project.m,MATLAB,21,included,项目初始化,搜索路径设置,初始化 MATLAB 搜索路径
+2,project_root.m,MATLAB,18,included,项目初始化,根目录定位,定位项目根目录
+3,results_dir.m,MATLAB,23,included,项目初始化,输出目录规范,规范输出目录
+4,src/ModernTCN/modern_tcn_model.py,Python,292,included,ModernTCN模型定义,网络结构定义,ModernTCN-small 多任务网络定义
+5,src/ModernTCN/modern_tcn_data.py,Python,259,included,数据加载,数据集读取与契约检查,统一数据集读取与窗口化
+6,src/ModernTCN/modern_tcn_metrics.py,Python,653,included,训练指标,多任务损失和指标计算,分类与回归损失函数及评估指标
+7,src/ModernTCN/train_modern_tcn.py,Python,559,included,训练入口,单 seed 训练主流程,单 seed 训练入口脚本
+8,src/ModernTCN/run_modern_tcn_theta10_v2_multiseed.py,Python,327,included,训练入口,多 seed 训练调度,多 seed 训练入口脚本
+9,src/ModernTCN/export_modern_tcn_onnx.py,Python,99,included,模型导出,ONNX 导出,PyTorch 到 ONNX 格式转换
+10,src/ModernTCN/check_onnxruntime_consistency.py,Python,105,included,一致性验证,ONNXRuntime 一致性检查,PyTorch 与 ONNXRuntime 输出对比
+11,src/ModernTCN/ModernTCN_default_config.m,MATLAB,38,included,MATLAB部署配置,默认配置加载,默认部署参数定义
+12,src/ModernTCN/ModernTCN_load_predictor.m,MATLAB,80,included,MATLAB部署,predictor 加载,MATLAB 端 ONNX predictor 加载
+13,src/ModernTCN/ModernTCN_predict_window.m,MATLAB,119,included,MATLAB部署,单窗口预测,输入窗口准备与预测调用
+14,src/ModernTCN/ModernTCN_online_step.m,MATLAB,281,included,MATLAB部署,在线逐步推理,在线窗口维护与逐步预测
+15,src/ModernTCN/ModernTCN_state_classifier.m,MATLAB,382,included,MATLAB部署,状态分类器,logits 解码与 theta 调理
+16,src/ModernTCN/ModernTCN_State_Classifier_sim.m,MATLAB,67,included,MATLAB部署,Simulink 包装,Simulink MATLAB Function 包装
+17,src/ModernTCN/ModernTCN_check_matlab_onnx.m,MATLAB,173,included,一致性验证,MATLAB ONNX 一致性检查,MATLAB 端与 PyTorch 输出对比
+18,src/core/preloadfcn_modern_tcn.m,MATLAB,8,included,闭环验证接口,预加载入口,ModernTCN 闭环预加载入口
+19,src/ModernTCN/ModernTCN_analyze_closed_loop_out.m,MATLAB,575,included,结果分析,闭环输出分析,闭环仿真结果解析与指标计算
+20,src/ModernTCN/ModernTCN_replay_closed_loop_yraw.m,MATLAB,440,included,结果分析,yraw 回放,闭环原始输出回放分析
+21,src/Compare/benchmark_modern_tcn_onnx_runtime.py,Python,221,included,辅助验证,ONNXRuntime 实时性测试,单窗口推理延迟测量
+22,src/Compare/run_realtime_benchmark.m,MATLAB,527,included,辅助验证,实时性汇总实验,核心链路计算余量评估
+23,src/paths/gen_agv_theta10_uniform_paths.m,MATLAB,712,excluded_public_support,路径生成,训练路径生成,theta10 uniform 训练路径，作为运行支撑
+24,src/paths/gen_modern_tcn_demo_path.m,MATLAB,542,excluded_public_support,路径生成,演示路径生成,ModernTCN 演示路径，作为运行支撑
+25,src/paths/gen_modern_tcn_theta_sweep_plot_path.m,MATLAB,283,excluded_public_support,路径生成,绘图路径生成,坡度 sweep 绘图路径
+26,src/paths/gen_modern_tcn_theta_sweep_short_paths.m,MATLAB,117,excluded_public_support,路径生成,短路径生成,坡度 sweep 短路径
+27,src/core/parameters.m,MATLAB,94,excluded_public_support,车辆参数,参数定义,车辆与控制参数，作为运行支撑
+28,src/ModernTCN/plot_modern_tcn_theta_scatter.m,MATLAB,311,excluded_public_support,结果分析,散点图绘制,坡度散点评估辅助
+29,src/ModernTCN/eval_modern_tcn_theta_sweep_plot.m,MATLAB,978,excluded_public_support,结果分析,sweep 评估,坡度 sweep 评估辅助
+30,src/gru/*.m,MATLAB,,excluded_gru_tcn_other_application,GRU对照模块,GRU 基线,GRU 对照算法，属于 GRU 申请包
+31,src/TCN/*.m,MATLAB,,excluded_gru_tcn_other_application,TCN对照模块,TCN 基线,TCN 对照算法，属于对照链路
+32,src/core/state_eq.m,MATLAB,590,excluded_gru_tcn_other_application,车辆模型,状态方程,AGV 动力学，非本申请主体
+33,src/core/output_eq.m,MATLAB,318,excluded_gru_tcn_other_application,车辆模型,输出方程,AGV 输出计算，非本申请主体
+34,src/lpv/*.m,MATLAB,,excluded_gru_tcn_other_application,LPV模块,线性化,LPV 线性化，非本申请主体
+35,src/mpc/*.m,MATLAB,,excluded_gru_tcn_other_application,MPC模块,控制器,MPC 控制器，非本申请主体
+36,src/ModernTCN/generated_layers/,MATLAB,,excluded_generated,自动生成层,兼容层,MATLAB ONNX 导入自动生成兼容层
+37,src/tests/test_gru*.m,MATLAB,,excluded_gru_tcn_other_application,测试,GRU 测试,GRU 相关测试，属于 GRU 申请包
+38,.git/,,,,excluded_cache,,版本控制目录
+39,.github/,,,,excluded_cache,,仓库平台配置
+40,.kilo/,,,,excluded_cache,,IDE 缓存
+41,.cursor/,,,,excluded_cache,,IDE 配置
+42,.venv/,,,,excluded_third_party,,虚拟环境
+43,slprj/,,,,excluded_cache,,Simulink 缓存
+44,results/**,,,,excluded_result,,运行结果与模型产物
+45,figures/**,,,,excluded_result,,图表输出
+46,docs/**,,,,excluded_result,,文档输出
+47,*.slx,,,,excluded_binary_or_data,,Simulink 二进制模型
+48,*.pt,,,,excluded_binary_or_data,,PyTorch 权重文件
+49,*.onnx,,,,excluded_binary_or_data,,ONNX 模型文件
+50,*.mat,,,,excluded_binary_or_data,,数据与中间结果

@@ -1,0 +1,15 @@
+模块,主要文件,功能说明,输入,输出
+项目初始化,"init_project.m, project_root.m, results_dir.m",设置路径与结果目录,项目根目录,MATLAB搜索路径、结果路径
+ModernTCN模型定义,src/ModernTCN/modern_tcn_model.py,ModernTCN-small 多任务网络定义,128×19 归一化窗口,logits_main/logits_turn/theta_hat
+数据加载,src/ModernTCN/modern_tcn_data.py,统一数据集读取与窗口化,数据集 .mat 文件,训练/验证/测试 DataLoader
+训练指标,src/ModernTCN/modern_tcn_metrics.py,多任务损失函数与评估指标,预测值和标签值,损失值和指标值
+训练入口,"train_modern_tcn.py, run_modern_tcn_theta10_v2_multiseed.py",单/多 seed 训练主流程,数据集和训练参数,checkpoint、指标 CSV
+ONNX导出,src/ModernTCN/export_modern_tcn_onnx.py,PyTorch 到 ONNX 格式转换,checkpoint .pt 文件,ONNX 模型文件
+一致性验证,"check_onnxruntime_consistency.py, ModernTCN_check_matlab_onnx.m",PyTorch/ONNXRuntime/MATLAB 输出对比,ONNX 模型和参考输出,一致性检查报告
+MATLAB部署配置,src/ModernTCN/ModernTCN_default_config.m,默认部署参数定义,项目根目录,配置结构体
+MATLAB在线推理,"ModernTCN_load_predictor.m, ModernTCN_predict_window.m, ModernTCN_online_step.m",predictor 加载与在线窗口维护,ONNX 模型和 y_raw,预测结果
+状态分类器,src/ModernTCN/ModernTCN_state_classifier.m,logits 解码与 theta 调理,y_raw 单帧,工况/转向/theta 输出
+Simulink包装,src/ModernTCN/ModernTCN_State_Classifier_sim.m,Simulink MATLAB Function 包装,Simulink 信号,工况/转向/theta 输出
+闭环验证接口,src/core/preloadfcn_modern_tcn.m,ModernTCN 闭环预加载入口,Simulink 模型参数,在线推理状态初始化
+结果分析,"ModernTCN_analyze_closed_loop_out.m, ModernTCN_replay_closed_loop_yraw.m",闭环输出分析与 yraw 回放,logsout/日志,指标和图表
+辅助验证,"benchmark_modern_tcn_onnx_runtime.py, run_realtime_benchmark.m",ONNXRuntime 实时性测试,ONNX 模型,推理延迟统计
