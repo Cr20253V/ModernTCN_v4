@@ -24,9 +24,7 @@ label_main = local_resample(logs, 'diag.label_main', t);
 label_turn = local_resample(logs, 'diag.label_turn', t);
 conf_main = local_resample(logs, 'diag.conf_main', t);
 theta_ground = local_resample(logs, 'diag.theta_ground', t);
-theta_ref = local_resample(logs, 'diag.theta_ref', t);
 omega_ref = local_resample(logs, 'diag.omega_ref', t);
-v_ref = local_resample(logs, 'diag.v_ref', t);
 
 e_y = local_resample(logs, 'diag.e_y', t);
 e_psi = local_resample(logs, 'diag.e_psi', t);
@@ -41,7 +39,7 @@ Ds = load(dataset_file, 'dataset');
 dataset = Ds.dataset;
 
 params = parameters();
-[feature_raw, feature_norm] = local_extract_features_from_yraw(y_raw, t, params, dataset);
+[~, feature_norm] = local_extract_features_from_yraw(y_raw, t, params, dataset);
 
 zones = local_get_zones(root, t);
 zone_names = fieldnames(zones);
@@ -176,59 +174,10 @@ n = size(y_raw, 1);
 feat_dim = numel(scaler.mean);
 feature_raw = nan(n, feat_dim);
 
-r = local_field_or_default(params, 'wheel_radius', 0.1);
-W = local_field_or_default(params, 'W', 1.0);
-alpha_accel = Ts / (scaler.tau_accel_lp + Ts);
-alpha_diff = Ts / (scaler.tau_diff + Ts);
-lambda_pitch = exp(-Ts / scaler.tau_pitch);
-
-started = false;
-v_hat_prev = 0.0;
-dv_hat_dt_prev = 0.0;
-accel_x_lp_prev = 0.0;
-pitch_angle_est_prev = 0.0;
-
-for k = (seq_skip + 1):n
-    y = double(y_raw(k, :));
-    accel_x = y(9);
-    gyro_y = y(10);
-    gyro_z = y(11);
-    I_lf = y(12);
-    I_rr = y(13);
-    omega_wheel_lf = y(17);
-    omega_wheel_rr = y(18);
-    delta_lf = y(6);
-    delta_rr = y(7);
-    v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-
-    if ~started
-        dv_hat_dt = 0.0;
-        accel_x_lp = accel_x;
-        pitch_angle_est = 0.0;
-        started = true;
-    else
-        dv_raw = (v_hat - v_hat_prev) / Ts;
-        dv_hat_dt = alpha_diff * dv_raw + (1 - alpha_diff) * dv_hat_dt_prev;
-        accel_x_lp = alpha_accel * accel_x + (1 - alpha_accel) * accel_x_lp_prev;
-        pitch_angle_est = lambda_pitch * pitch_angle_est_prev + gyro_y * Ts;
-    end
-
-    ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-    I_sum = abs(I_lf) + abs(I_rr);
-    I_diff_signed = I_lf - I_rr;
-    I_diff_abs = abs(I_lf) - abs(I_rr);
-    kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-    accel_per_current = accel_x_lp / max(I_sum, 0.1);
-
-    feature_raw(k, :) = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-        delta_lf, delta_rr, gyro_y, v_hat, dv_hat_dt, ws_imbalance, ...
-        I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-        accel_per_current, pitch_angle_est];
-
-    v_hat_prev = v_hat;
-    dv_hat_dt_prev = dv_hat_dt;
-    accel_x_lp_prev = accel_x_lp;
-    pitch_angle_est_prev = pitch_angle_est;
+feature_cfg = struct('tau_diff', scaler.tau_diff, 'tau_accel_lp', scaler.tau_accel_lp);
+if seq_skip < n
+    feature_raw((seq_skip + 1):n, :) = extract_passive_features( ...
+        'batch', y_raw((seq_skip + 1):n, :), params, Ts, feature_cfg);
 end
 
 feature_norm = (feature_raw - double(scaler.mean(:).')) ./ ...
@@ -555,14 +504,6 @@ if isempty(x)
     y = NaN;
 else
     y = sqrt(mean(x.^2));
-end
-end
-
-function v = local_field_or_default(s, field_name, default_value)
-if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
-    v = s.(field_name);
-else
-    v = default_value;
 end
 end
 

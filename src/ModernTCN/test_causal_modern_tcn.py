@@ -10,7 +10,7 @@ from modern_tcn_model import ModernTCNConfig, ModernTCNSmall, build_model_from_c
 def test_same_and_causal_forward_shapes() -> None:
     for temporal_padding in ("same", "causal"):
         cfg = ModernTCNConfig(
-            input_dim=19,
+            input_dim=22,
             seq_len=128,
             channels=16,
             blocks=2,
@@ -19,7 +19,7 @@ def test_same_and_causal_forward_shapes() -> None:
             temporal_padding=temporal_padding,
         )
         model = ModernTCNSmall(cfg).eval()
-        x = torch.randn(3, 128, 19)
+        x = torch.randn(3, 128, 22)
         with torch.no_grad():
             logits_main, logits_turn, theta_hat = model(x)
         assert tuple(logits_main.shape) == (3, 3)
@@ -30,7 +30,7 @@ def test_same_and_causal_forward_shapes() -> None:
 def test_causal_prefix_invariance() -> None:
     torch.manual_seed(0)
     cfg = ModernTCNConfig(
-        input_dim=19,
+        input_dim=22,
         seq_len=128,
         channels=16,
         blocks=2,
@@ -40,7 +40,7 @@ def test_causal_prefix_invariance() -> None:
     )
     model = ModernTCNSmall(cfg).eval()
 
-    x1 = torch.randn(2, 128, 19)
+    x1 = torch.randn(2, 128, 22)
     x2 = x1.clone()
     cut = 64
     x2[:, cut + 1 :, :] = torch.randn_like(x2[:, cut + 1 :, :])
@@ -58,7 +58,7 @@ def test_causal_prefix_invariance() -> None:
 
 def test_legacy_checkpoint_defaults_to_same() -> None:
     cfg = ModernTCNConfig(
-        input_dim=19,
+        input_dim=22,
         seq_len=128,
         channels=8,
         blocks=1,
@@ -80,7 +80,7 @@ def test_legacy_checkpoint_defaults_to_same() -> None:
 
 def test_causal_checkpoint_roundtrip() -> None:
     cfg = ModernTCNConfig(
-        input_dim=19,
+        input_dim=22,
         seq_len=128,
         channels=8,
         blocks=1,
@@ -95,7 +95,7 @@ def test_causal_checkpoint_roundtrip() -> None:
             "model_state": model.state_dict(),
         }
     ).eval()
-    x = torch.randn(2, 128, 19)
+    x = torch.randn(2, 128, 22)
     with torch.no_grad():
         y1 = model(x)
         y2 = restored(x)

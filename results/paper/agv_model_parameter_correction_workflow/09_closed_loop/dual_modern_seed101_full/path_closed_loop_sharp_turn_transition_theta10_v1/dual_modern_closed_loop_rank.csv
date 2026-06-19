@@ -1,0 +1,5 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+ModernTCN_turn_l020_tt25_seed101,9,6,9,24,1
+GRU,12,7,8,27,2
+ModernTCN_slope_seed101,15,6,9,30,3
+TCN,24,11,14,49,4

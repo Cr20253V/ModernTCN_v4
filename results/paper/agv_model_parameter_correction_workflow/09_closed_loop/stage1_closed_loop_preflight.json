@@ -1,0 +1,16 @@
+{
+  "checks": {
+    "plant_revision": true,
+    "dataset": true,
+    "modern_onnx": true,
+    "gru_model": true,
+    "tcn_model": true,
+    "oracle_ref_shell": true,
+    "theta0_shell": true,
+    "learned_shells": true,
+    "three_paths": true,
+    "oracle_not_imu": true,
+    "maps_candidate": true
+  },
+  "pass": true
+}

@@ -1,4 +1,4 @@
-function [theta_hat, label_main, label_turn, conf_main] = ModernTCN_State_Classifier_sim(y_raw, reset)
+function [theta_hat, label_main, label_turn, conf_main] = ModernTCN_State_Classifier_sim(y_raw, reset, u_cmd)
 %MODERNTCN_STATE_CLASSIFIER_SIM Simulink MATLAB Function 块调用入口。
 %#codegen
 %
@@ -11,6 +11,9 @@ function [theta_hat, label_main, label_turn, conf_main] = ModernTCN_State_Classi
 % 手动接入时，MATLAB Function block 内建议改为：
 %   [theta_hat, label_main, label_turn, conf_main] = ...
 %       ModernTCN_State_Classifier_sim(y_raw, reset);
+%
+% Plan B-lite command-response candidates may pass u_cmd=[F_cmd; omega_cmd].
+% The two-argument call remains compatible with passive-only datasets.
 
 coder.extrinsic('evalin');
 coder.extrinsic('assignin');
@@ -54,13 +57,17 @@ if isempty(y_raw) || numel(y_raw) < 18
     return;
 end
 
-[state, out] = ModernTCN_state_classifier('update', state, double(y_raw(:)));
+if nargin < 3 || isempty(u_cmd)
+    u_cmd = zeros(2, 1);
+end
+
+[state, out] = ModernTCN_state_classifier('update', state, double(y_raw(:)), double(u_cmd(:)));
 if isempty(out)
     return;
 end
 
 assignin('base', 'modern_tcn_out_temp', out);
-theta_hat = evalin('base', 'double(modern_tcn_out_temp.theta_hat)');
+theta_hat = evalin('base', 'double(modern_tcn_out_temp.theta_hat_for_mpc)');
 label_main = evalin('base', 'double(modern_tcn_out_temp.label_main)');
 label_turn = evalin('base', 'double(modern_tcn_out_temp.label_turn)');
 conf_main = evalin('base', 'double(modern_tcn_out_temp.conf_main)');

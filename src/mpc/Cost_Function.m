@@ -49,6 +49,8 @@ if ~isfield(cfg,'stall_vref_th'), cfg.stall_vref_th = 0.30; end
 if ~isfield(cfg,'stall_ratio_w'), cfg.stall_ratio_w = 2.0; end
 if ~isfield(cfg,'stall_lowrate_w'), cfg.stall_lowrate_w = 1.5; end
 if ~isfield(cfg,'debug'), cfg.debug = false; end
+if ~isfield(cfg,'rethrow_scene_errors'), cfg.rethrow_scene_errors = false; end
+if ~isfield(cfg,'store_trace'), cfg.store_trace = false; end
 
 % 安全范围（log10 映射防止负权重）
 clip = @(x,lo,hi) min(hi,max(lo,x));
@@ -69,8 +71,9 @@ if isfield(cfg, 'ctrl') && ~isempty(cfg.ctrl)
     ctrl = cfg.ctrl;
 else
     % 创建默认控制器（独立测试时）
-    % 为确保与 Simulink（preloadfcn_v2 TARGET_NP/NC）一致，显式指定 Np=150、Nc=50 (1.5s/0.5s)
-    ctrl = mpc_setup_single_interp(db, struct('Np',150,'Nc',50));
+    % 与 Simulink 实时入口保持一致：P0 oracle-MPC 候选 Np=150、Nc=30。
+    ctrl = mpc_setup_single_interp(db, struct('Np',150,'Nc',30, ...
+        'Q',[100, 100, 15, 3], 'R',[3e-5, 3e-5], 'dR',[1e-3, 1e-3]));
 end
 
 % 提取 mpcobj（注意：这是引用，后续修改会影响 ctrl.mpcobj）
@@ -84,6 +87,27 @@ if isfield(cfg,'ctrl_maps')
     for i=1:numel(fns)
         ctrl.maps.(fns{i}) = cfg.ctrl_maps.(fns{i});
     end
+end
+
+% 离线复现器需要给 state_eq_ref 提供当前参考几何。Simulink 入口通过
+% base workspace 中的 ref 时间序列完成这一契约；离线路径没有仿真时间，
+% 因此在每个积分步注入标量 v_ref/omega_ref，避免转弯 ICR 回退到测量 omega。
+inject_ref_for_state_eq = true;
+if isfield(cfg, 'inject_ref_for_state_eq')
+    inject_ref_for_state_eq = logical(cfg.inject_ref_for_state_eq);
+end
+had_base_ref = false;
+old_base_ref = [];
+if inject_ref_for_state_eq
+    try
+        had_base_ref = evalin('base', 'exist(''ref'', ''var'') ~= 0');
+        if had_base_ref
+            old_base_ref = evalin('base', 'ref');
+        end
+    catch
+        had_base_ref = false;
+    end
+    ref_cleanup = onCleanup(@() local_restore_base_ref(had_base_ref, old_base_ref)); %#ok<NASGU>
 end
 
 % V2.3：已移除F_eq前馈，以下物理参数不再需要
@@ -215,10 +239,43 @@ for s = 1:scene_count
         sat_omega = false(N,1);
         solve_ms = zeros(N,1);
         cons_violation = zeros(N,1);
+        if cfg.store_trace
+            trace = struct();
+            trace.t = ref.t(:);
+            trace.X = zeros(N,1);
+            trace.Y = zeros(N,1);
+            trace.psi = zeros(N,1);
+            trace.v = zeros(N,1);
+            trace.omega = zeros(N,1);
+            trace.delta_lf = zeros(N,1);
+            trace.delta_rr = zeros(N,1);
+            trace.beta = zeros(N,1);
+            trace.X_ref = ref.X_ref(:);
+            trace.Y_ref = ref.Y_ref(:);
+            trace.psi_ref = ref.psi_ref(:);
+            trace.v_ref = ref.v_ref(:);
+            trace.omega_ref = ref.omega_ref(:);
+            trace.theta_ref = ref.theta_ref(:);
+            trace.e_y = zeros(N,1);
+            trace.e_psi = zeros(N,1);
+            trace.e_v = zeros(N,1);
+            trace.e_omega = zeros(N,1);
+            trace.F_cmd = zeros(N,1);
+            trace.omega_cmd = zeros(N,1);
+            trace.rho_f = zeros(N,3);
+            trace.Nominal_U = zeros(N,3);
+            trace.cons_violation = zeros(N,1);
+            trace.solve_ms = zeros(N,1);
+        else
+            trace = [];
+        end
 
         u_prev = [0; 0];
         rho_prev = [ref.v_ref(1); ref.omega_ref(1); ref.theta_ref(1)];
         fail_scene = false;
+        first_fail_step = NaN;
+        first_fail_reason = '';
+        first_fail_qpcode = '';
 
         for k = 1:N
             %% 1. 从8维状态计算4维路径坐标系误差
@@ -269,12 +326,19 @@ for s = 1:scene_count
             Nominal.Y = zeros(4,1);   % 输出工作点
             Nominal.DX = zeros(4,1);  % 状态导数工作点
             
-            % 输入工作点：重力/滚阻补偿 (让 MPC 知道爬坡基础力不是额外负担)
-            m_agv = 200.0; c_r = 0.015; g = 9.81;
+            % 输入工作点：重力/滚阻补偿和参考角速度前馈。
+            % LPV库在 u0=[F_eq; omega_ref] 附近线性化，Adaptive MPC 的
+            % Nominal.U 也必须使用同一输入工作点，否则转弯时会丢失
+            % omega_cmd 的名义分量，只靠反馈硬追。
+            m_agv = params.mass; c_r = params.rolling_resistance; g = params.gravity;
             F_eq = m_agv * g * (sin(md) + c_r * cos(md)); 
             
             Nominal.U = zeros(3,1);   % （2 MV + 1 MD）
-            Nominal.U(1) = F_eq;      % [关键修改]
+            Nominal.U(1) = F_eq;
+            if ~isfield(cfg, 'use_omega_nominal') || cfg.use_omega_nominal
+                Nominal.U(2) = rho_f(2);
+            end
+            Nominal.U(3) = md;
             
             % 更新权重（通过修改 mpcobj 属性）
             mpcobj.Weights.OutputVariables = upd.Q;
@@ -301,6 +365,9 @@ for s = 1:scene_count
                 qp_success = strcmpi(Info.QPCode, 'feasible') || strcmpi(Info.QPCode, 'optimal');
                 if ~qp_success
                     fail_scene = true;
+                    first_fail_step = k;
+                    first_fail_reason = 'QP solver did not report feasible/optimal';
+                    first_fail_qpcode = char(string(Info.QPCode));
                     if cfg.debug
                         fprintf('  [DEBUG] 步%d: QPCode=%s, 求解失败\n', k, Info.QPCode);
                         fprintf('         rho=[%.3f, %.5f, %.5f]\n', rho_f(1), rho_f(2), rho_f(3));
@@ -313,6 +380,9 @@ for s = 1:scene_count
                 % 回退：若无 QPCode，检查 Cost 是否为有限值
                 if ~isfield(Info, 'Cost') || ~isfinite(Info.Cost)
                     fail_scene = true;
+                    first_fail_step = k;
+                    first_fail_reason = 'MPC move returned no finite cost';
+                    first_fail_qpcode = 'missing_or_nonfinite_cost';
                     if cfg.debug
                         fprintf('  [DEBUG] 步%d: 无有效 Info 字段，求解失败\n', k);
                     end
@@ -331,12 +401,37 @@ for s = 1:scene_count
             sat_omega(k) = abs(u(2)) >= (abs(mpcobj.MV(2).Max) - 1e-6);
             
             %% 10. 推进Plant状态（使用state_eq_ref）
+            x_trace = x_plant;
+            if inject_ref_for_state_eq
+                ref_step = struct('v_ref', v_ref, 'omega_ref', omega_ref);
+                assignin('base', 'ref', ref_step);
+            end
             x_plant = state_eq_ref(x_plant, u, theta_meas, params);
             
             %% 11. 记录
             ey(k) = e_y; epsi(k) = e_psi; ev(k) = e_v; eomega(k) = e_omega;
             u_hist(k,:) = u.';
             du_hist(k,:) = (u - u_prev).';
+            if cfg.store_trace
+                trace.X(k) = X;
+                trace.Y(k) = Y;
+                trace.psi(k) = psi;
+                trace.v(k) = v;
+                trace.omega(k) = omega;
+                trace.delta_lf(k) = x_trace(6);
+                trace.delta_rr(k) = x_trace(7);
+                trace.beta(k) = x_trace(8);
+                trace.e_y(k) = e_y;
+                trace.e_psi(k) = e_psi;
+                trace.e_v(k) = e_v;
+                trace.e_omega(k) = e_omega;
+                trace.F_cmd(k) = u(1);
+                trace.omega_cmd(k) = u(2);
+                trace.rho_f(k,:) = rho_f.';
+                trace.Nominal_U(k,:) = Nominal.U.';
+                trace.cons_violation(k) = cons_viol;
+                trace.solve_ms(k) = solve_time;
+            end
             u_prev = u;
             solve_ms(k) = solve_time;
             cons_violation(k) = cons_viol;
@@ -344,6 +439,11 @@ for s = 1:scene_count
             %% 12. 失败判定
             if any(~isfinite([e_y, e_psi, e_v, e_omega])) || any(~isfinite(u))
                 fail_scene = true;
+                if isnan(first_fail_step)
+                    first_fail_step = k;
+                    first_fail_reason = 'Non-finite closed-loop signal';
+                    first_fail_qpcode = 'nonfinite_signal';
+                end
                 break;
             end
         end
@@ -389,17 +489,77 @@ for s = 1:scene_count
         J_total = J_total + weight_s * J_scene;
 
         % 报告
+        valid_n = find(solve_ms > 0, 1, 'last');
+        if isempty(valid_n)
+            valid_n = 0;
+        end
+        if valid_n > 0
+            u_valid = u_hist(1:valid_n, :);
+            du_valid = du_hist(1:valid_n, :);
+            ey_valid = ey(1:valid_n);
+            epsi_valid = epsi(1:valid_n);
+            ev_valid = ev(1:valid_n);
+            eomega_valid = eomega(1:valid_n);
+            cons_valid = cons_violation(1:valid_n);
+            F_limit = max(abs([mpcobj.MV(1).Min, mpcobj.MV(1).Max]));
+            omega_limit = max(abs([mpcobj.MV(2).Min, mpcobj.MV(2).Max]));
+            F_peak = max(abs(u_valid(:, 1)));
+            omega_peak = max(abs(u_valid(:, 2)));
+            F_sat_rate = mean(abs(u_valid(:, 1)) >= (F_limit - 1e-6));
+            omega_sat_rate = mean(abs(u_valid(:, 2)) >= (omega_limit - 1e-6));
+            dF_peak = max(abs(du_valid(:, 1)));
+            domega_peak = max(abs(du_valid(:, 2)));
+            ey_peak = max(abs(ey_valid));
+            epsi_peak = max(abs(epsi_valid));
+            ev_peak = max(abs(ev_valid));
+            eomega_peak = max(abs(eomega_valid));
+            cons_violation_rate = mean(cons_valid > 1e-9);
+        else
+            F_limit = max(abs([mpcobj.MV(1).Min, mpcobj.MV(1).Max]));
+            omega_limit = max(abs([mpcobj.MV(2).Min, mpcobj.MV(2).Max]));
+            F_peak = NaN;
+            omega_peak = NaN;
+            F_sat_rate = NaN;
+            omega_sat_rate = NaN;
+            dF_peak = NaN;
+            domega_peak = NaN;
+            ey_peak = NaN;
+            epsi_peak = NaN;
+            ev_peak = NaN;
+            eomega_peak = NaN;
+            cons_violation_rate = NaN;
+        end
         rep = struct();
         rep.RMSE = struct('ey',RMSE(ey),'epsi',RMSE(epsi),'ev',RMSE(ev),'eomega',RMSE(eomega));
         rep.RMS_du = struct('dF',RMS(du_hist(:,1)),'dw',RMS(du_hist(:,2)));
-        rep.cons = struct('L1',L1,'Linf',Linf);
+        rep.peak = struct('ey',ey_peak,'epsi',epsi_peak,'ev',ev_peak,'eomega',eomega_peak);
+        rep.cons = struct('L1',L1,'Linf',Linf,'violation_rate',cons_violation_rate);
         rep.sat = struct('omega_rate',sat_rate);
+        rep.control = struct('valid_steps',valid_n,'F_peak',F_peak,'omega_peak',omega_peak, ...
+            'F_sat_rate',F_sat_rate,'omega_sat_rate',omega_sat_rate, ...
+            'F_limit',F_limit,'omega_limit',omega_limit, ...
+            'dF_peak',dF_peak,'domega_peak',domega_peak);
+        rep.steps = struct('total',N,'valid',valid_n,'completion_ratio',valid_n / max(N, 1), ...
+            'first_fail_step',first_fail_step,'first_fail_reason',first_fail_reason, ...
+            'first_fail_qpcode',first_fail_qpcode);
         rep.stall = struct('ratio',stall_ratio,'low_speed_rate',low_speed_rate,'J_stall',J_stall);
         rep.solve_ms = struct('avg',avg_ms,'max',max_ms);
         rep.failed = fail_scene;
+        if cfg.store_trace
+            rep.trace = local_trim_trace(trace, valid_n);
+        end
+        if isfield(cfg, 'report_zones') && isstruct(cfg.report_zones)
+            rep.zones = local_zone_metrics(cfg.report_zones, ref.t(:), valid_n, ...
+                ey, epsi, ev, eomega, cons_violation, u_hist);
+        else
+            rep.zones = struct();
+        end
         report.scene.(name) = rep;
 
     catch ME
+        if cfg.rethrow_scene_errors
+            rethrow(ME);
+        end
         % 场景失败：记大罚，不中断其它场景
         J_total = J_total + weight_s * 1e6;
         report.fail_count = report.fail_count + 1;
@@ -419,4 +579,92 @@ if isfield(cfg,'save_report') && cfg.save_report
     save(fullfile(report_dir, sprintf('bo_report_%s.mat',datestr(now,'yyyymmdd_HHMMSS'))),'J','report');
 end
 
+end
+
+function zones = local_zone_metrics(zone_spec, t, valid_n, ey, epsi, ev, eomega, cons_violation, u_hist)
+zones = struct();
+zone_names = fieldnames(zone_spec);
+valid_mask = false(size(t));
+valid_mask(1:min(valid_n, numel(t))) = true;
+
+for i = 1:numel(zone_names)
+    name = zone_names{i};
+    range = zone_spec.(name);
+    if numel(range) < 2
+        continue;
+    end
+    mask = valid_mask & t >= range(1) & t < range(2);
+    if nnz(mask) < 1
+        row = local_empty_zone_metric(range);
+    else
+        row = struct();
+        row.t0 = range(1);
+        row.t1 = range(2);
+        row.n_samples = nnz(mask);
+        row.ey_rmse = local_rms(ey(mask));
+        row.ey_peak = max(abs(ey(mask)));
+        row.epsi_rmse = local_rms(epsi(mask));
+        row.epsi_peak = max(abs(epsi(mask)));
+        row.ev_rmse = local_rms(ev(mask));
+        row.ev_peak = max(abs(ev(mask)));
+        row.eomega_rmse = local_rms(eomega(mask));
+        row.eomega_peak = max(abs(eomega(mask)));
+        row.cons_Linf = max(abs(cons_violation(mask)));
+        row.cons_violation_rate = mean(cons_violation(mask) > 1e-9);
+        row.F_peak = max(abs(u_hist(mask, 1)));
+        row.omega_peak = max(abs(u_hist(mask, 2)));
+    end
+    zones.(matlab.lang.makeValidName(name)) = row;
+end
+end
+
+function row = local_empty_zone_metric(range)
+row = struct();
+row.t0 = range(1);
+row.t1 = range(2);
+row.n_samples = 0;
+row.ey_rmse = NaN;
+row.ey_peak = NaN;
+row.epsi_rmse = NaN;
+row.epsi_peak = NaN;
+row.ev_rmse = NaN;
+row.ev_peak = NaN;
+row.eomega_rmse = NaN;
+row.eomega_peak = NaN;
+row.cons_Linf = NaN;
+row.cons_violation_rate = NaN;
+row.F_peak = NaN;
+row.omega_peak = NaN;
+end
+
+function trace = local_trim_trace(trace, valid_n)
+if isempty(trace) || valid_n <= 0
+    return;
+end
+fields = fieldnames(trace);
+for i = 1:numel(fields)
+    value = trace.(fields{i});
+    if isnumeric(value) && size(value, 1) >= valid_n
+        trace.(fields{i}) = value(1:valid_n, :);
+    end
+end
+end
+
+function y = local_rms(x)
+if isempty(x)
+    y = NaN;
+else
+    y = sqrt(mean(x(:).^2));
+end
+end
+
+function local_restore_base_ref(had_ref, old_ref)
+try
+    if had_ref
+        assignin('base', 'ref', old_ref);
+    else
+        evalin('base', 'clear ref');
+    end
+catch
+end
 end

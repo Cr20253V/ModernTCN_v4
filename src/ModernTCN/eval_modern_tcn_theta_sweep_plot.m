@@ -404,68 +404,24 @@ end
 
 function features = local_extract_features(y_raw, Ts)
 params = parameters();
-r = params.wheel_radius;
-W = params.W;
-
-accel_x = y_raw(:, 9);
-gyro_y = y_raw(:, 10);
-gyro_z = y_raw(:, 11);
-I_lf = y_raw(:, 12);
-I_rr = y_raw(:, 13);
-omega_wheel_lf = y_raw(:, 17);
-omega_wheel_rr = y_raw(:, 18);
-delta_lf = y_raw(:, 6);
-delta_rr = y_raw(:, 7);
-
-v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-dv_raw = [0; diff(v_hat) / Ts];
-dv_hat_dt = local_lowpass(dv_raw, Ts, 0.3);
-ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-I_sum = abs(I_lf) + abs(I_rr);
-I_diff_signed = I_lf - I_rr;
-I_diff_abs = abs(I_lf) - abs(I_rr);
-accel_x_lp = local_lowpass(accel_x, Ts, 0.4);
-kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-accel_per_current = accel_x_lp ./ max(I_sum, 0.1);
-pitch_angle_est = local_leaky_integral(gyro_y, Ts, 2.0);
-
-features = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-    delta_lf, delta_rr, gyro_y, v_hat, dv_hat_dt, ws_imbalance, ...
-    I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-    accel_per_current, pitch_angle_est];
-end
-
-function x_lp = local_lowpass(x, Ts, tau)
-alpha = Ts / (tau + Ts);
-x_lp = zeros(size(x));
-x_lp(1) = x(1);
-for i = 2:numel(x)
-    x_lp(i) = alpha * x(i) + (1 - alpha) * x_lp(i - 1);
-end
-end
-
-function y = local_leaky_integral(x, Ts, tau)
-lambda = exp(-Ts / tau);
-y = zeros(size(x));
-for i = 2:numel(x)
-    y(i) = lambda * y(i - 1) + x(i) * Ts;
-end
+feature_cfg = struct('tau_diff', 0.3, 'tau_accel_lp', 0.4);
+features = extract_passive_features('batch', y_raw, params, Ts, feature_cfg);
 end
 
 function local_write_outputs(result, cfg, path_info, files)
 writetable(result.segment_table, files.segment_csv);
 writetable(result.window_table, files.window_csv);
 
-metrics_segment_all = result.metrics_segment_all; %#ok<NASGU>
-metrics_segment_active = result.metrics_segment_active; %#ok<NASGU>
-metrics_segment_abs_le8 = result.metrics_segment_abs_le8; %#ok<NASGU>
-metrics_segment_abs_le10 = result.metrics_segment_abs_le10; %#ok<NASGU>
-metrics_window_all = result.metrics_window_all; %#ok<NASGU>
-metrics_window_active = result.metrics_window_active; %#ok<NASGU>
-metrics_window_abs_le8 = result.metrics_window_abs_le8; %#ok<NASGU>
-metrics_window_abs_le10 = result.metrics_window_abs_le10; %#ok<NASGU>
-segment_table = result.segment_table; %#ok<NASGU>
-window_table = result.window_table; %#ok<NASGU>
+metrics_segment_all = result.metrics_segment_all;
+metrics_segment_active = result.metrics_segment_active;
+metrics_segment_abs_le8 = result.metrics_segment_abs_le8;
+metrics_segment_abs_le10 = result.metrics_segment_abs_le10;
+metrics_window_all = result.metrics_window_all;
+metrics_window_active = result.metrics_window_active;
+metrics_window_abs_le8 = result.metrics_window_abs_le8;
+metrics_window_abs_le10 = result.metrics_window_abs_le10;
+segment_table = result.segment_table;
+window_table = result.window_table;
 save(files.result_mat, 'metrics_segment_all', 'metrics_segment_active', ...
     'metrics_segment_abs_le8', 'metrics_segment_abs_le10', ...
     'metrics_window_all', 'metrics_window_active', ...

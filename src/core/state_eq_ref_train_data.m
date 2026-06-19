@@ -48,6 +48,9 @@ rho = params.air_density;
 CdA = params.drag_coefficient_area;
 C_af = params.front_cornering_stiffness;
 C_ar = params.rear_cornering_stiffness;
+C_yaw_damping = getfield_default(params, 'yaw_damping', 250.0);
+beta_damping = getfield_default(params, 'sideslip_damping', 0.0);
+beta_low_speed_damping = getfield_default(params, 'sideslip_low_speed_damping', 1.0);
 delta_max = params.max_steering_angle;
 delta_dot_max = params.max_steering_rate;
 tau_delta = params.steering_time_constant;
@@ -132,7 +135,8 @@ delta_rr_mid = (delta_rr + delta_rr_new) / 2;
 
 core = @(s, dl, dr) continuous_core_train(s, dl, dr, F_drive_lf, F_drive_rr, ...
     F_rolling_total, F_slope, stall_load, m_eff_total, I_z, Lf, Lr, ...
-    low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, rho, CdA);
+    low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, C_yaw_damping, ...
+    beta_damping, beta_low_speed_damping, rho, CdA);
 
 k1 = core(s_k, delta_lf, delta_rr);
 k2 = core(s_k + 0.5 * Ts * k1, delta_lf_mid, delta_rr_mid);
@@ -153,7 +157,8 @@ end
 
 function ds = continuous_core_train(s, delta_lf, delta_rr, Fx_lf, Fx_rr, ...
     F_rolling_total, F_slope, stall_load, m_eff_total, I_z, Lf, Lr, ...
-    low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, rho, CdA)
+    low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, C_yaw_damping, ...
+    beta_damping, beta_low_speed_damping, rho, CdA)
 
 psi = s(3); v = s(4); omega = s(5); beta = s(6);
 
@@ -173,13 +178,13 @@ if v_dot < 0 && v <= 0
 end
 
 Mz_tire = Fy_f * Lf - Fy_r * Lr;
-Mz_damping = -1000.0 * omega;
+Mz_damping = -C_yaw_damping * omega;
 omega_dot = sat_sym((Mz_tire + Mz_drive + Mz_damping) / max(I_z, 1e-6), 5.0);
 
 if abs(v) < low_speed_thresh
-    beta_dot = -5.0 * beta;
+    beta_dot = -beta_low_speed_damping * beta;
 else
-    beta_dot = (Fy_f + Fy_r) / (m_eff_total * max(abs(v), low_speed_thresh / 10)) - omega - 5.0 * beta;
+    beta_dot = (Fy_f + Fy_r) / (m_eff_total * max(abs(v), low_speed_thresh / 10)) - omega - beta_damping * beta;
 end
 beta_dot = sat_sym(beta_dot, deg2rad(10));
 

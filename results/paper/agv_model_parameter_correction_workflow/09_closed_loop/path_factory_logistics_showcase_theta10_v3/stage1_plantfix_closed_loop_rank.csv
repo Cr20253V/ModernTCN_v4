@@ -1,0 +1,6 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+ModernTCN,6,3,4,13,1
+GRU,12,6,8,26,2
+TCN,18,9,12,39,3
+LPV-MPC_theta0,24,12,16,52,4
+LPV-MPC_oracle_theta,30,15,20,65,5

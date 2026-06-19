@@ -97,6 +97,12 @@ if cfg.verbose
 end
 
 %% 1. 加载并准备 Simulink 模型
+skip_gru_preload_cleanup = [];
+if cfg.skip_gru_model_preload
+    [had_skip_gru_preload, old_skip_gru_preload] = local_set_base_var('preload_skip_gru_model', true);
+    skip_gru_preload_cleanup = onCleanup(@() local_restore_base_var( ...
+        'preload_skip_gru_model', had_skip_gru_preload, old_skip_gru_preload)); %#ok<NASGU>
+end
 if ~bdIsLoaded(cfg.model_name)
     load_system(cfg.model_name);
 end
@@ -215,6 +221,11 @@ data.meta.label_map_main = struct('flat', 1, 'stall', 2, 'slope', 3);
 data.meta.label_map_turn = struct('right', -1, 'straight', 0, 'left', 1);
 data.meta.event_cfg = cfg.event_cfg;
 data.meta.noise_profile = cfg.noise_profile;
+if isfield(cfg, 'plant_revision') && ~isempty(cfg.plant_revision)
+    data.meta.plant_revision = cfg.plant_revision;
+elseif exist('agv_plant_revision', 'file') == 2
+    data.meta.plant_revision = agv_plant_revision(params);
+end
 data.meta.self_check = stats;
 data.meta.notes = ['TCN/GRU shared training mother dataset. ' ...
                    'Designed to increase transition-rich samples for TCN/GRU fair comparison.'];
@@ -255,6 +266,7 @@ if ~isfield(cfg, 'Ts'); cfg.Ts = 0.01; end
 if ~isfield(cfg, 'seed'); cfg.seed = 20260424; end
 if ~isfield(cfg, 'verbose'); cfg.verbose = true; end
 if ~isfield(cfg, 'fail_fast'); cfg.fail_fast = false; end
+if ~isfield(cfg, 'skip_gru_model_preload'); cfg.skip_gru_model_preload = true; end
 if ~isfield(cfg, 'path_duration_warn_range'); cfg.path_duration_warn_range = [10, 45]; end
 
 if ~isfield(cfg, 'noise_on'); cfg.noise_on = true; end
@@ -835,6 +847,10 @@ fprintf(fid, '# TCN Training Data Generation Report\n\n');
 fprintf(fid, '- Generated: %s\n', datestr(now, 'yyyy-mm-dd HH:MM:SS'));
 fprintf(fid, '- Output: `%s`\n', cfg.output_file);
 fprintf(fid, '- Model: `%s`\n', cfg.model_name);
+if isfield(data, 'meta') && isfield(data.meta, 'plant_revision') && ...
+        isfield(data.meta.plant_revision, 'id')
+    fprintf(fid, '- Plant revision: `%s`\n', data.meta.plant_revision.id);
+end
 fprintf(fid, '- Valid runs: %d\n', numel(data.runs));
 fprintf(fid, '- Failed runs: %d\n', stats.failed_runs);
 fprintf(fid, '- Total samples: %d\n\n', stats.total_samples);
@@ -884,6 +900,7 @@ end
 if exist('init_project', 'file') == 2
     init_project();
 end
+assignin('base', 'preload_skip_gru_model', true);
 if exist('preloadfcn_v2', 'file') == 2
     evalin('base', 'preloadfcn_v2');
 elseif exist('preloadfcn_v1', 'file') == 2
@@ -891,6 +908,23 @@ elseif exist('preloadfcn_v1', 'file') == 2
 end
 if ~evalin('base', 'exist(''MPC_idx'',''var'')')
     assignin('base', 'MPC_idx', [6, 8, 11, 1]);
+end
+end
+
+function [had_var, old_value] = local_set_base_var(name, value)
+had_var = evalin('base', sprintf('exist(''%s'', ''var'')==1', name));
+old_value = [];
+if had_var
+    old_value = evalin('base', name);
+end
+assignin('base', name, value);
+end
+
+function local_restore_base_var(name, had_var, old_value)
+if had_var
+    assignin('base', name, old_value);
+else
+    evalin('base', sprintf('clear %s', name));
 end
 end
 

@@ -1,11 +1,11 @@
-function out = ModernTCN_online_step(y_raw, reset, seed, request_predict)
+function out = ModernTCN_online_step(y_raw, reset, seed, request_predict, u_cmd)
 %MODERNTCN_ONLINE_STEP 从单帧 y_raw 在线更新 ModernTCN 状态并按需推理。
 %
 % 功能说明：
 %   该函数是 ModernTCN 接入 Simulink 前的核心在线封装。它的输入不是
-%   已经归一化的 [128,19] 窗口，而是仿真模型每个采样周期输出的一帧
+%   已经归一化的 [128,22] 窗口，而是仿真模型每个采样周期输出的一帧
 %   y_raw。函数内部会：
-%     1. 从 y_raw 提取与当前推荐 ModernTCN 数据集一致的 19 维特征；
+%     1. 从 y_raw 提取与 passive17_plus_all5 一致的 22 维特征；
 %     2. 使用数据集内保存的 TCN scaler 做归一化；
 %     3. 维护 128 步滑动窗口；
 %     4. 调用当前推荐 ModernTCN ONNX predictor，输出分类、置信度和 theta_hat。
@@ -37,6 +37,9 @@ end
 if nargin < 4
     request_predict = [];
 end
+if nargin < 5
+    u_cmd = [];
+end
 
 persistent state
 
@@ -56,10 +59,10 @@ if numel(y_raw) < 18
     return;
 end
 
-[feature_raw, state] = local_extract_feature(double(y_raw(:)), state);
+[feature_raw, state] = local_extract_feature(double(y_raw(:)), u_cmd, state);
 feature_norm = (feature_raw - state.scaler_mean) ./ (state.scaler_std + state.eps);
 
-% 滚动维护 [128,19] 归一化窗口。模型训练时使用的就是这个归一化窗口。
+% 滚动维护 [128,22] 归一化窗口。模型训练时使用的就是这个归一化窗口。
 state.buffer(1:end-1, :) = state.buffer(2:end, :);
 state.buffer(end, :) = single(feature_norm);
 state.buffer_count = min(state.buffer_count + 1, state.seq_len);
@@ -99,14 +102,17 @@ function state = local_init_state(seed)
 % 初始化在线状态。注意：这里读取的是 TCN/ModernTCN 数据集 scaler，不是 GRU scaler。
 root = local_project_root();
 default_cfg = ModernTCN_default_config(root);
+cfg = local_read_sim_cfg(seed);
 dataset_file = default_cfg.dataset_file;
+if isfield(cfg, 'dataset_file') && ~isempty(cfg.dataset_file)
+    dataset_file = cfg.dataset_file;
+end
 if exist(dataset_file, 'file') ~= 2
     error('ModernTCN:MissingDataset', '找不到数据集: %s', dataset_file);
 end
 
 S = load(dataset_file, 'dataset');
 dataset = S.dataset;
-cfg = local_read_sim_cfg(seed);
 
 params = parameters();
 state = struct();
@@ -115,6 +121,14 @@ state.params = params;
 state.Ts = dataset.meta.Ts;
 state.seq_len = dataset.meta.seq_len;
 state.feat_dim = numel(dataset.scaler.mean);
+state.feature_contract_name = local_field_or_default(dataset.scaler, 'feature_contract', ...
+    local_field_or_default(dataset.meta, 'feature_contract', 'passive17_plus_all5'));
+feature_contract = local_feature_contract(state.feature_contract_name);
+if state.feat_dim ~= feature_contract.input_dim
+    error('ModernTCN:FeatureContractMismatch', ...
+        'Dataset feature dim is %d, but %s requires %d.', ...
+        state.feat_dim, feature_contract.feature_contract, feature_contract.input_dim);
+end
 state.buffer = zeros(state.seq_len, state.feat_dim, 'single');
 state.buffer_count = 0;
 state.step = 0;
@@ -124,19 +138,30 @@ state.scaler_mean = double(dataset.scaler.mean(:).');
 state.scaler_std = double(dataset.scaler.std(:).');
 state.tau_accel_lp = dataset.scaler.tau_accel_lp;
 state.tau_diff = dataset.scaler.tau_diff;
-state.tau_pitch = dataset.scaler.tau_pitch;
 state.alpha_diff = state.Ts / (state.tau_diff + state.Ts);
 state.alpha_accel = state.Ts / (state.tau_accel_lp + state.Ts);
-state.lambda_pitch = exp(-state.Ts / state.tau_pitch);
 
-state.has_feature_prev = false;
-state.v_hat_prev = 0.0;
-state.dv_hat_dt_prev = 0.0;
-state.accel_x_lp_prev = 0.0;
-state.pitch_angle_est_prev = 0.0;
+state.cmd_stats_window_sec = local_field_or_default(feature_contract, 'command_stats_window_sec', 0.2);
+state.u_cmd_already_lagged = logical(local_field_or_default(cfg, ...
+    'u_cmd_already_lagged', false));
+feature_cfg = struct('tau_diff', state.tau_diff, ...
+    'tau_accel_lp', state.tau_accel_lp, ...
+    'cmd_stats_window_sec', state.cmd_stats_window_sec, ...
+    'u_cmd_already_lagged', state.u_cmd_already_lagged);
+if strcmpi(feature_contract.feature_contract, 'passive17_plus_all5_cmdresp_lite_v1')
+    state.feature_state = extract_command_response_features('init', params, state.Ts, feature_cfg);
+elseif strcmpi(feature_contract.feature_contract, 'passive17_plus_all5_cmdresp_lag1_only_v1')
+    state.feature_state = extract_command_response_lag1_features('init', params, state.Ts, feature_cfg);
+else
+    state.feature_state = extract_passive_features('init', params, state.Ts, feature_cfg);
+end
 
 state.infer_period_steps = cfg.infer_period_steps;
-state.predictor = ModernTCN_load_predictor(seed);
+if isfield(cfg, 'disable_predictor') && logical(cfg.disable_predictor)
+    state.predictor = [];
+else
+    state.predictor = ModernTCN_load_predictor(seed);
+end
 state.last_out = local_default_output(state);
 end
 
@@ -152,6 +177,15 @@ try
             if isfield(user_cfg, 'infer_period_steps') && ~isempty(user_cfg.infer_period_steps)
                 cfg.infer_period_steps = max(1, round(double(user_cfg.infer_period_steps)));
             end
+            if isfield(user_cfg, 'dataset_file') && ~isempty(user_cfg.dataset_file)
+                cfg.dataset_file = char(user_cfg.dataset_file);
+            end
+            if isfield(user_cfg, 'disable_predictor') && ~isempty(user_cfg.disable_predictor)
+                cfg.disable_predictor = logical(user_cfg.disable_predictor);
+            end
+            if isfield(user_cfg, 'u_cmd_already_lagged') && ~isempty(user_cfg.u_cmd_already_lagged)
+                cfg.u_cmd_already_lagged = logical(user_cfg.u_cmd_already_lagged);
+            end
         end
     end
 catch
@@ -159,54 +193,22 @@ catch
 end
 end
 
-function [feature_raw, state] = local_extract_feature(y_raw, state)
-% 复刻 TCN_prepare_dataset 中的 GRU_compatible_observable_19 特征契约。
-p = state.params;
-r = p.wheel_radius;
-W = p.W;
-
-accel_x = y_raw(9);
-gyro_y = y_raw(10);
-gyro_z = y_raw(11);
-I_lf = y_raw(12);
-I_rr = y_raw(13);
-omega_wheel_lf = y_raw(17);
-omega_wheel_rr = y_raw(18);
-delta_lf = y_raw(6);
-delta_rr = y_raw(7);
-
-v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-if ~state.has_feature_prev
-    % 离线数据预处理在每个 run 的第一个有效样本处使用 dv_raw=0、
-    % accel_x_lp=accel_x、pitch_angle_est=0。这里保持相同初值，避免
-    % 在线窗口与训练窗口出现开头偏移。
-    dv_hat_dt = 0.0;
-    accel_x_lp = accel_x;
-    pitch_angle_est = 0.0;
-    state.has_feature_prev = true;
+function [feature_raw, state] = local_extract_feature(y_raw, u_cmd, state)
+if strcmpi(state.feature_contract_name, 'passive17_plus_all5_cmdresp_lite_v1')
+    if isempty(u_cmd)
+        u_cmd = [0; 0];
+    end
+    [feature_raw, state.feature_state] = extract_command_response_features( ...
+        'step', y_raw, double(u_cmd(:)).', state.feature_state);
+elseif strcmpi(state.feature_contract_name, 'passive17_plus_all5_cmdresp_lag1_only_v1')
+    if isempty(u_cmd)
+        u_cmd = [0; 0];
+    end
+    [feature_raw, state.feature_state] = extract_command_response_lag1_features( ...
+        'step', y_raw, double(u_cmd(:)).', state.feature_state);
 else
-    dv_raw = (v_hat - state.v_hat_prev) / state.Ts;
-    dv_hat_dt = state.alpha_diff * dv_raw + (1 - state.alpha_diff) * state.dv_hat_dt_prev;
-    accel_x_lp = state.alpha_accel * accel_x + (1 - state.alpha_accel) * state.accel_x_lp_prev;
-    pitch_angle_est = state.lambda_pitch * state.pitch_angle_est_prev + gyro_y * state.Ts;
+    [feature_raw, state.feature_state] = extract_passive_features('step', y_raw, state.feature_state);
 end
-
-ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-I_sum = abs(I_lf) + abs(I_rr);
-I_diff_signed = I_lf - I_rr;
-I_diff_abs = abs(I_lf) - abs(I_rr);
-kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-accel_per_current = accel_x_lp / max(I_sum, 0.1);
-
-state.v_hat_prev = v_hat;
-state.dv_hat_dt_prev = dv_hat_dt;
-state.accel_x_lp_prev = accel_x_lp;
-state.pitch_angle_est_prev = pitch_angle_est;
-
-feature_raw = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-    delta_lf, delta_rr, gyro_y, v_hat, dv_hat_dt, ws_imbalance, ...
-    I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-    accel_per_current, pitch_angle_est];
 end
 
 function tf = local_should_predict(state, request_predict)
@@ -237,6 +239,7 @@ out.logits_turn = single(pred.logits_turn(:).');
 out.X_window_norm = state.buffer;
 out.debug = struct();
 out.debug.infer_period_steps = state.infer_period_steps;
+out.debug.u_cmd_already_lagged = state.u_cmd_already_lagged;
 out.debug.note = "ModernTCN raw output; theta_hat 建议先只记录，不直接接入 RhoFilter。";
 end
 
@@ -269,6 +272,18 @@ function local_publish_output(out)
 try
     assignin('base', 'modern_tcn_online_last_out', out);
 catch
+end
+end
+
+function contract = local_feature_contract(feature_contract_name)
+name = lower(char(feature_contract_name));
+switch name
+    case {'passive17_plus_all5_cmdresp_lite_v1','command_response','cmdresp_lite_v1'}
+        contract = extract_command_response_features('contract');
+    case {'passive17_plus_all5_cmdresp_lag1_only_v1','cmdresp_lag1_only_v1','cmdresp_lag1_only'}
+        contract = extract_command_response_lag1_features('contract');
+    otherwise
+        contract = extract_passive_features('contract');
 end
 end
 

@@ -34,6 +34,7 @@ class ModernTCNContract:
     active_drive_steer_wheels: str = "LF,RR"
     passive_support_wheels: str = "RF,LR"
     feature_policy: str = "keep_current_algorithm_inputs_unchanged"
+    feature_contract: str = "passive17_plus_all5"
     label_time_policy: str = "current_window_end"
     horizon_steps: int = 0
     horizon_seconds: float = 0.0
@@ -128,14 +129,18 @@ def load_modern_tcn_dataset(
         feat_names = _read_feat_names(f, root)
         scaler = _read_scaler(root)
 
-    contract = ModernTCNContract(
-        dataset_file=str(dataset_file),
-        seq_len=int(train.X.shape[1]),
-        input_dim=int(train.X.shape[2]),
-        output_contract="logits_main3_logits_turn3_theta1",
-        split_policy="use_existing_run_level_split_from_mat",
-        scaler_policy="use_existing_normalized_X_and_existing_scaler_only",
-    )
+        feature_contract = _read_dataset_feature_contract(root, feat_names)
+        feature_policy = _feature_policy_for_contract(feature_contract)
+        contract = ModernTCNContract(
+            dataset_file=str(dataset_file),
+            seq_len=int(train.X.shape[1]),
+            input_dim=int(train.X.shape[2]),
+            output_contract="logits_main3_logits_turn3_theta1",
+            split_policy="use_existing_run_level_split_from_mat",
+            scaler_policy="use_existing_normalized_X_and_existing_scaler_only",
+            feature_policy=feature_policy,
+            feature_contract=feature_contract,
+        )
 
     _check_contract(contract)
     return {
@@ -253,7 +258,36 @@ def _decode_matlab_char(ds: h5py.Dataset) -> str:
 def _check_contract(contract: ModernTCNContract) -> None:
     if contract.seq_len != 128:
         raise ValueError(f"ModernTCN 第一阶段要求 seq_len=128，实际为 {contract.seq_len}")
-    if contract.input_dim != 19:
-        raise ValueError(f"ModernTCN 第一阶段要求 input_dim=19，实际为 {contract.input_dim}")
+    expected = {
+        "passive17_plus_all5": 22,
+        "passive17_plus_all5_cmdresp_lite_v1": 30,
+        "passive17_plus_all5_cmdresp_lag1_only_v1": 24,
+    }
+    if contract.feature_contract in expected:
+        need = expected[contract.feature_contract]
+        if contract.input_dim != need:
+            raise ValueError(
+                f"ModernTCN {contract.feature_contract} 要求 input_dim={need}，实际为 {contract.input_dim}"
+            )
+    elif contract.input_dim not in (22, 24, 30):
+        raise ValueError(
+            f"未知 ModernTCN feature contract={contract.feature_contract} 且 input_dim={contract.input_dim} 不受支持"
+        )
     if contract.horizon_steps != 0:
         raise ValueError(f"ModernTCN 当前模型固定为当前状态估计 horizon_steps=0，实际为 {contract.horizon_steps}")
+
+
+def _read_dataset_feature_contract(root: h5py.Group, feat_names: List[str]) -> str:
+    if len(feat_names) == 30 and "F_cmd_lag1" in feat_names:
+        return "passive17_plus_all5_cmdresp_lite_v1"
+    if len(feat_names) == 24 and "F_cmd_lag1" in feat_names and "omega_cmd_lag1" in feat_names:
+        return "passive17_plus_all5_cmdresp_lag1_only_v1"
+    return "passive17_plus_all5"
+
+
+def _feature_policy_for_contract(feature_contract: str) -> str:
+    if feature_contract == "passive17_plus_all5_cmdresp_lite_v1":
+        return "plan_b_lite_history_command_response"
+    if feature_contract == "passive17_plus_all5_cmdresp_lag1_only_v1":
+        return "plan_b_lag1_only_history_command_response"
+    return "keep_current_algorithm_inputs_unchanged"

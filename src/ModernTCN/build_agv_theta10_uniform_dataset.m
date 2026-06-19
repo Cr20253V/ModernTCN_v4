@@ -24,7 +24,7 @@ paths_root = fullfile(root, 'data', 'paths');
 data_tcn_dir = fullfile(root, 'data', 'tcn');
 results_root = fullfile(root, 'results', 'modern_tcn');
 
-cfg.tag = local_cfg(cfg, 'tag', 'agv_dualsteer_theta10_uniform_conf_h0_v2');
+cfg.tag = local_cfg(cfg, 'tag', 'agv_dualsteer_theta10_uniform_conf_h0_v3_passive17_plus_all5');
 cfg.path_tag = local_cfg(cfg, 'path_tag', 'agv_theta10_uniform_v2');
 cfg.generate_paths = local_cfg(cfg, 'generate_paths', false);
 cfg.generate_train_data = local_cfg(cfg, 'generate_train_data', false);
@@ -46,6 +46,7 @@ path_prefix = [cfg.path_tag '_'];
 outputs = struct();
 outputs.tag = cfg.tag;
 outputs.path_tag = cfg.path_tag;
+outputs.feature_contract = extract_passive_features('contract');
 outputs.paths_dir = paths_dir;
 outputs.path_pattern = fullfile(paths_dir, [path_prefix '*.mat']);
 outputs.path_manifest = fullfile(paths_dir, [cfg.path_tag '_manifest.csv']);
@@ -79,6 +80,9 @@ if cfg.generate_train_data
     train_cfg.path_pattern = outputs.path_pattern;
     if cfg.use_manifest_paths
         train_cfg.path_files = local_manifest_path_files(outputs.path_manifest);
+        if ~isempty(cfg.max_paths)
+            train_cfg.path_files = train_cfg.path_files(1:min(numel(train_cfg.path_files), cfg.max_paths));
+        end
         outputs.train_path_files = train_cfg.path_files;
     end
     train_cfg.seed = cfg.seed;
@@ -90,7 +94,10 @@ if cfg.generate_train_data
     train_cfg.self_check = local_train_self_check();
     train_cfg.label_cfg = local_label_cfg();
     train_cfg.path_duration_warn_range = cfg.path_duration_warn_range;
-    if ~isempty(cfg.max_paths)
+    if isfield(cfg, 'plant_revision') && ~isempty(cfg.plant_revision)
+        train_cfg.plant_revision = cfg.plant_revision;
+    end
+    if ~isempty(cfg.max_paths) && ~cfg.use_manifest_paths
         train_cfg.max_paths = cfg.max_paths;
     end
     outputs.train_data = TCN_gen_train_data(train_cfg);
@@ -106,7 +113,7 @@ if cfg.prepare_dataset
     prep_cfg.contract_file = outputs.contract_file;
     prep_cfg.reuse_split_file = false;
     prep_cfg.split_strategy = 'stratified';
-    prep_cfg.split_search_trials = 40000;
+    prep_cfg.split_search_trials = local_cfg(cfg, 'split_search_trials', 40000);
     prep_cfg.seq_len = 128;
     prep_cfg.stride = 64;
     prep_cfg.skip_initial_sec = 1.0;
@@ -137,6 +144,9 @@ if cfg.prepare_dataset
     prep_cfg.theta_mask_strategy = 'nonstall_full_range';
     prep_cfg.horizon_steps = 0;
     prep_cfg.seed = cfg.seed;
+    prep_cfg.train_ratio = local_cfg(cfg, 'train_ratio', 0.70);
+    prep_cfg.val_ratio = local_cfg(cfg, 'val_ratio', 0.15);
+    prep_cfg.test_ratio = local_cfg(cfg, 'test_ratio', 0.15);
     prep_cfg.verbose = cfg.verbose;
     outputs.dataset = TCN_prepare_dataset(prep_cfg);
 end

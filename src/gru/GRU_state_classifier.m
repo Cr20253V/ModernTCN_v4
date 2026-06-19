@@ -112,6 +112,12 @@ function state = initClassifier(params, model)
         warning('model中未找到seq_len字段，使用默认值48');
     end
     state.feat_dim = numel(model.scaler.mean);  % 特征维度
+    feature_contract = extract_passive_features('contract');
+    if state.feat_dim ~= feature_contract.input_dim
+        error('GRU_state_classifier:FeatureContractMismatch', ...
+            'Model feature dim is %d, but %s requires %d.', ...
+            state.feat_dim, feature_contract.feature_contract, feature_contract.input_dim);
+    end
     state.buffer = zeros(state.seq_len, state.feat_dim);  % [seq_len, feat_dim]
     state.buffer_count = 0;  % 当前缓冲区样本数
 
@@ -162,31 +168,8 @@ function state = initClassifier(params, model)
         warning('model中未找到scaler，使用默认滤波参数');
     end
     
-    % 计算滤波系数
-    state.alpha_diff = state.Ts / (state.tau_diff + state.Ts);
-    state.alpha_accel = state.Ts / (state.tau_accel_lp + state.Ts);
-    
-    % 特征计算状态变量（用于滤波）
-    state.v_hat_prev = 0;           % 上一步的v_hat
-    state.dv_hat_dt_prev = 0;       % 上一步的dv_hat_dt（滤波后）
-    state.accel_x_lp_prev = 0;      % 上一步的accel_x_lp（滤波后）
-
-    % 坡度估计滤波参数（IMU衰减积分）
-    state.tau_pitch = 2.0;
-    state.lambda_pitch = exp(-state.Ts / state.tau_pitch);
-    state.pitch_angle_est_prev = 0;  % 上一步的坡度估计
-    
-    % 特征名称映射（与 GRU_prepare_dataset.m V1.6 一致）
-    state.feat_indices = struct();
-    state.feat_indices.accel_x = 9;
-    state.feat_indices.gyro_z = 11;
-    state.feat_indices.I_lf = 12;
-    state.feat_indices.I_rr = 13;
-    state.feat_indices.omega_wheel_lf = 17;
-    state.feat_indices.omega_wheel_rr = 18;
-    state.feat_indices.delta_lf = 6;
-    state.feat_indices.delta_rr = 7;
-    state.feat_indices.gyro_y = 10;
+    feature_cfg = struct('tau_diff', state.tau_diff, 'tau_accel_lp', state.tau_accel_lp);
+    state.feature_state = extract_passive_features('init', params, state.Ts, feature_cfg);
     
     % 数值稳健性
     state.eps = 1e-8;
@@ -203,6 +186,7 @@ function [state, out] = updateClassifier(state, y_raw_t)
     
     %% 1. 提取特征（更新状态变量）
     [features, state] = extractFeatures(y_raw_t, state);
+    state.last_features = features;
     
     % 检查NaN/Inf
     if any(isnan(features)) || any(isinf(features))
@@ -312,71 +296,9 @@ end
 %% ========== 辅助函数 ==========
 
 function [features, state] = extractFeatures(y_raw, state)
-%EXTRACTFEATURES 从原始输出提取特征（V1.1：维护滤波状态）
-% 输入: y_raw [31×1], state（包含滤波状态变量）
-% 输出: features [1×17]（与 GRU_prepare_dataset.m V1.1 一致）
-%       state（更新后的状态，包含滤波器状态）
+%EXTRACTFEATURES 从原始输出提取 passive17_plus_all5 特征。
 
-    params = state.params;
-    Ts = state.Ts;
-    r = params.wheel_radius;
-    W = params.W;
-    
-    % 提取原始传感量
-    accel_x = y_raw(state.feat_indices.accel_x);
-    gyro_z = y_raw(state.feat_indices.gyro_z);
-    I_lf = y_raw(state.feat_indices.I_lf);
-    I_rr = y_raw(state.feat_indices.I_rr);
-    omega_wheel_lf = y_raw(state.feat_indices.omega_wheel_lf);
-    omega_wheel_rr = y_raw(state.feat_indices.omega_wheel_rr);
-    delta_lf = y_raw(state.feat_indices.delta_lf);
-    delta_rr = y_raw(state.feat_indices.delta_rr);
-    gyro_y = y_raw(state.feat_indices.gyro_y);
-    
-    % 派生特征（与 GRU_prepare_dataset.m V1.1 完全一致）
-    
-    % 1) v_hat: 基于轮速的速度估计
-    v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-    
-    % 2) dv_hat_dt: 速度变化率（滤波差分，与离线一致）
-    % 先计算原始差分
-    dv_raw = (v_hat - state.v_hat_prev) / Ts;
-    % 一阶低通滤波
-    dv_hat_dt = state.alpha_diff * dv_raw + (1 - state.alpha_diff) * state.dv_hat_dt_prev;
-    % 更新状态
-    state.v_hat_prev = v_hat;
-    state.dv_hat_dt_prev = dv_hat_dt;
-    
-    % 3) ws_imbalance: 轮速差异
-    ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-    
-    % 4) I_sum, I_diff_signed, I_diff_abs: 电流特征（V1.1新增signed）
-    I_sum = abs(I_lf) + abs(I_rr);
-    I_diff_signed = I_lf - I_rr;           % 保留方向信息
-    I_diff_abs = abs(I_lf) - abs(I_rr);    % 原逻辑
-    
-    % 5) accel_x_lp: 加速度低通滤波（与离线一致）
-    accel_x_lp = state.alpha_accel * accel_x + (1 - state.alpha_accel) * state.accel_x_lp_prev;
-    % 更新状态
-    state.accel_x_lp_prev = accel_x_lp;
-    
-    % 6) kappa_proxy: 曲率近似
-    kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-    
-    % 新增特征（仅用可观测量）
-    % 7) accel_per_current: 驱动-加速度比值
-    current_floor = 0.1;  % 防止低电流数值发散
-    accel_per_current = accel_x_lp / max(I_sum, current_floor);
-    
-    % 8) pitch_angle_est: IMU 衰减积分的坡度估计
-    pitch_angle_est = state.lambda_pitch * state.pitch_angle_est_prev + gyro_y * Ts;
-    state.pitch_angle_est_prev = pitch_angle_est;
-    
-    % 组合特征（与 GRU_prepare_dataset.m V1.6 一致，19维）
-    features = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-                delta_lf, delta_rr, gyro_y, ...
-                v_hat, dv_hat_dt, ws_imbalance, I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-                accel_per_current, pitch_angle_est];
+    [features, state.feature_state] = extract_passive_features('step', y_raw, state.feature_state);
 end
 
 function out = constructOutput(state)
@@ -399,4 +321,10 @@ function out = constructOutput(state)
     out.debug.buffer_count = state.buffer_count;
     out.debug.step = state.step;
     out.debug.warning = 'Using default output (buffer not full or exception)';
+    if isfield(state, 'last_features') && ~isempty(state.last_features)
+        out.features = double(state.last_features(:));
+    else
+        out.features = nan(state.feat_dim, 1);
+    end
+    out.debug.feature_contract = state.feature_state.feature_contract;
 end

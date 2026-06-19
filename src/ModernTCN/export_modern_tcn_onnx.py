@@ -1,6 +1,6 @@
 """将训练好的 ModernTCN checkpoint 导出为 ONNX，并保存 PyTorch 参考输出。
 
-导出前强制 `model.eval()`，固定输入形状 `[batch, 128, 19]`，不启用
+导出前强制 `model.eval()`，固定输入形状 `[batch, 128, input_dim]`，不启用
 dynamic axes。第一版默认 opset=17；如果 MATLAB 导入报算子不支持，再按
 错误信息降级或替换模型算子。
 """
@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -52,17 +53,23 @@ def main() -> None:
 
     dummy = torch.zeros(1, ckpt["model_config"]["seq_len"], ckpt["model_config"]["input_dim"], dtype=torch.float32)
     with torch.no_grad():
-        torch.onnx.export(
-            model,
-            dummy,
-            onnx_file,
-            export_params=True,
-            opset_version=args.opset,
-            do_constant_folding=True,
-            input_names=["input_window"],
-            output_names=["logits_main", "logits_turn", "theta_hat"],
-            dynamo=False,
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="You are using the legacy TorchScript-based ONNX export.*",
+                category=DeprecationWarning,
+            )
+            torch.onnx.export(
+                model,
+                dummy,
+                onnx_file,
+                export_params=True,
+                opset_version=args.opset,
+                do_constant_folding=True,
+                input_names=["input_window"],
+                output_names=["logits_main", "logits_turn", "theta_hat"],
+                dynamo=False,
+            )
 
     # 保存一组 test 窗口的 PyTorch 输出，供 ONNXRuntime 和 MATLAB 做三方一致性。
     data = load_modern_tcn_dataset(Path(ckpt["contract"]["dataset_file"]))
@@ -81,6 +88,7 @@ def main() -> None:
 
     meta = {
         "checkpoint": str(checkpoint),
+        "model_family": str(ckpt.get("model_family", "small")),
         "onnx_file": str(onnx_file),
         "sample_file": str(sample_file),
         "opset": args.opset,

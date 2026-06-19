@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "path_manifest_exists": true,
+    "revision_id": true,
+    "cornering_stiffness": true,
+    "yaw_damping": true,
+    "beta_normal_damping_removed": true,
+    "beta_low_speed_damping_present": true,
+    "full_outputs_are_v5": true,
+    "old_v2_v3_not_targeted": true
+  },
+  "pass": true
+}

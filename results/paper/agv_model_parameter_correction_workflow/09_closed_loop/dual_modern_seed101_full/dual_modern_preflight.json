@@ -1,0 +1,14 @@
+{
+  "checks": {
+    "plant_revision": true,
+    "dataset": true,
+    "modern_slope_onnx": true,
+    "modern_turn_onnx": true,
+    "gru_model": true,
+    "tcn_model": true,
+    "learned_shells": true,
+    "three_paths": true,
+    "maps_candidate": true
+  },
+  "pass": true
+}

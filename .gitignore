@@ -24,6 +24,8 @@ results/**/*.mat
 # 模型权重和训练 checkpoint
 *.ckpt
 *.pth
+*.pt
+*.onnx
 src/Mamba/results/
 
 # Simulink 生成文件
@@ -60,3 +62,31 @@ missfont.log
 *.dll
 *.dylib
 src/Mamba/model/mamba/
+
+# Local archives and obsolete experiment outputs
+archive/
+results/E_distillation/
+results/paper/plan_a_imu_removal_workflow/
+results/paper/agv_model_parameter_correction_workflow/10_dual_standard_mpc_search/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/*smoke*/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/identity_override_audit*/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/omega_cmd_weight_sweep*/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/p0_simulink_oracle_closing*/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/ref_model_7path*/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/sharp_turn_control_chain_compare*/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/steering_rate*/
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/analyze_sharp_turn_control_chain.m
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/closed_loop_rerun_report.md
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/run_identity_override_audit.m
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/run_omega_cmd_weight_sweep.m
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/run_p0_simulink_oracle_closing.m
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/run_ref_model_7path_check_codex.m
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/run_steering_rate_sweep.m
+results/paper/agv_model_parameter_correction_workflow/09_closed_loop/run_steering_rate_tau_sweep.m
+figures/paths/modern_tcn_showcase/
+results/paths/modern_tcn_showcase/
+results/modern_tcn/paper/agv_model_parameter_correction_workflow/
+results/modern_tcn/stageB_v3p17*/
+results/modern_tcn/v4b_cl_s21/
+results/modern_tcn/weakcombo*/
+results/gru/v4_cl_s101_vs_modern_v4b_s21/

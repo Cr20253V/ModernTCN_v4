@@ -2,7 +2,7 @@ function predictor = TCN_load_predictor(model_file)
 %TCN_LOAD_PREDICTOR Load a trained MATLAB TCN model for online inference.
 %
 % The returned predictor is used by TCN_predict_window. It expects a
-% normalized [128,19] window with the same feature order as the V2 dataset.
+% normalized [128,22] window with the passive17_plus_all5 feature order.
 
 root = local_project_root();
 default_cfg = TCN_default_config(root);

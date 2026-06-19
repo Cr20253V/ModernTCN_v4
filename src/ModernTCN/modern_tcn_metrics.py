@@ -101,6 +101,20 @@ def multitask_loss(
     loss_theta_small_neg_excess = _masked_weighted_abs_excess_mse(
         theta_hat, theta, small_neg_mask, theta_sample_weight, float(getattr(cfg, "theta_excess_target_deg", 1.0))
     )
+    loss_turn_release = _turn_straight_probability_penalty(
+        logits_turn,
+        y_turn,
+        batch["turn_transition"].bool(),
+        turn_sample_weight,
+        transition_mask=True,
+    )
+    loss_false_turn_straight = _turn_straight_probability_penalty(
+        logits_turn,
+        y_turn,
+        batch["turn_transition"].bool(),
+        turn_sample_weight,
+        transition_mask=False,
+    )
 
     total = (
         loss_main
@@ -115,6 +129,8 @@ def multitask_loss(
         + float(getattr(cfg, "lambda_theta_active_excess", 0.0)) * loss_theta_active_excess
         + float(getattr(cfg, "lambda_theta_small_neg", 0.0)) * loss_theta_small_neg
         + float(getattr(cfg, "lambda_theta_small_neg_excess", 0.0)) * loss_theta_small_neg_excess
+        + float(getattr(cfg, "lambda_turn_release", 0.0)) * loss_turn_release
+        + float(getattr(cfg, "lambda_false_turn_straight", 0.0)) * loss_false_turn_straight
     )
     parts = {
         "loss_total": float(total.detach().cpu()),
@@ -130,6 +146,8 @@ def multitask_loss(
         "loss_theta_active_excess": float(loss_theta_active_excess.detach().cpu()),
         "loss_theta_small_neg": float(loss_theta_small_neg.detach().cpu()),
         "loss_theta_small_neg_excess": float(loss_theta_small_neg_excess.detach().cpu()),
+        "loss_turn_release": float(loss_turn_release.detach().cpu()),
+        "loss_false_turn_straight": float(loss_false_turn_straight.detach().cpu()),
     }
     return total, parts
 
@@ -501,6 +519,26 @@ def _masked_weighted_abs_excess_mse(
     target_rad = torch.deg2rad(torch.tensor(float(target_deg), device=pred.device, dtype=pred.dtype))
     excess = torch.relu(torch.abs(pred - target) - target_rad)
     return ((excess ** 2) * wm).sum() / wm.sum().clamp_min(1e-8)
+
+
+def _turn_straight_probability_penalty(
+    logits_turn: torch.Tensor,
+    y_turn: torch.Tensor,
+    turn_transition: torch.Tensor,
+    weight: torch.Tensor,
+    transition_mask: bool,
+) -> torch.Tensor:
+    straight = y_turn == 1
+    transition = turn_transition.bool()
+    if transition_mask:
+        mask = straight & transition
+    else:
+        mask = straight & ~transition
+    mask_f = mask.float()
+    prob_turn = torch.softmax(logits_turn, dim=1)
+    non_straight_prob = prob_turn[:, 0] + prob_turn[:, 2]
+    wm = mask_f * weight
+    return ((non_straight_prob ** 2) * wm).sum() / wm.sum().clamp_min(1e-8)
 
 
 def _main_slope_sample_weight(y_main: torch.Tensor, theta: torch.Tensor, cfg) -> torch.Tensor:

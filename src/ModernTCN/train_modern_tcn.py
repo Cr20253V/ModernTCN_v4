@@ -18,7 +18,7 @@ import math
 import random
 import time
 from pathlib import Path
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 import numpy as np
 import torch
@@ -26,12 +26,25 @@ from torch.utils.data import DataLoader
 
 from modern_tcn_data import AGVWindowDataset, class_weights, find_project_root, load_modern_tcn_dataset
 from modern_tcn_metrics import compute_metrics, metric_row, multitask_loss, seed42_gate, selection_score
-from modern_tcn_model import ModernTCNConfig, ModernTCNSmall
+from modern_tcn_model import (
+    ModernTCNConfig,
+    ModernTCNFullConfig,
+    build_model_from_config,
+    normalize_model_family,
+)
+
+
+FULL_DEFAULT_DATASET = (
+    Path("data")
+    / "tcn"
+    / "ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v4b_weakcombo_rebalanced_passive17_plus_all5.mat"
+)
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="ModernTCN-small 第一阶段训练脚本")
+    p = argparse.ArgumentParser(description="ModernTCN-small / ModernTCNFull 第一阶段训练脚本")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--model-family", type=str, default="small", choices=["small", "full"])
     p.add_argument("--dataset-file", type=str, default="")
     p.add_argument("--run-tag", type=str, default="")
     p.add_argument("--epochs", type=int, default=120)
@@ -51,6 +64,16 @@ def parse_args() -> argparse.Namespace:
         help="Temporal convolution padding mode. 默认 same，causal 仅用于因果消融实验。",
     )
     p.add_argument("--dropout", type=float, default=0.15)
+    p.add_argument("--command-dropout-prob", type=float, default=0.0)
+    p.add_argument("--command-dropout-start-index", type=int, default=-1)
+    p.add_argument("--command-dropout-feature-count", type=int, default=0)
+    p.add_argument(
+        "--command-dropout-mode",
+        type=str,
+        default="window_block",
+        choices=["window_block", "time_block", "channel_block"],
+        help="训练期命令特征 dropout。只作用于 train batch，验证/测试/导出不启用。",
+    )
     p.add_argument("--turn-head-source", type=str, default="full", choices=["full", "inputstats", "kinematic_stats"])
     p.add_argument("--lambda-turn", type=float, default=0.05)
     p.add_argument("--lambda-theta", type=float, default=0.35)
@@ -71,6 +94,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lambda-theta-active-excess", type=float, default=0.0)
     p.add_argument("--lambda-theta-small-neg", type=float, default=0.0)
     p.add_argument("--lambda-theta-small-neg-excess", type=float, default=0.0)
+    p.add_argument("--lambda-turn-release", type=float, default=0.0)
+    p.add_argument("--lambda-false-turn-straight", type=float, default=0.0)
     p.add_argument("--theta-excess-target-deg", type=float, default=1.0)
     p.add_argument("--theta-flat-excess-target-deg", type=float, default=0.5)
     p.add_argument("--theta-small-neg-min-deg", type=float, default=-4.0)
@@ -123,110 +148,53 @@ def main() -> Dict[str, object]:
 
 def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     root = find_project_root()
-    run_tag = args.run_tag or f"modern_tcn_v4_industrial_seed{args.seed}"
-    out_dir = root / "results" / "modern_tcn" / run_tag
-    dataset_file = Path(args.dataset_file) if args.dataset_file else None
+    model_family = normalize_model_family(getattr(args, "model_family", "small"))
+    run_tag = getattr(args, "run_tag", "") or _default_run_tag(model_family, args.seed)
+    out_dir = root / "results" / _result_dir_name(model_family) / run_tag
+    dataset_file = _resolve_dataset_file(root, getattr(args, "dataset_file", ""), model_family)
 
     _set_seed(args.seed)
-    device = _select_device(args.device)
+    device = _select_device(getattr(args, "device", "auto"))
     data = load_modern_tcn_dataset(
         dataset_file=dataset_file,
-        limit_train=args.limit_train,
-        limit_val=args.limit_val,
-        limit_test=args.limit_test,
+        limit_train=getattr(args, "limit_train", 0),
+        limit_val=getattr(args, "limit_val", 0),
+        limit_test=getattr(args, "limit_test", 0),
     )
     train_split = data["train"]
     val_split = data["val"]
     test_split = data["test"]
     contract = data["contract"]
 
-    cfg = ModernTCNConfig(
-        input_dim=contract.input_dim,
-        seq_len=contract.seq_len,
-        channels=args.channels,
-        blocks=args.blocks,
-        kernel_size=args.kernel_size,
-        temporal_padding=getattr(args, "temporal_padding", "same"),
-        dropout=args.dropout,
-        turn_head_source=args.turn_head_source,
-        lambda_turn=args.lambda_turn,
-        lambda_theta=args.lambda_theta,
-        lambda_theta_flat=args.lambda_theta_flat,
-        theta_flat_loss_mode=args.theta_flat_loss_mode,
-        theta_flat_zero_tol_deg=args.theta_flat_zero_tol_deg,
-        lambda_theta_near_flat=args.lambda_theta_near_flat,
-        theta_near_flat_deg=args.theta_near_flat_deg,
-        lambda_theta_error_excess=args.lambda_theta_error_excess,
-        lambda_theta_flat_excess=args.lambda_theta_flat_excess,
-        lambda_theta_near_flat_excess=args.lambda_theta_near_flat_excess,
-        lambda_theta_true_zero_excess=args.lambda_theta_true_zero_excess,
-        lambda_theta_active_excess=args.lambda_theta_active_excess,
-        lambda_theta_small_neg=args.lambda_theta_small_neg,
-        lambda_theta_small_neg_excess=args.lambda_theta_small_neg_excess,
-        theta_excess_target_deg=args.theta_excess_target_deg,
-        theta_flat_excess_target_deg=args.theta_flat_excess_target_deg,
-        theta_small_neg_min_deg=args.theta_small_neg_min_deg,
-        theta_small_neg_max_deg=args.theta_small_neg_max_deg,
-        theta_gate_mode=args.theta_gate_mode,
-        theta_gate_power=args.theta_gate_power,
-        theta_gate_floor=args.theta_gate_floor,
-        theta_neg_weight=args.theta_neg_weight,
-        theta_pos_weight=args.theta_pos_weight,
-        turn_transition_weight=args.turn_transition_weight,
-        turn_class_multipliers=tuple(args.turn_class_multipliers),
-        select_turn_weight=args.select_turn_weight,
-        select_turn_transition_weight=args.select_turn_transition_weight,
-        select_turn_transition_target=getattr(args, "select_turn_transition_target", 0.75),
-        select_turn_left_weight=args.select_turn_left_weight,
-        select_turn_left_target=args.select_turn_left_target,
-        select_turn_lr_weight=getattr(args, "select_turn_lr_weight", 0.0),
-        select_turn_lr_target=getattr(args, "select_turn_lr_target", 0.80),
-        select_theta_weight=args.select_theta_weight,
-        select_theta_ref_deg=args.select_theta_ref_deg,
-        select_theta_p95_weight=args.select_theta_p95_weight,
-        select_theta_p95_target_deg=getattr(args, "select_theta_p95_target_deg", 1.0),
-        select_theta_flat_p95_weight=args.select_theta_flat_p95_weight,
-        select_theta_flat_p95_target_deg=getattr(args, "select_theta_flat_p95_target_deg", 1.0),
-        select_theta_near_flat_p95_weight=args.select_theta_near_flat_p95_weight,
-        select_theta_near_flat_p95_target_deg=getattr(args, "select_theta_near_flat_p95_target_deg", 1.0),
-        select_theta_true_zero_p95_weight=args.select_theta_true_zero_p95_weight,
-        select_theta_true_zero_p95_target_deg=getattr(args, "select_theta_true_zero_p95_target_deg", 1.0),
-        select_theta_extreme_p95_weight=args.select_theta_extreme_p95_weight,
-        select_theta_extreme_p95_target_deg=getattr(args, "select_theta_extreme_p95_target_deg", 1.0),
-        select_theta_edge_p95_weight=getattr(args, "select_theta_edge_p95_weight", 0.0),
-        select_theta_edge_p95_target_deg=getattr(args, "select_theta_edge_p95_target_deg", 1.2),
-        select_theta_small_nonzero_p95_weight=args.select_theta_small_nonzero_p95_weight,
-        select_theta_small_nonzero_p95_target_deg=getattr(args, "select_theta_small_nonzero_p95_target_deg", 1.0),
-        select_theta_flat_bias_weight=args.select_theta_flat_bias_weight,
-        select_theta_flat_bias_target_deg=getattr(args, "select_theta_flat_bias_target_deg", 0.2),
-    )
-    model = ModernTCNSmall(cfg).to(device)
+    cfg = _build_config(args, contract, model_family)
+    model = build_model_from_config(cfg, model_family).to(device)
 
     # smoke test 只验证数据契约和模型维度，不写任何模型文件。
-    if args.dry_run:
+    if getattr(args, "dry_run", False):
         xb = torch.from_numpy(train_split.X[:4]).float().to(device)
         with torch.no_grad():
             outputs = model(xb)
-        print("[ModernTCN dry-run] 数据和模型前向检查通过")
+        print(f"[ModernTCN {model_family} dry-run] 数据和模型前向检查通过")
         print(f"  X: {tuple(xb.shape)}")
         print(f"  logits_main/logits_turn/theta: {[tuple(o.shape) for o in outputs]}")
         return {"status": "dry_run_ok"}
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_file = out_dir / f"modern_tcn_seed{args.seed}.pt"
-    summary_csv = out_dir / f"modern_tcn_seed{args.seed}_summary.csv"
-    history_csv = out_dir / f"modern_tcn_seed{args.seed}_history.csv"
-    report_file = out_dir / "ModernTCN_train_report.md"
+    file_prefix = _file_prefix(model_family, args.seed)
+    checkpoint_file = out_dir / f"{file_prefix}.pt"
+    summary_csv = out_dir / f"{file_prefix}_summary.csv"
+    history_csv = out_dir / f"{file_prefix}_history.csv"
+    report_file = out_dir / _report_file_name(model_family)
 
     train_loader = DataLoader(
         AGVWindowDataset(train_split),
-        batch_size=args.batch_size,
+        batch_size=getattr(args, "batch_size", 256),
         shuffle=True,
-        num_workers=args.num_workers,
+        num_workers=getattr(args, "num_workers", 0),
         pin_memory=(device.type == "cuda"),
     )
-    val_loader = DataLoader(AGVWindowDataset(val_split), batch_size=args.batch_size, shuffle=False, num_workers=0)
-    test_loader = DataLoader(AGVWindowDataset(test_split), batch_size=args.batch_size, shuffle=False, num_workers=0)
+    val_loader = DataLoader(AGVWindowDataset(val_split), batch_size=getattr(args, "batch_size", 256), shuffle=False, num_workers=0)
+    test_loader = DataLoader(AGVWindowDataset(test_split), batch_size=getattr(args, "batch_size", 256), shuffle=False, num_workers=0)
 
     class_w_main = class_weights(
         train_split.y_main,
@@ -241,17 +209,30 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         list(cfg.turn_class_multipliers),
     ).to(device)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(args.epochs, 1))
+    opt = torch.optim.AdamW(model.parameters(), lr=getattr(args, "lr", 1e-3), weight_decay=getattr(args, "weight_decay", 1e-4))
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(getattr(args, "epochs", 120), 1))
 
-    print("[ModernTCN] 第一阶段训练开始")
+    print(f"[ModernTCN {model_family}] 第一阶段训练开始")
     print(f"  seed={args.seed}, device={device}, out={out_dir}")
     print(f"  dataset={contract.dataset_file}")
     print(f"  train/val/test={len(train_split.X)}/{len(val_split.X)}/{len(test_split.X)}")
-    print(
-        f"  model channels={cfg.channels}, blocks={cfg.blocks}, kernel={cfg.kernel_size}, "
-        f"temporal_padding={cfg.temporal_padding}"
-    )
+    print(f"  model_family={model_family}")
+    if model_family == "full":
+        print(
+            f"  full patch={cfg.patch_size}/{cfg.patch_stride}, dims={cfg.dims}, "
+            f"stage_blocks={cfg.stage_blocks}, large_kernels={cfg.large_kernels}"
+        )
+    else:
+        print(
+            f"  model channels={cfg.channels}, blocks={cfg.blocks}, kernel={cfg.kernel_size}, "
+            f"temporal_padding={cfg.temporal_padding}"
+        )
+    if cfg.command_dropout_prob > 0:
+        print(
+            "  command_dropout="
+            f"prob={cfg.command_dropout_prob:g}, start={cfg.command_dropout_start_index}, "
+            f"count={cfg.command_dropout_feature_count}, mode={cfg.command_dropout_mode}"
+        )
 
     best_score = math.inf
     best_epoch = 0
@@ -261,7 +242,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     history_rows = []
     t0 = time.time()
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(1, getattr(args, "epochs", 120) + 1):
         train_loss = _train_epoch(model, train_loader, opt, device, class_w_main, class_w_turn, cfg)
         scheduler.step()
         val_loss, val_logits_main, val_logits_turn, val_theta = _predict_full(
@@ -280,7 +261,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         else:
             patience_count += 1
 
-        if epoch == 1 or epoch % 5 == 0 or epoch == args.epochs:
+        if epoch == 1 or epoch % 5 == 0 or epoch == getattr(args, "epochs", 120):
             print(
                 f"  epoch {epoch:03d} | train={train_loss:.4f} val={val_metrics['loss_total']:.4f} "
                 f"main={val_metrics['acc_main']:.4f} turn={val_metrics['acc_turn']:.4f} "
@@ -288,7 +269,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
                 f"theta={val_metrics['theta_mae_deg']:.4f} score={score:.4f}"
             )
 
-        if epoch >= args.min_epochs and patience_count >= args.patience:
+        if epoch >= getattr(args, "min_epochs", 30) and patience_count >= getattr(args, "patience", 25):
             print(f"[ModernTCN] 早停：epoch={epoch}, best_epoch={best_epoch}")
             break
 
@@ -304,6 +285,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
 
     torch.save(
         {
+            "model_family": model_family,
             "model_state": best_state,
             "model_config": cfg.to_dict(),
             "seed": args.seed,
@@ -323,9 +305,9 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     row = metric_row(args.seed, best_epoch, test_metrics, paths)
     _write_csv(summary_csv, [row])
     _write_csv(history_csv, history_rows)
-    _write_report(report_file, args, cfg, contract.__dict__, row, test_metrics, best_val_metrics, train_seconds)
+    _write_report(report_file, args, cfg, contract.__dict__, row, test_metrics, best_val_metrics, train_seconds, model_family)
 
-    print("[ModernTCN] 训练完成")
+    print(f"[ModernTCN {model_family}] 训练完成")
     print(f"  checkpoint: {checkpoint_file}")
     print(f"  summary: {summary_csv}")
     print(f"  report: {report_file}")
@@ -350,12 +332,170 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     }
 
 
+def _default_run_tag(model_family: str, seed: int) -> str:
+    if model_family == "full":
+        return f"modern_tcn_full_v4b_seed{seed}"
+    return f"modern_tcn_v4_industrial_seed{seed}"
+
+
+def _result_dir_name(model_family: str) -> str:
+    return "modern_tcn_full" if model_family == "full" else "modern_tcn"
+
+
+def _file_prefix(model_family: str, seed: int) -> str:
+    return f"modern_tcn_full_seed{seed}" if model_family == "full" else f"modern_tcn_seed{seed}"
+
+
+def _report_file_name(model_family: str) -> str:
+    return "ModernTCNFull_train_report.md" if model_family == "full" else "ModernTCN_train_report.md"
+
+
+def _resolve_dataset_file(root: Path, dataset_arg: str, model_family: str) -> Optional[Path]:
+    if dataset_arg:
+        path = Path(dataset_arg)
+        return path if path.is_absolute() else root / path
+    if model_family == "full":
+        return root / FULL_DEFAULT_DATASET
+    return None
+
+
+def _arg(args: argparse.Namespace, name: str, default):
+    value = getattr(args, name, default)
+    return default if value is None else value
+
+
+def _build_config(args: argparse.Namespace, contract, model_family: str) -> ModernTCNConfig:
+    base = ModernTCNFullConfig() if model_family == "full" else ModernTCNConfig()
+    common = {
+        "input_dim": contract.input_dim,
+        "seq_len": contract.seq_len,
+        "channels": _arg(args, "channels", base.channels),
+        "blocks": _arg(args, "blocks", base.blocks),
+        "kernel_size": _arg(args, "kernel_size", base.kernel_size),
+        "temporal_padding": _arg(args, "temporal_padding", base.temporal_padding),
+        "dropout": _arg(args, "dropout", base.dropout),
+        "command_dropout_prob": _arg(args, "command_dropout_prob", base.command_dropout_prob),
+        "command_dropout_start_index": _arg(
+            args, "command_dropout_start_index", base.command_dropout_start_index
+        ),
+        "command_dropout_feature_count": _arg(
+            args, "command_dropout_feature_count", base.command_dropout_feature_count
+        ),
+        "command_dropout_mode": _arg(args, "command_dropout_mode", base.command_dropout_mode),
+        "turn_head_source": _arg(args, "turn_head_source", base.turn_head_source),
+        "lambda_turn": _arg(args, "lambda_turn", base.lambda_turn),
+        "lambda_theta": _arg(args, "lambda_theta", base.lambda_theta),
+        "lambda_theta_flat": _arg(args, "lambda_theta_flat", base.lambda_theta_flat),
+        "theta_flat_loss_mode": _arg(args, "theta_flat_loss_mode", base.theta_flat_loss_mode),
+        "theta_flat_zero_tol_deg": _arg(args, "theta_flat_zero_tol_deg", base.theta_flat_zero_tol_deg),
+        "lambda_theta_near_flat": _arg(args, "lambda_theta_near_flat", base.lambda_theta_near_flat),
+        "theta_near_flat_deg": _arg(args, "theta_near_flat_deg", base.theta_near_flat_deg),
+        "lambda_theta_error_excess": _arg(args, "lambda_theta_error_excess", base.lambda_theta_error_excess),
+        "lambda_theta_flat_excess": _arg(args, "lambda_theta_flat_excess", base.lambda_theta_flat_excess),
+        "lambda_theta_near_flat_excess": _arg(
+            args, "lambda_theta_near_flat_excess", base.lambda_theta_near_flat_excess
+        ),
+        "lambda_theta_true_zero_excess": _arg(args, "lambda_theta_true_zero_excess", base.lambda_theta_true_zero_excess),
+        "lambda_theta_active_excess": _arg(args, "lambda_theta_active_excess", base.lambda_theta_active_excess),
+        "lambda_theta_small_neg": _arg(args, "lambda_theta_small_neg", base.lambda_theta_small_neg),
+        "lambda_theta_small_neg_excess": _arg(args, "lambda_theta_small_neg_excess", base.lambda_theta_small_neg_excess),
+        "lambda_turn_release": _arg(args, "lambda_turn_release", base.lambda_turn_release),
+        "lambda_false_turn_straight": _arg(args, "lambda_false_turn_straight", base.lambda_false_turn_straight),
+        "theta_excess_target_deg": _arg(args, "theta_excess_target_deg", base.theta_excess_target_deg),
+        "theta_flat_excess_target_deg": _arg(args, "theta_flat_excess_target_deg", base.theta_flat_excess_target_deg),
+        "theta_true_zero_tol_deg": _arg(args, "theta_true_zero_tol_deg", base.theta_true_zero_tol_deg),
+        "theta_small_neg_min_deg": _arg(args, "theta_small_neg_min_deg", base.theta_small_neg_min_deg),
+        "theta_small_neg_max_deg": _arg(args, "theta_small_neg_max_deg", base.theta_small_neg_max_deg),
+        "theta_gate_mode": _arg(args, "theta_gate_mode", base.theta_gate_mode),
+        "theta_gate_power": _arg(args, "theta_gate_power", base.theta_gate_power),
+        "theta_gate_floor": _arg(args, "theta_gate_floor", base.theta_gate_floor),
+        "main_class_multipliers": tuple(_arg(args, "main_class_multipliers", base.main_class_multipliers)),
+        "turn_class_multipliers": tuple(_arg(args, "turn_class_multipliers", base.turn_class_multipliers)),
+        "main_class_weight_method": _arg(args, "main_class_weight_method", base.main_class_weight_method),
+        "turn_class_weight_method": _arg(args, "turn_class_weight_method", base.turn_class_weight_method),
+        "main_neg_slope_weight": _arg(args, "main_neg_slope_weight", base.main_neg_slope_weight),
+        "main_pos_slope_weight": _arg(args, "main_pos_slope_weight", base.main_pos_slope_weight),
+        "theta_neg_weight": _arg(args, "theta_neg_weight", 1.0),
+        "theta_pos_weight": _arg(args, "theta_pos_weight", base.theta_pos_weight),
+        "turn_transition_weight": _arg(args, "turn_transition_weight", base.turn_transition_weight),
+        "select_turn_weight": _arg(args, "select_turn_weight", base.select_turn_weight),
+        "select_turn_transition_weight": _arg(
+            args, "select_turn_transition_weight", base.select_turn_transition_weight
+        ),
+        "select_turn_transition_target": _arg(
+            args, "select_turn_transition_target", base.select_turn_transition_target
+        ),
+        "select_turn_left_weight": _arg(args, "select_turn_left_weight", base.select_turn_left_weight),
+        "select_turn_left_target": _arg(args, "select_turn_left_target", base.select_turn_left_target),
+        "select_turn_lr_weight": _arg(args, "select_turn_lr_weight", base.select_turn_lr_weight),
+        "select_turn_lr_target": _arg(args, "select_turn_lr_target", base.select_turn_lr_target),
+        "select_theta_weight": _arg(args, "select_theta_weight", base.select_theta_weight),
+        "select_theta_ref_deg": _arg(args, "select_theta_ref_deg", base.select_theta_ref_deg),
+        "select_theta_p95_weight": _arg(args, "select_theta_p95_weight", base.select_theta_p95_weight),
+        "select_theta_p95_target_deg": _arg(args, "select_theta_p95_target_deg", base.select_theta_p95_target_deg),
+        "select_theta_flat_p95_weight": _arg(
+            args, "select_theta_flat_p95_weight", base.select_theta_flat_p95_weight
+        ),
+        "select_theta_flat_p95_target_deg": _arg(
+            args, "select_theta_flat_p95_target_deg", base.select_theta_flat_p95_target_deg
+        ),
+        "select_theta_near_flat_p95_weight": _arg(
+            args, "select_theta_near_flat_p95_weight", base.select_theta_near_flat_p95_weight
+        ),
+        "select_theta_near_flat_p95_target_deg": _arg(
+            args, "select_theta_near_flat_p95_target_deg", base.select_theta_near_flat_p95_target_deg
+        ),
+        "select_theta_true_zero_p95_weight": _arg(
+            args, "select_theta_true_zero_p95_weight", base.select_theta_true_zero_p95_weight
+        ),
+        "select_theta_true_zero_p95_target_deg": _arg(
+            args, "select_theta_true_zero_p95_target_deg", base.select_theta_true_zero_p95_target_deg
+        ),
+        "select_theta_flat_peak_weight": _arg(
+            args, "select_theta_flat_peak_weight", base.select_theta_flat_peak_weight
+        ),
+        "select_theta_flat_peak_target_deg": _arg(
+            args, "select_theta_flat_peak_target_deg", base.select_theta_flat_peak_target_deg
+        ),
+        "select_theta_small_neg_p95_weight": _arg(
+            args, "select_theta_small_neg_p95_weight", base.select_theta_small_neg_p95_weight
+        ),
+        "select_theta_small_neg_p95_target_deg": _arg(
+            args, "select_theta_small_neg_p95_target_deg", base.select_theta_small_neg_p95_target_deg
+        ),
+        "select_theta_extreme_p95_weight": _arg(
+            args, "select_theta_extreme_p95_weight", base.select_theta_extreme_p95_weight
+        ),
+        "select_theta_extreme_p95_target_deg": _arg(
+            args, "select_theta_extreme_p95_target_deg", base.select_theta_extreme_p95_target_deg
+        ),
+        "select_theta_edge_p95_weight": _arg(args, "select_theta_edge_p95_weight", base.select_theta_edge_p95_weight),
+        "select_theta_edge_p95_target_deg": _arg(
+            args, "select_theta_edge_p95_target_deg", base.select_theta_edge_p95_target_deg
+        ),
+        "select_theta_small_nonzero_p95_weight": _arg(
+            args, "select_theta_small_nonzero_p95_weight", base.select_theta_small_nonzero_p95_weight
+        ),
+        "select_theta_small_nonzero_p95_target_deg": _arg(
+            args, "select_theta_small_nonzero_p95_target_deg", base.select_theta_small_nonzero_p95_target_deg
+        ),
+        "select_theta_flat_bias_weight": _arg(args, "select_theta_flat_bias_weight", base.select_theta_flat_bias_weight),
+        "select_theta_flat_bias_target_deg": _arg(
+            args, "select_theta_flat_bias_target_deg", base.select_theta_flat_bias_target_deg
+        ),
+    }
+    if model_family == "full":
+        return ModernTCNFullConfig(**common)
+    return ModernTCNConfig(**common)
+
+
 def _train_epoch(model, loader, opt, device, class_w_main, class_w_turn, cfg) -> float:
     model.train()
     total_loss = 0.0
     total_n = 0
     for batch in loader:
         batch = _to_device(batch, device)
+        batch = _apply_command_feature_dropout(batch, cfg)
         opt.zero_grad(set_to_none=True)
         logits_main, logits_turn, theta_hat = model(batch["X"])
         loss, _ = multitask_loss(logits_main, logits_turn, theta_hat, batch, class_w_main, class_w_turn, cfg)
@@ -366,6 +506,40 @@ def _train_epoch(model, loader, opt, device, class_w_main, class_w_turn, cfg) ->
         total_loss += float(loss.detach().cpu()) * n
         total_n += n
     return total_loss / max(total_n, 1)
+
+
+def _apply_command_feature_dropout(batch: Dict[str, torch.Tensor], cfg: ModernTCNConfig) -> Dict[str, torch.Tensor]:
+    prob = float(getattr(cfg, "command_dropout_prob", 0.0) or 0.0)
+    if prob <= 0.0:
+        return batch
+    if not (0.0 <= prob < 1.0):
+        raise ValueError(f"command_dropout_prob 必须在 [0,1) 内，实际 {prob}")
+
+    x = batch["X"]
+    start = int(getattr(cfg, "command_dropout_start_index", -1) or -1)
+    count = int(getattr(cfg, "command_dropout_feature_count", 0) or 0)
+    end = start + count
+    if start < 0 or count <= 0 or end > int(x.shape[2]):
+        raise ValueError(
+            "command dropout 配置与输入维度不匹配："
+            f"start={start}, count={count}, input_dim={int(x.shape[2])}"
+        )
+
+    mode = str(getattr(cfg, "command_dropout_mode", "window_block") or "window_block").lower()
+    if mode == "window_block":
+        keep = (torch.rand((x.shape[0], 1, 1), device=x.device) >= prob).to(dtype=x.dtype)
+    elif mode == "time_block":
+        keep = (torch.rand((x.shape[0], x.shape[1], 1), device=x.device) >= prob).to(dtype=x.dtype)
+    elif mode == "channel_block":
+        keep = (torch.rand((x.shape[0], 1, count), device=x.device) >= prob).to(dtype=x.dtype)
+    else:
+        raise ValueError(f"未知 command_dropout_mode: {mode}")
+
+    x_drop = x.clone()
+    x_drop[:, :, start:end] = x_drop[:, :, start:end] * keep
+    out = dict(batch)
+    out["X"] = x_drop
+    return out
 
 
 @torch.no_grad()
@@ -469,11 +643,14 @@ def _write_report(
     test_metrics: Dict[str, object],
     val_metrics: Dict[str, object],
     train_seconds: float,
+    model_family: str,
 ) -> None:
     passed, failures = seed42_gate(test_metrics) if args.seed == 42 else (False, [])
     with path.open("w", encoding="utf-8") as f:
-        f.write("# ModernTCN-small 第一阶段训练报告\n\n")
+        title = "ModernTCNFull v0 第一阶段训练报告" if model_family == "full" else "ModernTCN-small 第一阶段训练报告"
+        f.write(f"# {title}\n\n")
         f.write("## 固定约束\n\n")
+        f.write(f"- model_family: `{model_family}`\n")
         f.write(f"- dataset: `{contract['dataset_file']}`\n")
         f.write(f"- vehicle: `{contract.get('vehicle_type', '')}`; active=`{contract.get('active_drive_steer_wheels', '')}`; passive=`{contract.get('passive_support_wheels', '')}`\n")
         f.write(f"- feature_policy: `{contract.get('feature_policy', '')}`\n")

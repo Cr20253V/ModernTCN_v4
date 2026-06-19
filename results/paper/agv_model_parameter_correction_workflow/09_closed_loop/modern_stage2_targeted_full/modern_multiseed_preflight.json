@@ -1,0 +1,13 @@
+{
+  "checks": {
+    "plant_revision": true,
+    "dataset": true,
+    "onnx_ModernTCN_turn_seed101_champion": true,
+    "onnx_ModernTCN_stage2_l020_tt30_lr_seed303": true,
+    "onnx_ModernTCN_stage2_l020_tt30_lr_seed101": true,
+    "learned_shell": true,
+    "three_paths": true,
+    "maps_candidate": true
+  },
+  "pass": true
+}

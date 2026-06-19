@@ -8,7 +8,7 @@ function dataset = TCN_prepare_dataset(cfg)
 %   特征集合，避免由于数据切分不同造成不公平比较。
 %
 % 处理流程：
-%   1. 从每个 run 的 y_raw 中提取 19 维可观测输入特征。
+%   1. 从每个 run 的 y_raw 中提取 22 维 passive17_plus_all5 输入特征。
 %   2. 以 seq_len/stride 在每个 run 内滑窗，不跨 run 生成窗口。
 %   3. 主工况默认取窗口末端标签；转弯可单独使用末端、多数投票或
 %      末端稳定片段多数投票，并记录窗口纯度供诊断和训练降权。
@@ -33,7 +33,7 @@ function dataset = TCN_prepare_dataset(cfg)
 %   cfg.transition_rich     : true 时使用过渡段密集滑窗、稳态稀疏滑窗。
 %
 % 输出 dataset：
-%   dataset.X_train/val/test           : [窗口数, seq_len, 19]。
+%   dataset.X_train/val/test           : [窗口数, seq_len, 22]。
 %   dataset.y_main_*                   : 主工况标签 1/2/3。
 %   dataset.y_turn_*                   : 转弯标签 -1/0/1。
 %   dataset.y_theta_*                  : 坡度角监督值 [rad]。
@@ -54,6 +54,7 @@ end
 
 root = project_root();
 cfg = local_defaults(cfg, root);
+local_assert_output_paths_preflight(cfg);
 
 if cfg.verbose
     fprintf('\n========== TCN Dataset Preprocess ==========\n');
@@ -81,7 +82,7 @@ else
 end
 cfg.Ts = Ts;
 
-[features_by_run, labels_by_run, feat_names, run_table] = local_extract_runs(data, params, Ts, cfg);
+[features_by_run, labels_by_run, feat_names, run_table, feature_contract] = local_extract_runs(data, params, Ts, cfg);
 [X_all, labels_all] = local_make_windows(features_by_run, labels_by_run, cfg);
 split_info = local_get_or_make_split(labels_all, run_table, cfg);
 
@@ -124,8 +125,10 @@ scaler.std = std(X_train_flat, 0, 1);
 scaler.std(scaler.std < 1e-8) = 1.0;
 scaler.tau_accel_lp = cfg.tau_accel_lp;
 scaler.tau_diff = cfg.tau_diff;
-scaler.tau_pitch = cfg.tau_pitch;
-scaler.feature_contract = 'GRU_compatible_observable_19';
+scaler.feature_contract = feature_contract.feature_contract;
+scaler.feature_names = feature_contract.feature_names;
+scaler.feature_policy = local_get_field(feature_contract, ...
+    'feature_policy', 'imu_free_passive17_plus_all5');
 
 norm_fn = @(X) (X - reshape(scaler.mean, 1, 1, [])) ./ reshape(scaler.std, 1, 1, []);
 
@@ -237,8 +240,15 @@ dataset.meta.theta_balance_max_imbalance = cfg.theta_balance_max_imbalance;
 dataset.meta.turn_balance_after_split = cfg.turn_balance_after_split;
 dataset.meta.turn_balance_min_lr_balance = cfg.turn_balance_min_lr_balance;
 dataset.meta.feature_contract = scaler.feature_contract;
-dataset.meta.feature_policy = 'keep_current_algorithm_inputs_unchanged';
-dataset.meta.no_new_inputs = true;
+dataset.meta.feature_policy = scaler.feature_policy;
+dataset.meta.feature_extractor = cfg.feature_extractor;
+if isfield(data, 'meta') && isfield(data.meta, 'plant_revision')
+    dataset.meta.plant_revision = data.meta.plant_revision;
+end
+dataset.meta.no_new_inputs = local_get_field(feature_contract, 'no_new_inputs', true);
+dataset.meta.base_feature_contract = local_get_field(feature_contract, ...
+    'base_feature_contract', feature_contract.feature_contract);
+dataset.meta.plan_branch = local_get_field(feature_contract, 'plan_branch', 'Plan A passive-only');
 dataset.meta.input_dim = numel(feat_names);
 dataset.meta.vehicle_type = 'diagonal_dual_steer_drive_agv';
 dataset.meta.active_drive_steer_wheels = {'LF', 'RR'};
@@ -250,6 +260,7 @@ dataset.meta.confidence_policy = 'derive_classification_confidence_from_softmax_
 dataset.meta.split_strategy = 'run_level_no_window_leakage';
 dataset.meta.split_file = cfg.split_file;
 dataset.meta.contract_file = cfg.contract_file;
+dataset.meta.overwrite = cfg.overwrite;
 dataset.meta.train_ratio = cfg.train_ratio;
 dataset.meta.val_ratio = cfg.val_ratio;
 dataset.meta.test_ratio = cfg.test_ratio;
@@ -260,6 +271,8 @@ dataset.contract = local_dataset_contract(dataset);
 
 local_self_check(dataset, cfg);
 
+local_assert_output_paths_safe(cfg, dataset);
+
 out_dir = fileparts(cfg.output_file);
 if ~isempty(out_dir) && ~exist(out_dir, 'dir')
     mkdir(out_dir);
@@ -268,7 +281,8 @@ save(cfg.output_file, 'dataset', '-v7.3');
 
 scaler_data = struct('scaler', scaler, 'feat_names', {feat_names}, ...
     'seq_len', cfg.seq_len, 'stride', cfg.stride, 'Ts', Ts, ...
-    'feature_contract', scaler.feature_contract);
+    'feature_contract', scaler.feature_contract, ...
+    'feature_extractor', cfg.feature_extractor);
 save(cfg.scaler_file, '-struct', 'scaler_data');
 
 local_write_report(cfg.report_file, dataset);
@@ -324,7 +338,6 @@ if ~isfield(cfg, 'test_ratio'); cfg.test_ratio = 0.15; end
 if ~isfield(cfg, 'seed'); cfg.seed = 42; end
 if ~isfield(cfg, 'tau_accel_lp'); cfg.tau_accel_lp = 0.4; end
 if ~isfield(cfg, 'tau_diff'); cfg.tau_diff = 0.3; end
-if ~isfield(cfg, 'tau_pitch'); cfg.tau_pitch = 2.0; end
 if ~isfield(cfg, 'turn_label_strategy'); cfg.turn_label_strategy = 'tail_majority'; end
 if ~isfield(cfg, 'turn_tail_sec'); cfg.turn_tail_sec = 0.50; end
 if ~isfield(cfg, 'turn_min_purity'); cfg.turn_min_purity = 0.70; end
@@ -352,19 +365,21 @@ if cfg.horizon_steps ~= 0
         ['当前数据集契约固定为 horizon_steps=0（窗口末端当前状态监督）。' ...
          '如需未来预判，请另建 horizon 数据集，避免与当前 GRU/ModernTCN 结果混用。']);
 end
+if ~isfield(cfg, 'feature_extractor') || isempty(cfg.feature_extractor)
+    cfg.feature_extractor = 'passive';
+end
+if ~isfield(cfg, 'cmd_stats_window_sec'); cfg.cmd_stats_window_sec = 0.2; end
+if ~isfield(cfg, 'overwrite'); cfg.overwrite = true; end
+if ~isfield(cfg, 'protected_existing_files'); cfg.protected_existing_files = {}; end
 if ~isfield(cfg, 'verbose'); cfg.verbose = true; end
 if ~isfield(cfg, 'min_windows_per_split'); cfg.min_windows_per_split = 1; end
 end
 
-function [features_by_run, labels_by_run, feat_names, run_table] = local_extract_runs(data, params, Ts, cfg)
-r = params.wheel_radius;
-W = params.W;
-
-feat_names = {
-    'accel_x', 'gyro_z', 'I_lf', 'I_rr', 'omega_wheel_lf', 'omega_wheel_rr', ...
-    'delta_lf', 'delta_rr', 'gyro_y', 'v_hat', 'dv_hat_dt', 'ws_imbalance', ...
-    'I_sum', 'I_diff_signed', 'I_diff_abs', 'accel_x_lp', 'kappa_proxy', ...
-    'accel_per_current', 'pitch_angle_est'};
+function [features_by_run, labels_by_run, feat_names, run_table, feature_contract] = local_extract_runs(data, params, Ts, cfg)
+[feat_names, feature_contract] = local_feature_contract(cfg);
+feature_cfg = struct('tau_diff', cfg.tau_diff, ...
+    'tau_accel_lp', cfg.tau_accel_lp, ...
+    'cmd_stats_window_sec', cfg.cmd_stats_window_sec);
 
 features_by_run = cell(numel(data.runs), 1);
 labels_by_run = cell(numel(data.runs), 1);
@@ -383,32 +398,7 @@ for k = 1:numel(data.runs)
     y_raw = y_raw(idx, :);
     N = size(y_raw, 1);
 
-    accel_x = y_raw(:, 9);
-    gyro_y = y_raw(:, 10);
-    gyro_z = y_raw(:, 11);
-    I_lf = y_raw(:, 12);
-    I_rr = y_raw(:, 13);
-    omega_wheel_lf = y_raw(:, 17);
-    omega_wheel_rr = y_raw(:, 18);
-    delta_lf = y_raw(:, 6);
-    delta_rr = y_raw(:, 7);
-
-    v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-    dv_raw = [0; diff(v_hat) / Ts];
-    dv_hat_dt = local_lowpass(dv_raw, Ts, cfg.tau_diff);
-    ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-    I_sum = abs(I_lf) + abs(I_rr);
-    I_diff_signed = I_lf - I_rr;
-    I_diff_abs = abs(I_lf) - abs(I_rr);
-    accel_x_lp = local_lowpass(accel_x, Ts, cfg.tau_accel_lp);
-    kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-    accel_per_current = accel_x_lp ./ max(I_sum, 0.1);
-    pitch_angle_est = local_leaky_integral(gyro_y, Ts, cfg.tau_pitch);
-
-    features_by_run{k} = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-        delta_lf, delta_rr, gyro_y, v_hat, dv_hat_dt, ws_imbalance, ...
-        I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-        accel_per_current, pitch_angle_est];
+    features_by_run{k} = local_extract_features_for_run(run, y_raw, idx, params, Ts, feature_cfg, cfg);
 
     labels = struct();
     labels.y_main = run.label_main(idx);
@@ -546,6 +536,47 @@ for i = 1:numel(event_idx)
     i0 = max(1, event_idx(i) - buf);
     i1 = min(N, event_idx(i) + buf);
     event_mask(i0:i1) = true;
+end
+end
+
+function [feat_names, feature_contract] = local_feature_contract(cfg)
+switch lower(char(cfg.feature_extractor))
+    case {'passive','passive17_plus_all5'}
+        feat_names = extract_passive_features('names');
+        feature_contract = extract_passive_features('contract');
+    case {'command_response','cmdresp_lite','cmdresp_lite_v1','plan_b_lite'}
+        feat_names = extract_command_response_features('names');
+        feature_contract = extract_command_response_features('contract');
+    case {'cmdresp_lag1_only','cmdresp_lag1_only_v1','plan_b_lag1_only'}
+        feat_names = extract_command_response_lag1_features('names');
+        feature_contract = extract_command_response_lag1_features('contract');
+    otherwise
+        error('TCN_prepare_dataset:BadFeatureExtractor', ...
+            'Unknown feature_extractor: %s', char(cfg.feature_extractor));
+end
+end
+
+function features = local_extract_features_for_run(run, y_raw, idx, params, Ts, feature_cfg, cfg)
+switch lower(char(cfg.feature_extractor))
+    case {'passive','passive17_plus_all5'}
+        features = extract_passive_features('batch', y_raw, params, Ts, feature_cfg);
+    case {'command_response','cmdresp_lite','cmdresp_lite_v1','plan_b_lite'}
+        if ~isfield(run, 'u') || size(run.u, 2) < 2 || size(run.u, 1) < max(idx)
+            error('TCN_prepare_dataset:MissingCommand', ...
+                'Command-response features require run.u(:,1:2) for every y_raw row.');
+        end
+        u_cmd = run.u(idx, 1:2);
+        features = extract_command_response_features('batch', y_raw, u_cmd, params, Ts, feature_cfg);
+    case {'cmdresp_lag1_only','cmdresp_lag1_only_v1','plan_b_lag1_only'}
+        if ~isfield(run, 'u') || size(run.u, 2) < 2 || size(run.u, 1) < max(idx)
+            error('TCN_prepare_dataset:MissingCommand', ...
+                'Command-response features require run.u(:,1:2) for every y_raw row.');
+        end
+        u_cmd = run.u(idx, 1:2);
+        features = extract_command_response_lag1_features('batch', y_raw, u_cmd, params, Ts, feature_cfg);
+    otherwise
+        error('TCN_prepare_dataset:BadFeatureExtractor', ...
+            'Unknown feature_extractor: %s', char(cfg.feature_extractor));
 end
 end
 
@@ -985,23 +1016,6 @@ if ~isempty(intersect(r_train, r_val)) || ~isempty(intersect(r_train, r_test)) |
 end
 end
 
-function x_lp = local_lowpass(x, Ts, tau)
-alpha = Ts / (tau + Ts);
-x_lp = zeros(size(x));
-x_lp(1) = x(1);
-for i = 2:numel(x)
-    x_lp(i) = alpha * x(i) + (1 - alpha) * x_lp(i - 1);
-end
-end
-
-function y = local_leaky_integral(x, Ts, tau)
-lambda = exp(-Ts / tau);
-y = zeros(size(x));
-for i = 2:numel(x)
-    y(i) = lambda * y(i - 1) + x(i) * Ts;
-end
-end
-
 function theta = local_select_theta(run, idx)
 if isfield(run, 'y_theta_ground') && numel(run.y_theta_ground) >= max(idx)
     theta = run.y_theta_ground(idx);
@@ -1202,6 +1216,79 @@ local_assert_no_split_leakage([dataset.run_id_train; dataset.run_id_val; dataset
     numel(dataset.run_id_train) + numel(dataset.run_id_val) + (1:numel(dataset.run_id_test))');
 end
 
+function local_assert_output_paths_preflight(cfg)
+paths = {
+    cfg.output_file, ...
+    cfg.scaler_file, ...
+    cfg.split_file, ...
+    cfg.contract_file, ...
+    cfg.report_file};
+if ~cfg.overwrite
+    for i = 1:numel(paths)
+        p = paths{i};
+        if ~isempty(p) && exist(p, 'file') == 2
+            error('TCN_prepare_dataset:OutputExists', ...
+                'Output exists and overwrite=false: %s', p);
+        end
+    end
+end
+protected = cfg.protected_existing_files;
+if ischar(protected) || isstring(protected)
+    protected = cellstr(protected);
+end
+if isempty(protected)
+    protected = {};
+end
+for i = 1:numel(paths)
+    p = char(string(paths{i}));
+    for j = 1:numel(protected)
+        q = char(string(protected{j}));
+        if strcmpi(p, q)
+            error('TCN_prepare_dataset:ProtectedOutput', ...
+                'Refusing to write protected baseline file: %s', p);
+        end
+    end
+end
+if local_is_command_response_extractor(cfg.feature_extractor)
+    required_tag = local_required_command_response_tag(cfg.feature_extractor);
+    for i = 1:numel(paths)
+        p = char(string(paths{i}));
+        if ~contains(p, required_tag)
+            error('TCN_prepare_dataset:UnsafeCommandResponseTag', ...
+                'Command-response outputs must include %s in the file name: %s', ...
+                required_tag, p);
+        end
+    end
+end
+end
+
+function local_assert_output_paths_safe(cfg, dataset)
+if isfield(dataset.meta, 'feature_contract') && ...
+        contains(char(dataset.meta.feature_contract), 'cmdresp')
+    required_tag = local_required_command_response_tag(cfg.feature_extractor);
+    if ~contains(char(cfg.output_file), required_tag)
+    error('TCN_prepare_dataset:UnsafeCommandResponseTag', ...
+        'Command-response outputs must include %s in the file name: %s', ...
+        required_tag, cfg.output_file);
+    end
+end
+end
+
+function tf = local_is_command_response_extractor(feature_extractor)
+tf = ismember(lower(char(feature_extractor)), ...
+    {'command_response','cmdresp_lite','cmdresp_lite_v1','plan_b_lite', ...
+     'cmdresp_lag1_only','cmdresp_lag1_only_v1','plan_b_lag1_only'});
+end
+
+function tag = local_required_command_response_tag(feature_extractor)
+switch lower(char(feature_extractor))
+    case {'cmdresp_lag1_only','cmdresp_lag1_only_v1','plan_b_lag1_only'}
+        tag = 'cmdresp_lag1_only_v1';
+    otherwise
+        tag = 'cmdresp_lite_v1';
+end
+end
+
 function contract = local_dataset_contract(dataset)
 meta = dataset.meta;
 contract = struct();
@@ -1218,7 +1305,13 @@ contract.input_dim = meta.input_dim;
 contract.feature_names = dataset.feat_names(:)';
 contract.feature_contract = meta.feature_contract;
 contract.feature_policy = meta.feature_policy;
+if isfield(meta, 'plant_revision')
+    contract.plant_revision = meta.plant_revision;
+end
 contract.no_new_inputs = meta.no_new_inputs;
+contract.feature_extractor = meta.feature_extractor;
+contract.base_feature_contract = meta.base_feature_contract;
+contract.plan_branch = meta.plan_branch;
 contract.label_time_policy = meta.label_time_policy;
 contract.horizon_steps = meta.horizon_steps;
 contract.horizon_seconds = meta.horizon_seconds;
@@ -1289,6 +1382,10 @@ if isfield(dataset, 'split_info') && isfield(dataset.split_info, 'score')
     fprintf(fid, '- Split balance score: %.6f\n', dataset.split_info.score);
 end
 fprintf(fid, '- Feature contract: `%s`\n', dataset.meta.feature_contract);
+if isfield(dataset.meta, 'plant_revision') && ...
+        isfield(dataset.meta.plant_revision, 'id')
+    fprintf(fid, '- Plant revision: `%s`\n', dataset.meta.plant_revision.id);
+end
 fprintf(fid, '- Vehicle: `%s`, active wheels=`%s`, passive wheels=`%s`\n', ...
     dataset.meta.vehicle_type, strjoin(dataset.meta.active_drive_steer_wheels, ','), ...
     strjoin(dataset.meta.passive_support_wheels, ','));

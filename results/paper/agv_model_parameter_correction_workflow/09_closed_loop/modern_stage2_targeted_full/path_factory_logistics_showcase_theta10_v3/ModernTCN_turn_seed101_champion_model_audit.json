@@ -1,0 +1,11 @@
+{
+  "kind": "modern_tcn",
+  "label": "ModernTCN_turn_seed101_champion",
+  "seed": 101,
+  "dataset_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.onnx",
+  "run_tag": "modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101",
+  "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_factory_logistics_showcase_theta10_v3.mat",
+  "created_at": "2026-06-17 05:37:22",
+  "project_root": "E:\\Matlab\\Simulink\\S-Function_16"
+}

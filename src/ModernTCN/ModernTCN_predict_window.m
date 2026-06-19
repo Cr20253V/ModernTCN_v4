@@ -2,13 +2,13 @@ function output = ModernTCN_predict_window(predictor, X_window)
 %MODERNTCN_PREDICT_WINDOW 使用已加载的 ModernTCN 对单个时间窗口做在线推理。
 %
 % 功能说明：
-%   输入一个已经归一化、特征顺序与训练数据一致的 128x19 窗口，输出主工况、
+%   输入一个已经归一化、特征顺序与训练数据一致的 128x22 窗口，输出主工况、
 %   转弯状态、坡度角预测值和对应概率。该函数只做推理和后处理，不做 scaler
 %   归一化，也不改变特征顺序。
 %
 % 输入格式：
-%   X_window 可以是 [128,19] 或 [1,128,19]。
-%   [128,19] = [time, feature]，这是后续 MATLAB/Simulink wrapper 推荐格式。
+%   X_window 可以是 [128,22] 或 [1,128,22]。
+%   [128,22] = [time, feature]，这是后续 MATLAB/Simulink wrapper 推荐格式。
 %
 % 输出标签：
 %   main_state = 1/2/3，分别对应 flat/stall/slope。
@@ -45,7 +45,7 @@ output.logits_turn = logits_turn(1,:);
 end
 
 function X = local_prepare_single_window(X_window, expected_size)
-% 统一转换成 ONNX 需要的 [batch,time,feature] = [1,128,19]。
+% 统一转换成 ONNX 需要的 [batch,time,feature]。
 X = single(X_window);
 sz = size(X);
 
@@ -55,15 +55,16 @@ if ismatrix(X)
     elseif isequal(sz, fliplr(expected_size))
         error(['ModernTCN:WrongWindowShape'], ...
             ['输入尺寸是 [%d,%d]，看起来像 [feature,time]。', ...
-             '请转置成 [time,feature] = [128,19] 后再调用。'], sz(1), sz(2));
+             '请转置成 [time,feature] = %s 后再调用。'], sz(1), sz(2), mat2str(expected_size));
     else
         error('ModernTCN:WrongWindowShape', ...
-            '输入窗口必须是 [128,19] 或 [1,128,19]，当前尺寸是 %s。', mat2str(sz));
+            '输入窗口必须是 %s 或 %s，当前尺寸是 %s。', ...
+            mat2str(expected_size), mat2str([1 expected_size]), mat2str(sz));
     end
 elseif ndims(X) == 3
     if ~isequal(sz, [1 expected_size])
         error('ModernTCN:WrongWindowShape', ...
-            '三维输入必须是 [1,128,19]，当前尺寸是 %s。', mat2str(sz));
+            '三维输入必须是 %s，当前尺寸是 %s。', mat2str([1 expected_size]), mat2str(sz));
     end
 else
     error('ModernTCN:WrongWindowShape', ...

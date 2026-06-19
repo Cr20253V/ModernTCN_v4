@@ -2,7 +2,7 @@ function output = TCN_predict_window(predictor, X_window)
 %TCN_PREDICT_WINDOW Run one normalized TCN window through the MATLAB model.
 %
 % Input:
-%   X_window: [128,19] normalized window in [time, feature] order.
+%   X_window: [128,22] normalized window in [time, feature] order.
 %
 % Output labels:
 %   main_state = 1/2/3 for flat/stall/slope.
@@ -48,17 +48,17 @@ if ismatrix(X)
     elseif isequal(sz, fliplr(expected_size))
         error('TCN:WrongWindowShape', ...
             ['输入尺寸是 [%d,%d]，看起来像 [feature,time]。', ...
-             '请转置成 [time,feature] = [128,19] 后再调用。'], sz(1), sz(2));
+             '请转置成 [time,feature] = %s 后再调用。'], sz(1), sz(2), mat2str(expected_size));
     else
         error('TCN:WrongWindowShape', ...
-            '输入窗口必须是 [128,19]，当前尺寸是 %s。', mat2str(sz));
+            '输入窗口必须是 %s，当前尺寸是 %s。', mat2str(expected_size), mat2str(sz));
     end
 elseif ndims(X) == 3
     if isequal(sz, [1 expected_size])
         X = squeeze(X(1,:,:));
     else
         error('TCN:WrongWindowShape', ...
-            '三维输入必须是 [1,128,19]，当前尺寸是 %s。', mat2str(sz));
+            '三维输入必须是 %s，当前尺寸是 %s。', mat2str([1 expected_size]), mat2str(sz));
     end
 else
     error('TCN:WrongWindowShape', '输入窗口维度不支持。');

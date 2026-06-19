@@ -6,7 +6,7 @@
 % 功能描述：
 %   GRU训练数据预处理脚本
 %   1. 加载原始数据（GRU_train_data_full.mat）
-%   2. 提取原始传感量并计算派生特征
+%   2. 提取 passive17_plus_all5 特征并计算派生特征
 %   3. 按回合分组，防止数据泄漏（A2优化）
 %   4. 滑窗切片（seq_len=48, stride=12）
 %   5. 数据归一化（z-score，仅用训练集统计）
@@ -47,7 +47,7 @@ if ~isfield(cfg, 'verbose');      cfg.verbose     = true;                       
 %
 % 输出：
 %   - dataset: 处理后的数据集，保存至 cfg.output_file
-%       .X_train/val/test: [N, seq_len, feat_dim]
+%       .X_train/val/test: [N, seq_len, 22]
 %       .y_main_train/val/test: [N,1]∈{1,2,3}
 %       .y_turn_train/val/test: [N,1]∈{-1,0,+1}
 %       .y_theta_train/val/test: [N,1] [rad]
@@ -61,7 +61,7 @@ if ~isfield(cfg, 'verbose');      cfg.verbose     = true;                       
 %   - parameters.m
 %
 % 备注：
-%   - 特征仅使用"原始传感量"和简单派生（符合规范8.6要求）
+%   - 特征仅使用允许的轮速/电流/转角/yaw-rate 通道和简单派生
 %   - 禁止使用诊断/估计量（如slip_flag, stall_flag等）
 %   - theta_ground仅作为监督标签，不作为输入特征
 % =============================
@@ -119,9 +119,6 @@ end
 
 % 加载参数（用于获取常量）
 params = parameters();
-r = params.wheel_radius;
-L = params.L;
-W = params.W;
 
 % V2.0: Ts 从数据元信息读取（确保与数据生成时的采样周期一致）
 if isfield(data.meta, 'Ts')
@@ -135,6 +132,7 @@ fprintf('  采样周期 Ts = %.4f s（来源: 数据元信息）\n', Ts);
 % 提取滤波时间常数
 tau_accel_lp = cfg.tau_accel_lp;
 tau_diff = cfg.tau_diff;
+feature_cfg = struct('tau_diff', tau_diff, 'tau_accel_lp', tau_accel_lp);
 
 %% 2. 提取特征并计算派生特征
 if cfg.verbose
@@ -172,109 +170,24 @@ for k = 1:length(data.runs)
     theta_source_counter.(theta_source_name) = theta_source_counter.(theta_source_name) + numel(theta_run);
     N = size(y_raw, 1);
     
-    % 必选原始通道（规范8.6）
-    accel_x = y_raw(:, 9);           % y9: accel_x_meas [m/s²]
-    gyro_z = y_raw(:, 11);           % y11: gyro_z_meas [rad/s]
-    I_lf = y_raw(:, 12);             % y12: I_meas_lf [A]
-    I_rr = y_raw(:, 13);             % y13: I_meas_rr [A]
-    omega_wheel_lf = y_raw(:, 17);   % y17: omega_wheel_lf [rad/s]
-    omega_wheel_rr = y_raw(:, 18);   % y18: omega_wheel_rr [rad/s]
-    
-    % 推荐原始通道
-    delta_lf = y_raw(:, 6);          % y6: delta_lf [rad]
-    delta_rr = y_raw(:, 7);          % y7: delta_rr [rad]
-    gyro_y = y_raw(:, 10);           % y10: gyro_y_meas [rad/s]
-    
-    % 派生特征（仅使用原始量+常量参数）
-    % 1) v_hat: 基于轮速的速度估计
-    v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-    
-    % 2) dv_hat_dt: 速度变化率（滤波差分，V1.1优化）
-    % 先计算原始差分，再低通滤波抑制噪声
-    alpha_diff = Ts / (tau_diff + Ts);  % 差分滤波系数
-    dv_raw = [0; diff(v_hat) / Ts];     % 原始差分
-    dv_hat_dt = zeros(N, 1);
-    dv_hat_dt(1) = dv_raw(1);
-    for i = 2:N
-        dv_hat_dt(i) = alpha_diff * dv_raw(i) + (1 - alpha_diff) * dv_hat_dt(i-1);
-    end
-    
-    % 3) ws_imbalance: 轮速差异（左右轮不平衡度）
-    ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-    
-    % 4) I_sum, I_diff_signed, I_diff_abs: 电流相关特征（V1.1优化）
-    I_sum = abs(I_lf) + abs(I_rr);
-    I_diff_signed = I_lf - I_rr;         % 保留方向信息（正=左强，负=右强）
-    I_diff_abs = abs(I_lf) - abs(I_rr);  % 幅值差异
-    
-    % 5) accel_x_lp: 加速度低通滤波
-    alpha_lp = Ts / (tau_accel_lp + Ts);  % 一阶低通滤波系数
-    accel_x_lp = zeros(N, 1);
-    accel_x_lp(1) = accel_x(1);
-    for i = 2:N
-        accel_x_lp(i) = alpha_lp * accel_x(i) + (1 - alpha_lp) * accel_x_lp(i-1);
-    end
-    
-    % 6) kappa_proxy: 曲率近似（可选，弱先验）
-    % kappa ≈ (tan(delta_lf) - tan(delta_rr)) / W
-    kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-    
-    % 新增特征：使用可观测量替代“上帝视角”参数
-    % 7) accel_per_current: 驱动-加速度比值（电流归一化加速度）
-    current_floor = 0.1;  % 防止小电流除零
-    accel_per_current = accel_x_lp ./ max(I_sum, current_floor);
-
-    % 8) pitch_angle_est: 基于 IMU 的坡度估计（衰减积分抑制漂移）
-    tau_pitch = 2.0;                     % 衰减时间常数 [s]
-    lambda_pitch = exp(-Ts / tau_pitch); % 衰减系数
-    pitch_angle_est = zeros(N, 1);
-    for i = 2:N
-        pitch_angle_est(i) = lambda_pitch * pitch_angle_est(i-1) + gyro_y(i) * Ts;
-    end
-    
-    % 组合特征矩阵 [N × feat_dim]（19维）
-    features = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-                delta_lf, delta_rr, gyro_y, ...
-                v_hat, dv_hat_dt, ws_imbalance, I_sum, I_diff_signed, I_diff_abs, ...
-                accel_x_lp, kappa_proxy, accel_per_current, pitch_angle_est];
+    features = extract_passive_features('batch', y_raw, params, Ts, feature_cfg);
     
     % 累积到全局（V1.2: 同时记录run_id）
     seg_start = size(all_features, 1) + 1;
-    all_features = [all_features; features];
-    all_label_main = [all_label_main; label_main_run];
-    all_label_turn = [all_label_turn; label_turn_run];
-    all_theta = [all_theta; theta_run];
-    all_run_id = [all_run_id; k * ones(N, 1)];  % V1.2: 记录回合编号
+    all_features = [all_features; features]; %#ok<AGROW>
+    all_label_main = [all_label_main; label_main_run]; %#ok<AGROW>
+    all_label_turn = [all_label_turn; label_turn_run]; %#ok<AGROW>
+    all_theta = [all_theta; theta_run]; %#ok<AGROW>
+    all_run_id = [all_run_id; k * ones(N, 1)]; %#ok<AGROW>  % V1.2: 记录回合编号
     seg_end = size(all_features, 1);
-    run_segments = [run_segments; seg_start, seg_end, k];
+    run_segments = [run_segments; seg_start, seg_end, k]; %#ok<AGROW>
 end
 
 if isempty(all_features)
     error('未提取到有效特征样本，请检查输入数据/skip_initial_sec/标签字段。');
 end
 
-% 定义特征名称（用于文档和调试）（V1.6: 17→19维）
-feat_names = {
-    'accel_x',          ... % 1
-    'gyro_z',           ... % 2
-    'I_lf',             ... % 3
-    'I_rr',             ... % 4
-    'omega_wheel_lf',   ... % 5
-    'omega_wheel_rr',   ... % 6
-    'delta_lf',         ... % 7
-    'delta_rr',         ... % 8
-    'gyro_y',           ... % 9
-    'v_hat',            ... % 10
-    'dv_hat_dt',        ... % 11 (V1.1: 改为滤波差分)
-    'ws_imbalance',     ... % 12
-    'I_sum',            ... % 13
-    'I_diff_signed',    ... % 14 (V1.1: 新增，保留方向)
-    'I_diff_abs',       ... % 15 (V1.1: 原 I_diff 改名)
-    'accel_x_lp',       ... % 16
-    'kappa_proxy',      ... % 17
-    'accel_per_current',... % 18 (V1.6: 新增，可观测)
-    'pitch_angle_est'   ... % 19 (V1.6: 新增，可观测)
-};
+feat_names = extract_passive_features('names');
 
 if cfg.verbose
     fprintf('  ✓ 特征提取完成！\n');
@@ -407,7 +320,7 @@ if cfg.save_split_file
         mkdir(split_dir);
     end
     split_info = struct();
-    split_info.generation_time = datestr(now, 'yyyy-mm-dd HH:MM:SS');
+    split_info.generation_time = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
     split_info.source_file = cfg.input_file;
     split_info.dataset_source = dataset_source_used;
     split_info.seed = cfg.seed;
@@ -486,6 +399,9 @@ scaler.std = std(X_train_flat, 0, 1); % [1 × feat_dim]
 scaler.std(scaler.std < 1e-8) = 1.0;
 scaler.tau_accel_lp = tau_accel_lp;  % 记录滤波参数，确保在线/离线一致
 scaler.tau_diff = tau_diff;
+feature_contract = extract_passive_features('contract');
+scaler.feature_contract = feature_contract.feature_contract;
+scaler.feature_names = feature_contract.feature_names;
 
 % 归一化函数
 normalize_fn = @(X) (X - reshape(scaler.mean, 1, 1, [])) ./ reshape(scaler.std, 1, 1, []);
@@ -722,7 +638,7 @@ dataset.scaler = scaler;
 dataset.feat_names = feat_names;
 
 % 元数据
-dataset.meta.generation_time = datestr(now, 'yyyy-mm-dd HH:MM:SS');
+dataset.meta.generation_time = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
 dataset.meta.version = 'V1.4';
 dataset.meta.author = 'LPV-MPC Project';
 dataset.meta.input_file = cfg.input_file;
@@ -750,6 +666,10 @@ dataset.meta.n_val = n_val;
 dataset.meta.n_test = n_test;
 dataset.meta.tau_accel_lp = tau_accel_lp;  % V1.1: 记录滤波时间常数
 dataset.meta.tau_diff = tau_diff;          % V1.1: 记录差分滤波时间常数
+dataset.meta.feature_contract = scaler.feature_contract;
+dataset.meta.feature_policy = 'imu_free_passive17_plus_all5';
+dataset.meta.input_dim = feat_dim;
+dataset.meta.no_new_inputs = true;
 dataset.meta.enable_train_resampling = cfg.enable_train_resampling;
 dataset.meta.resample_stall_multiplier = cfg.resample_stall_multiplier;
 dataset.meta.resample_stall_target_min = cfg.resample_stall_target_min;
@@ -770,7 +690,8 @@ if cfg.verbose
 end
 scaler_data = struct('scaler', scaler, 'feat_names', {feat_names}, ...
                      'seq_len', cfg.seq_len, 'Ts', Ts, ...
-                     'tau_accel_lp', tau_accel_lp, 'tau_diff', tau_diff);  % V1.1: 增加滤波参数
+                     'tau_accel_lp', tau_accel_lp, 'tau_diff', tau_diff, ...
+                     'feature_contract', scaler.feature_contract);  % V1.1: 增加滤波参数
 save(cfg.scaler_file, '-struct', 'scaler_data');
 
 if cfg.verbose
@@ -878,10 +799,10 @@ function print_injection_time_stats(data, runs_train, runs_val, runs_test)
         if isfield(meta, 'inject_info')
             inj = meta.inject_info;
             if isfield(inj, 'slip_window') && ~isempty(inj.slip_window)
-                slip_times_train = [slip_times_train; inj.slip_window(1)];
+                slip_times_train = [slip_times_train; inj.slip_window(1)]; %#ok<AGROW>
             end
             if isfield(inj, 'stall_window') && ~isempty(inj.stall_window)
-                stall_times_train = [stall_times_train; inj.stall_window(1)];
+                stall_times_train = [stall_times_train; inj.stall_window(1)]; %#ok<AGROW>
             end
         end
     end
@@ -892,10 +813,10 @@ function print_injection_time_stats(data, runs_train, runs_val, runs_test)
         if isfield(meta, 'inject_info')
             inj = meta.inject_info;
             if isfield(inj, 'slip_window') && ~isempty(inj.slip_window)
-                slip_times_val = [slip_times_val; inj.slip_window(1)];
+                slip_times_val = [slip_times_val; inj.slip_window(1)]; %#ok<AGROW>
             end
             if isfield(inj, 'stall_window') && ~isempty(inj.stall_window)
-                stall_times_val = [stall_times_val; inj.stall_window(1)];
+                stall_times_val = [stall_times_val; inj.stall_window(1)]; %#ok<AGROW>
             end
         end
     end
@@ -906,10 +827,10 @@ function print_injection_time_stats(data, runs_train, runs_val, runs_test)
         if isfield(meta, 'inject_info')
             inj = meta.inject_info;
             if isfield(inj, 'slip_window') && ~isempty(inj.slip_window)
-                slip_times_test = [slip_times_test; inj.slip_window(1)];
+                slip_times_test = [slip_times_test; inj.slip_window(1)]; %#ok<AGROW>
             end
             if isfield(inj, 'stall_window') && ~isempty(inj.stall_window)
-                stall_times_test = [stall_times_test; inj.stall_window(1)];
+                stall_times_test = [stall_times_test; inj.stall_window(1)]; %#ok<AGROW>
             end
         end
     end
@@ -948,10 +869,10 @@ function print_injection_intensity_stats(data, runs_train, ~, ~)
         if isfield(meta, 'inject_info')
             inj = meta.inject_info;
             if isfield(inj, 'slip_gamma') && ~isempty(inj.slip_gamma)
-                slip_gamma = [slip_gamma; inj.slip_gamma];
+                slip_gamma = [slip_gamma; inj.slip_gamma]; %#ok<AGROW>
             end
             if isfield(inj, 'stall_load') && ~isempty(inj.stall_load)
-                stall_load = [stall_load; inj.stall_load];
+                stall_load = [stall_load; inj.stall_load]; %#ok<AGROW>
             end
         end
     end
@@ -978,8 +899,8 @@ function print_velocity_stats(data, runs_train, ~, ~)
     
     for k = runs_train'
         if isfield(data.runs(k), 'u') && ~isempty(data.runs(k).u)
-            u1_all = [u1_all; data.runs(k).u(:, 1)];
-            u2_all = [u2_all; data.runs(k).u(:, 2)];
+            u1_all = [u1_all; data.runs(k).u(:, 1)]; %#ok<AGROW>
+            u2_all = [u2_all; data.runs(k).u(:, 2)]; %#ok<AGROW>
         end
     end
     
@@ -1092,4 +1013,3 @@ end
 
 error('第%d回合缺少可用坡度标签字段（theta / y_theta_ground / y_raw(:,16)）。', run_idx);
 end
-

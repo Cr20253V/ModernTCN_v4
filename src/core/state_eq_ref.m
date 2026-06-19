@@ -41,6 +41,9 @@ rho = params.air_density;                % 空气密度[kg/m³]
 CdA = params.drag_coefficient_area;      % 风阻系数×迎风面积[m²]
 C_af = params.front_cornering_stiffness; % 前轮侧偏刚度[N/rad]
 C_ar = params.rear_cornering_stiffness;  % 后轮侧偏刚度[N/rad]
+C_yaw_damping = getfield_default(params, 'yaw_damping', 250.0);
+beta_damping = getfield_default(params, 'sideslip_damping', 0.0);
+beta_low_speed_damping = getfield_default(params, 'sideslip_low_speed_damping', 1.0);
 delta_max = params.max_steering_angle;   % 最大转向角限制[rad]
 delta_dot_max = params.max_steering_rate;% 最大转向速率[rad/s]
 tau_delta = params.steering_time_constant;% 转向系统时间常数[s]
@@ -63,30 +66,8 @@ else
         delta_scale = 1.0;
     end
 
-    % ICR：优先用参考曲率 R_ref=v_ref/omega_ref；|ω_ref|<阈值或缺失时回退测量
-    w_ref_min = 1e-3;  % 回退阈值 [rad/s]
-    try, ref = evalin('base','ref'); catch, ref = struct(); end
-    v_ref_use = NaN; omega_ref_use = NaN;
-    if isstruct(ref) && isfield(ref,'v_ref') && isfield(ref,'omega_ref')
-        if isfield(ref,'t') && ~isempty(ref.t)
-            try, t_sim = get_param(bdroot,'SimulationTime'); catch, t_sim = 0; end
-            Ts_loc = Ts;
-            idx = 1 + round(t_sim / max(Ts_loc,1e-6));
-            idx = max(1, min(idx, numel(ref.t)));
-            v_ref_use = ref.v_ref(idx);
-            omega_ref_use = ref.omega_ref(idx);
-        else
-            if isscalar(ref.v_ref), v_ref_use = ref.v_ref; end
-            if isscalar(ref.omega_ref), omega_ref_use = ref.omega_ref; end
-        end
-    end
-    use_ref = ~isnan(omega_ref_use) && abs(omega_ref_use) >= w_ref_min && ~isnan(v_ref_use);
-    if use_ref
-        R_cmd = (v_ref_use / max(abs(omega_ref_use),1e-6)) * sign(omega_ref_use);
-    else
-        w_icr = omega;  % 回退：使用测量 ω
-        R_cmd = (v / max(abs(w_icr),1e-6)) * sign(w_icr);
-    end
+    [v_icr, w_icr] = steering_icr_source(v, omega, omega_cmd, Ts, params);
+    R_cmd = (v_icr / max(abs(w_icr),1e-6)) * sign(w_icr);
     x_c = 0.0;                      % 对称转弯，ICR 在 y 轴上
     y_c = R_cmd;                    % ICR y 坐标（可正可负）
 
@@ -264,7 +245,7 @@ smooth_gain = params.smooth_gain;
 CONT_CORE = @(s, dl, dr) continuous_dynamics_core_v2(s, dl, dr, ...
     F_drive_lf, F_drive_rr, F_rolling_total, F_slope, m_eff_total, I_z, Lf, Lr, ...
     low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, use_smooth, smooth_gain, ...
-    rho, CdA);  % 传入空气阻力参数用于动态计算
+    C_yaw_damping, beta_damping, beta_low_speed_damping, rho, CdA);  % 传入空气阻力参数用于动态计算
 
 % RK4积分四步计算（使用转向角插值）
 k1 = CONT_CORE(s_k, delta_lf, delta_rr);                    % 第一步：使用k时刻转向角
@@ -298,7 +279,7 @@ end
 %% =========================== 连续动力学核心函数 V2（动态空气阻力计算） ===========================
 function ds = continuous_dynamics_core_v2(s, delta_lf, delta_rr, Fx_lf, Fx_rr, F_rolling_total, F_slope, ...
     m_eff_total, I_z, Lf, Lr, low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, use_smooth, smooth_gain, ...
-    rho, CdA)
+    C_yaw_damping, beta_damping, beta_low_speed_damping, rho, CdA)
 % 连续动力学核心函数V2 - 用于RK4积分的每个子步，动态计算空气阻力
 % 输入参数：
 %   s: 状态向量 [X Y psi v omega beta]
@@ -322,10 +303,13 @@ function ds = continuous_dynamics_core_v2(s, delta_lf, delta_rr, Fx_lf, Fx_rr, F
 %   ds: 状态导数向量 [X_dot Y_dot psi_dot v_dot omega_dot beta_dot]
 
 % 设置默认参数值
-if nargin < 22
+if nargin < 20
     use_smooth = false;
     smooth_gain = 30.0;
 end
+if nargin < 21 || isempty(C_yaw_damping), C_yaw_damping = 250.0; end
+if nargin < 22 || isempty(beta_damping), beta_damping = 0.0; end
+if nargin < 23 || isempty(beta_low_speed_damping), beta_low_speed_damping = 1.0; end
 
 % 分解状态向量
 X = s(1); Y = s(2); psi = s(3); v = s(4); omega = s(5); beta = s(6);
@@ -375,8 +359,8 @@ end
 Mz_tire = Fy_f*Lf - Fy_r*Lr;      % 轮胎侧偏力产生的偏航力矩[Nm]
 Mz_total = Mz_tire + Mz_drive;     % 总偏航力矩 = 轮胎力矩 + 驱动力矩
 
-% 调整：横摆阻尼减小以提高可转性
-C_damping = 250.0;                % 横摆阻尼系数 [Nm/(rad/s)] (优化: 400→250)
+% 横摆阻尼：由 parameters.m 统一配置
+C_damping = C_yaw_damping;        % 横摆阻尼系数 [Nm/(rad/s)]
 Mz_damping = -C_damping * omega;  % 阻尼力矩（与角速度成正比）[Nm]
 Mz_total = Mz_total + Mz_damping; % 包含阻尼的总偏航力矩[Nm]
 
@@ -387,13 +371,13 @@ omega_dot = Mz_total / max(I_z,1e-6);  % [rad/s²]
 omega_dot_limit = 5.0;  % 最大角加速度限制 [rad/s²]
 omega_dot = sat_sym(omega_dot, omega_dot_limit);
 
-% 侧滑角动力学（添加强阻尼确保稳定性）
+% 侧滑角动力学：正常速度移除强人工阻尼，仅保留可配置数值阻尼
 if abs(v) < low_speed_thresh
-    % 低速情况：使用强阻尼强制侧滑角收敛到零
-    beta_dot = -5.0*beta; 
+    % 低速情况：使用温和数值阻尼使侧滑角回零
+    beta_dot = -beta_low_speed_damping * beta; 
 else
-    % 正常速度：基于力学原理的侧滑角动力学 + 强阻尼项
-    beta_dot = (Fy_f + Fy_r) / (m_eff_total * max(abs(v),low_speed_thresh/10)) - omega - 5.0*beta;
+    % 正常速度：基于力学原理的侧滑角动力学 + 可配置数值阻尼
+    beta_dot = (Fy_f + Fy_r) / (m_eff_total * max(abs(v),low_speed_thresh/10)) - omega - beta_damping * beta;
 end
 
 % 侧滑角变化率限幅
@@ -416,7 +400,8 @@ end
 
 %% =========================== 连续动力学核心函数（原版，保留兼容性） ===========================
 function ds = continuous_dynamics_core(s, delta_lf, delta_rr, Fx_lf, Fx_rr, F_drag, F_slope, ...
-    m_eff_total, I_z, Lf, Lr, low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, use_smooth, smooth_gain)
+    m_eff_total, I_z, Lf, Lr, low_speed_thresh, C_af, C_ar, mu, N_lf, N_rr, W, use_smooth, smooth_gain, ...
+    C_yaw_damping, beta_damping, beta_low_speed_damping)
 % 连续动力学核心函数（原版）- 用于RK4积分，使用固定的阻力值
 % 输入参数说明同V2版本，但F_drag为固定值而非动态计算
 
@@ -425,6 +410,9 @@ if nargin < 20
     use_smooth = false;
     smooth_gain = 30.0;
 end
+if nargin < 21 || isempty(C_yaw_damping), C_yaw_damping = 250.0; end
+if nargin < 22 || isempty(beta_damping), beta_damping = 0.0; end
+if nargin < 23 || isempty(beta_low_speed_damping), beta_low_speed_damping = 1.0; end
 
 % 状态分解
 X = s(1); Y = s(2); psi = s(3); v = s(4); omega = s(5); beta = s(6);
@@ -467,7 +455,7 @@ Mz_tire = Fy_f*Lf - Fy_r*Lr;
 Mz_total = Mz_tire + Mz_drive;
 
 % 横摆阻尼
-C_damping = 1000.0;
+C_damping = C_yaw_damping;
 Mz_damping = -C_damping * omega;
 Mz_total = Mz_total + Mz_damping;
 
@@ -479,9 +467,9 @@ omega_dot = sat_sym(omega_dot, omega_dot_limit);
 
 % 侧滑角动力学
 if abs(v) < low_speed_thresh
-    beta_dot = -5.0*beta;
+    beta_dot = -beta_low_speed_damping * beta;
 else
-    beta_dot = (Fy_f + Fy_r) / (m_eff_total * max(abs(v),low_speed_thresh/10)) - omega - 5.0*beta;
+    beta_dot = (Fy_f + Fy_r) / (m_eff_total * max(abs(v),low_speed_thresh/10)) - omega - beta_damping * beta;
 end
 
 % 侧滑角变化率限幅
@@ -609,4 +597,12 @@ N_rr = max(0, N_rear_base/2 + Delta_lat_rear/2);   % 右后轮载荷[N]
 
 % 基于实时载荷计算总滚动阻力
 F_rolling_total = c_r * (N_lf + N_rf + N_lr + N_rr); % 总滚动阻力[N]
+end
+
+function v = getfield_default(s, field_name, default_value)
+if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
+    v = s.(field_name);
+else
+    v = default_value;
+end
 end

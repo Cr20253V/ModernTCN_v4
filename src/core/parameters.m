@@ -48,11 +48,15 @@ params.drag_coefficient_area = 0.5;    % 风阻系数乘以迎风面积 [m^2] - 
 params.gravity = 9.81;                 % 重力加速度 [m/s^2] - 地球表面重力加速度
 
 %% 轮胎侧偏特性参数
-% 修正：大幅降低侧偏刚度，减少轮胎力矩，改善直线稳定性
-% 计算依据：降低侧向力生成，使横摆阻尼能有效控制omega
-% 优先保证直线行驶稳定性，转弯性能可通过MPC控制器补偿
-params.front_cornering_stiffness = 300;  % 前轮侧偏刚度 [N/rad] - 进一步降低到300
-params.rear_cornering_stiffness = 300;   % 后轮侧偏刚度 [N/rad] - 进一步降低到300
+% 修正：从过软的300 N/rad提升到更符合200 kg室内AGV的保守量级
+% 说明：该值低于乘用车典型轮胎刚度，但足以避免旧模型转向响应过慢
+params.front_cornering_stiffness = 3000;  % 前轮侧偏刚度 [N/rad]
+params.rear_cornering_stiffness = 3000;   % 后轮侧偏刚度 [N/rad]
+
+%% 横摆与侧滑数值阻尼参数
+params.yaw_damping = 250.0;                  % 横摆阻尼系数 [Nm/(rad/s)]
+params.sideslip_damping = 0.0;               % 正常速度侧滑角人工阻尼 [1/s]，0表示移除
+params.sideslip_low_speed_damping = 1.0;     % 低速侧滑角数值回零阻尼 [1/s]
 
 %% 噪声与数值阈值参数
 params.enable_noise = false;           % 噪声使能开关 [-] - 是否在仿真中添加测量噪声；开启时需设定随机种子与各通道标准差

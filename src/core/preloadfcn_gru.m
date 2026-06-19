@@ -54,7 +54,13 @@ assignin(mw, 'env_paths', env_paths);
 
 %% Target horizons
 TARGET_NP = 150;
-TARGET_NC = 50;
+TARGET_NC = 30;
+runtime_override = local_runtime_override_from_base();
+runtime_override_active = ~isempty(runtime_override);
+if runtime_override_active
+    TARGET_NP = runtime_override.Np;
+    TARGET_NC = runtime_override.Nc;
+end
 
 %% Step 0: Load basic params
 fprintf('[Step 0/5] Load basic parameters...\n');
@@ -96,6 +102,11 @@ for d = 1:numel(base_dirs)
     end
 end
 db_files = unique(db_files, 'stable');
+if runtime_override_active && isfield(runtime_override, 'db_file') && ...
+        ~isempty(runtime_override.db_file)
+    db_files = [{char(string(runtime_override.db_file))}, db_files];
+    db_files = unique(db_files, 'stable');
+end
 
 S = [];
 loaded_db_file = '';
@@ -164,8 +175,11 @@ fprintf('  OK MPCPlantBus created (nu_md=%d = %d MV + %d MD)\n\n', nu_md, nu, nd
 %% Step 3: Load BO maps / build ctrl
 fprintf('[Step 3/5] Load BO maps / ctrl...\n');
 bo_results_dir = fullfile(results_root, 'bo_results');
-base_dirs_mb = {bo_results_dir, data_models_dir, root, ''};
-maps_names = {'phase2_best.mat', 'phase1_best.mat'};
+workflow_mpc_dir = fullfile(root, 'results', 'paper', ...
+    'agv_model_parameter_correction_workflow', '06_mpc_retuning', ...
+    'p0_oracle_retuning_20260602_033639');
+base_dirs_mb = {workflow_mpc_dir, bo_results_dir, data_models_dir, root, ''};
+maps_names = {'maps_best_agv_physics_v2_p0_oracle.mat', 'phase2_best.mat', 'phase1_best.mat'};
 
 maps_files = {};
 for d = 1:numel(base_dirs_mb)
@@ -216,25 +230,34 @@ if ~maps_loaded
     fprintf('  WARN no phase2_best/phase1_best found, use defaults\n');
 end
 
+if runtime_override_active
+    maps_best = local_apply_runtime_override_to_maps(maps_best, runtime_override, db_rt);
+    maps_loaded = true;
+    maps_source_file = '[runtime_override]';
+    fprintf('  use runtime MPC override: %s\n', runtime_override.id);
+end
+
 ctrl = [];
 ctrl_source = 'not created';
 ctrl_file_path = fullfile(data_models_dir, 'ctrl.mat');
 
-if exist(ctrl_file_path, 'file')
+if ~runtime_override_active && exist(ctrl_file_path, 'file')
     try
         Tc = load(ctrl_file_path);
         if isfield(Tc, 'ctrl')
-            if isfield(Tc.ctrl, 'meta') && isfield(Tc.ctrl.meta, 'Np')
+            if isfield(Tc.ctrl, 'meta') && isfield(Tc.ctrl.meta, 'Np') && isfield(Tc.ctrl.meta, 'Nc')
                 old_Np = Tc.ctrl.meta.Np;
-                if old_Np == TARGET_NP
+                old_Nc = Tc.ctrl.meta.Nc;
+                if old_Np == TARGET_NP && old_Nc == TARGET_NC
                     ctrl = Tc.ctrl;
                     ctrl_source = ctrl_file_path;
-                    fprintf('  OK ctrl loaded (Np=%d)\n', old_Np);
+                    fprintf('  OK ctrl loaded (Np=%d, Nc=%d)\n', old_Np, old_Nc);
                 else
-                    fprintf('  WARN old ctrl Np=%d, rebuild target Np=%d\n', old_Np, TARGET_NP);
+                    fprintf('  WARN old ctrl Np=%d, Nc=%d, rebuild target Np=%d, Nc=%d\n', ...
+                        old_Np, old_Nc, TARGET_NP, TARGET_NC);
                 end
             else
-                fprintf('  WARN ctrl.meta.Np missing, rebuild\n');
+                fprintf('  WARN ctrl.meta.Np/meta.Nc missing, rebuild\n');
             end
         end
     catch ME
@@ -245,31 +268,43 @@ end
 if isempty(ctrl) && exist('mpc_setup_single_interp','file')==2
     fprintf('  create new ctrl (Np=%d, Nc=%d)...\n', TARGET_NP, TARGET_NC);
 
-    if maps_loaded && all(isfield(maps_best, {'Q_range','R_range','dR_range'}))
+    if runtime_override_active
+        Q_base = runtime_override.Q;
+        R_base = runtime_override.R;
+        dR_base = runtime_override.dR;
+        fprintf('    use runtime override weights\n');
+    elseif maps_loaded && all(isfield(maps_best, {'Q_range','R_range','dR_range'}))
         Q_base = mean(maps_best.Q_range, 1);
         R_base = mean(maps_best.R_range, 1);
         dR_base = mean(maps_best.dR_range, 1);
         fprintf('    use optimized BO weights\n');
     else
-        Q_base = [10, 15, 5, 1];
-        R_base = [1e-3, 1e-3];
-        dR_base = [1e-2, 1e-2];
-        fprintf('    use default weights\n');
+        Q_base = [100, 100, 15, 3];
+        R_base = [3e-5, 3e-5];
+        dR_base = [1e-3, 1e-3];
+        fprintf('    use P0 oracle-MPC defaults\n');
     end
 
     mpc_opts = struct('Np', TARGET_NP, 'Nc', TARGET_NC, ...
                       'Q', Q_base, 'R', R_base, 'dR', dR_base);
+    if runtime_override_active
+        mpc_opts = local_apply_runtime_override_to_mpc_opts(mpc_opts, runtime_override);
+    end
 
     ctrl = mpc_setup_single_interp(db_rt, mpc_opts);
     ctrl_source = 'created';
     fprintf('  OK ctrl created (P=%.2fs, M=%.2fs)\n', ...
         ctrl.meta.prediction_horizon_sec, ctrl.meta.control_horizon_sec);
 
-    try
-        save(ctrl_file_path, 'ctrl');
-        fprintf('  saved ctrl.mat\n');
-    catch ME
-        fprintf('  WARN save ctrl.mat failed: %s\n', ME.message);
+    if runtime_override_active
+        fprintf('  runtime override active, skip ctrl.mat write\n');
+    else
+        try
+            save(ctrl_file_path, 'ctrl');
+            fprintf('  saved ctrl.mat\n');
+        catch ME
+            fprintf('  WARN save ctrl.mat failed: %s\n', ME.message);
+        end
     end
 end
 
@@ -277,8 +312,14 @@ if maps_loaded && ~isempty(ctrl)
     fields = {'Q_range','R_range','dR_range','alpha_Q','beta_Q', ...
         'alpha_R','beta_R','alpha_dR','beta_dR', ...
         'scale_umin_lo','scale_umin_hi','scale_umax_lo','scale_umax_hi', ...
+        'rho_min', 'rho_max', 'enable_factor', ...
+        'factor_y', 'factor_psi', 'factor_v', 'factor_omega', ...
+        'factor_R_F', 'factor_R_omega', 'factor_dR_F', 'factor_dR_omega', ...
+        'enable_weight_interp', 'umin_range', 'umax_range', ...
+        'ey_max', 'epsi_max', 'ev_max', 'eomega_max', ...
         'omega_threshold', 'q_y_gain_max', 'theta_threshold', 'q_v_gain_max', ...
         'R_F_gain_max_uphill', 'R_F_gain_max_downhill', ...
+        'dR_F_gain_max_uphill', 'dR_F_gain_max_downhill', ...
         'transition_width', 'theta_transition_width'};
 
     copied = 0;
@@ -289,10 +330,54 @@ if maps_loaded && ~isempty(ctrl)
         end
     end
     fprintf('  copied %d BO map fields to ctrl.maps\n', copied);
+    if runtime_override_active
+        ctrl.opts.Np = runtime_override.Np;
+        ctrl.opts.Nc = runtime_override.Nc;
+        ctrl.opts.Q = runtime_override.Q;
+        ctrl.opts.R = runtime_override.R;
+        ctrl.opts.dR = runtime_override.dR;
+        ctrl.opts = local_apply_runtime_override_to_mpc_opts(ctrl.opts, runtime_override);
+    else
+        ctrl.opts.Np = TARGET_NP;
+        ctrl.opts.Nc = TARGET_NC;
+        ctrl.opts.Q = [100, 100, 15, 3];
+        ctrl.opts.R = [3e-5, 3e-5];
+        ctrl.opts.dR = [1e-3, 1e-3];
+    end
+    ctrl.mpcobj.Weights.OutputVariables = ctrl.opts.Q;
+    ctrl.mpcobj.Weights.ManipulatedVariables = ctrl.opts.R;
+    ctrl.mpcobj.Weights.ManipulatedVariablesRate = ctrl.opts.dR;
+    ctrl.meta.Np = TARGET_NP;
+    ctrl.meta.Nc = TARGET_NC;
+    if runtime_override_active
+        ctrl.meta.sync_source = ['runtime_override:' runtime_override.id];
+    else
+        ctrl.meta.sync_source = 'p0_oracle_retuning_20260602_033639';
+    end
+    ctrl.meta.sync_time = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
+    if runtime_override_active
+        fprintf('  runtime override active, skip ctrl.mat map write\n');
+    else
+        try
+            save(ctrl_file_path, 'ctrl');
+            fprintf('  saved ctrl.mat after P0 map injection\n');
+        catch ME
+            fprintf('  WARN save ctrl.mat after map injection failed: %s\n', ME.message);
+        end
+    end
 end
 
 if ~isempty(ctrl)
+    runtime_maps = local_codegen_runtime_maps(ctrl.maps);
     assignin('base', 'ctrl', ctrl);
+    assignin('base', 'mpcobj', ctrl.mpcobj);
+    assignin('base', 'maps', ctrl.maps);
+    assignin('base', 'mpc_runtime_maps', runtime_maps);
+    assignin(mw, 'ctrl', ctrl);
+    assignin(mw, 'mpcobj', ctrl.mpcobj);
+    assignin(mw, 'maps', ctrl.maps);
+    assignin(mw, 'mpc_runtime_maps', runtime_maps);
+    local_assign_runtime_map_scalars(runtime_maps, mw);
 else
     warning('[PreLoadFcn] Unable to create/load ctrl');
 end
@@ -336,6 +421,13 @@ if strcmp(mode, 'modern_tcn')
 elseif strcmp(mode, 'tcn')
     fprintf('[Step 4/5] Configure TCN model...\n');
     tcn_cfg = TCN_default_config(root);
+    if evalin('base', 'exist(''tcn_sim_cfg'', ''var'')==1')
+        external_cfg = evalin('base', 'tcn_sim_cfg');
+        if isstruct(external_cfg)
+            tcn_cfg = merge_struct_fields(tcn_cfg, external_cfg);
+            fprintf('  use external tcn_sim_cfg override\n');
+        end
+    end
     if exist(tcn_cfg.dataset_file, 'file') ~= 2
         error('[PreLoadFcn] TCN dataset not found: %s', tcn_cfg.dataset_file);
     end
@@ -365,6 +457,13 @@ elseif strcmp(mode, 'tcn')
 else
     fprintf('[Step 4/5] Load GRU model...\n');
     gru_cfg = GRU_default_config(root);
+    if evalin('base', 'exist(''gru_sim_cfg'', ''var'')==1')
+        external_cfg = evalin('base', 'gru_sim_cfg');
+        if isstruct(external_cfg)
+            gru_cfg = merge_struct_fields(gru_cfg, external_cfg);
+            fprintf('  use external gru_sim_cfg override\n');
+        end
+    end
     model_candidates = {
         gru_cfg.model_file
         fullfile(data_models_dir, 'GRU_model_gru_v4_industrial_inputstats_hidden96_seed101.mat')
@@ -438,12 +537,16 @@ else
     info = struct();
     info.seed = gru_cfg.seed;
     info.case_name = gru_cfg.case_name;
+    info.run_tag = gru_cfg.run_tag;
+    info.dataset_file = gru_cfg.dataset_file;
     info.model_file = model_file;
     info.meta_file = meta_file;
     info.time = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
     assignin('base', 'gru_preload_info', info);
     assignin(mw, 'gru_preload_info', info);
     active_model_label = 'GRU model';
+    fprintf('  OK GRU config frozen: seed=%d\n', gru_cfg.seed);
+    fprintf('  dataset: %s\n', gru_cfg.dataset_file);
 end
 fprintf('\n');
 
@@ -512,4 +615,134 @@ function out = merge_struct_fields(base, override)
     for i = 1:numel(fields)
         out.(fields{i}) = override.(fields{i});
     end
+end
+
+function runtime_override = local_runtime_override_from_base()
+runtime_override = [];
+if evalin('base', 'exist(''mpc_runtime_override'', ''var'')==0')
+    return;
+end
+runtime_override = evalin('base', 'mpc_runtime_override');
+if isempty(runtime_override) || ~isstruct(runtime_override)
+    runtime_override = [];
+    return;
+end
+
+required = {'Np', 'Nc', 'Q', 'R', 'dR'};
+for i = 1:numel(required)
+    if ~isfield(runtime_override, required{i}) || isempty(runtime_override.(required{i}))
+        error('preloadfcn_gru:BadRuntimeOverride', ...
+            'mpc_runtime_override missing field: %s', required{i});
+    end
+end
+if ~isfield(runtime_override, 'id') || isempty(runtime_override.id)
+    runtime_override.id = sprintf('candidate_np%d_nc%d', runtime_override.Np, runtime_override.Nc);
+end
+runtime_override.id = char(string(runtime_override.id));
+runtime_override.Np = double(runtime_override.Np);
+runtime_override.Nc = double(runtime_override.Nc);
+runtime_override.Q = double(reshape(runtime_override.Q, 1, []));
+runtime_override.R = double(reshape(runtime_override.R, 1, []));
+runtime_override.dR = double(reshape(runtime_override.dR, 1, []));
+runtime_override = local_normalize_runtime_override_optional(runtime_override);
+if ~isfield(runtime_override, 'maps_template') || isempty(runtime_override.maps_template) || ~isstruct(runtime_override.maps_template)
+    runtime_override.maps_template = struct();
+end
+end
+
+function runtime_override = local_normalize_runtime_override_optional(runtime_override)
+vector_fields = {'umin', 'umax', 'dumin', 'dumax', 'ymin', 'ymax'};
+for i = 1:numel(vector_fields)
+    name = vector_fields{i};
+    if isfield(runtime_override, name) && ~isempty(runtime_override.(name))
+        runtime_override.(name) = double(runtime_override.(name)(:));
+    end
+end
+
+scalar_fields = {'soft_weight_pos', 'soft_weight_yaw', 'tau'};
+for i = 1:numel(scalar_fields)
+    name = scalar_fields{i};
+    if isfield(runtime_override, name) && ~isempty(runtime_override.(name))
+        runtime_override.(name) = double(runtime_override.(name));
+    end
+end
+end
+
+function opts = local_apply_runtime_override_to_mpc_opts(opts, runtime_override)
+optional_fields = {'umin', 'umax', 'dumin', 'dumax', 'ymin', 'ymax', ...
+    'soft_weight_pos', 'soft_weight_yaw'};
+for i = 1:numel(optional_fields)
+    name = optional_fields{i};
+    if isfield(runtime_override, name) && ~isempty(runtime_override.(name))
+        opts.(name) = runtime_override.(name);
+    end
+end
+end
+
+function maps_out = local_apply_runtime_override_to_maps(maps_in, runtime_override, db_rt)
+maps_out = maps_in;
+if isempty(maps_out)
+    maps_out = struct();
+end
+if isfield(runtime_override, 'maps_template') && isstruct(runtime_override.maps_template)
+    fields = fieldnames(runtime_override.maps_template);
+    for i = 1:numel(fields)
+        maps_out.(fields{i}) = runtime_override.maps_template.(fields{i});
+    end
+end
+maps_out.enable_weight_interp = true;
+maps_out.Q_range = local_center_to_range(runtime_override.Q);
+maps_out.R_range = local_center_to_range(runtime_override.R);
+maps_out.dR_range = local_center_to_range(runtime_override.dR);
+maps_out.rho_min = [db_rt.grid.V(1); db_rt.grid.W(1); db_rt.grid.T(1)];
+maps_out.rho_max = [db_rt.grid.V(end); db_rt.grid.W(end); db_rt.grid.T(end)];
+maps_out.runtime_override = runtime_override;
+end
+
+function range = local_center_to_range(center)
+center = double(reshape(center, 1, []));
+range = [center; center];
+end
+
+function runtime_maps = local_codegen_runtime_maps(maps_in)
+runtime_maps = struct();
+if isempty(maps_in) || ~isstruct(maps_in)
+    return;
+end
+fields = {'enable_weight_interp', 'Q_range', 'R_range', 'dR_range', ...
+    'alpha_Q', 'beta_Q', 'alpha_R', 'beta_R', 'alpha_dR', 'beta_dR', ...
+    'scale_umin_lo', 'scale_umin_hi', 'scale_umax_lo', 'scale_umax_hi', ...
+    'rho_min', 'rho_max', 'tau', 'omega_threshold', 'q_y_gain_max', ...
+    'transition_width', 'theta_threshold', 'q_v_gain_max', ...
+    'theta_transition_width', 'R_F_gain_max_uphill', ...
+    'R_F_gain_max_downhill', 'dR_F_gain_max_uphill', ...
+    'dR_F_gain_max_downhill', 'umin_range', 'umax_range'};
+for i = 1:numel(fields)
+    name = fields{i};
+    if ~isfield(maps_in, name)
+        continue;
+    end
+    value = maps_in.(name);
+    if islogical(value)
+        runtime_maps.(name) = logical(value);
+    elseif isnumeric(value)
+        runtime_maps.(name) = double(value);
+    end
+end
+end
+
+function local_assign_runtime_map_scalars(runtime_maps, mw)
+if isempty(runtime_maps) || ~isstruct(runtime_maps)
+    return;
+end
+fields = fieldnames(runtime_maps);
+for i = 1:numel(fields)
+    value = runtime_maps.(fields{i});
+    if ~(isnumeric(value) || islogical(value))
+        continue;
+    end
+    var_name = ['mpc_runtime_' fields{i}];
+    assignin('base', var_name, value);
+    assignin(mw, var_name, value);
+end
 end

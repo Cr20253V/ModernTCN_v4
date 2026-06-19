@@ -168,17 +168,33 @@ if enhance_kappa_coupling
     end
 end
 
-%% 数值稳健化：极点抑制（仅在|λ|>1时微量收缩）
-% 说明：路径误差离散模型在大曲率/低速端可能出现轻微外移极点（|λ|≈1.006）。
-% 这里对 A_d 做极小对角泄露，以保证谱半径<=target，避免稳定性误报。
+%% 数值稳健化：极点抑制（仅在|λ|>1时收缩不稳定模态）
+% 说明：参数修正后，高侧偏刚度与低速有限差分会把横摆/侧滑局部
+% 离散极点推到单位圆外。MPC 的预测模型需要数值稳定，因此这里
+% 只裁剪不稳定特征值，避免对所有状态施加统一对角泄露而破坏
+% 位置/航向/速度通道的尺度。
 tol_unstable = 1e-6;   % 不稳定判据容差
 target_mod  = 0.9990;  % 更保守的目标谱半径
 eigA = eig(A_d);
 rhoA = max(abs(eigA));
 if rhoA > 1.0 + tol_unstable
-    % 自适应泄露：把最大模收缩到 target_mod 附近，设置上限 2e-2
-    leak = min(2e-2, max(0, rhoA - target_mod + 5e-4));
-    A_d = A_d - leak * eye(nx);
+    try
+        [V, D] = eig(A_d);
+        lam = diag(D);
+        for ii = 1:numel(lam)
+            if abs(lam(ii)) > target_mod
+                lam(ii) = target_mod * lam(ii) / abs(lam(ii));
+            end
+        end
+        A_stab = real(V * diag(lam) / V);
+        if all(isfinite(A_stab(:))) && max(abs(eig(A_stab))) <= target_mod + 1e-6
+            A_d = A_stab;
+        else
+            A_d = local_stabilize_by_diagonal_modes(A_d, target_mod);
+        end
+    catch
+        A_d = local_stabilize_by_diagonal_modes(A_d, target_mod);
+    end
 end
 
 %% 输出矩阵（输出 = 状态）
@@ -224,4 +240,17 @@ sys.valid_range.v = [max(v0-0.3, 0.5), v0+0.3];  % 速度有效范围 ±0.3 m/s
 sys.valid_range.omega = [omega0-0.1, omega0+0.1];  % 角速度有效范围 ±0.1 rad/s
 sys.valid_range.theta = [theta0-deg2rad(5), theta0+deg2rad(5)];  % 坡度有效范围 ±5°
 
+end
+
+function A = local_stabilize_by_diagonal_modes(A, target_mod)
+% Fallback for nearly defective local models: clip only unstable diagonal
+% modes and keep off-diagonal coupling unchanged.
+for ii = 1:min(size(A))
+    if abs(A(ii, ii)) > target_mod
+        A(ii, ii) = target_mod * sign(A(ii, ii));
+        if A(ii, ii) == 0
+            A(ii, ii) = target_mod;
+        end
+    end
+end
 end

@@ -49,14 +49,15 @@ old_dir = pwd;
 cleanup = onCleanup(@() cd(old_dir));
 cd(layer_root);
 net = importNetworkFromONNX(onnx_file, Namespace=local_onnx_namespace(onnx_file));
+input_size = local_onnx_input_size(onnx_file);
 
 predictor = struct();
 predictor.seed = seed;
 predictor.onnx_file = string(onnx_file);
 predictor.layer_root = string(layer_root);
 predictor.net = net;
-predictor.input_size = [128 19];              % [time, feature]
-predictor.onnx_input_size = [1 128 19];       % [batch, time, feature]
+predictor.input_size = input_size;            % [time, feature]
+predictor.onnx_input_size = [1 input_size];   % [batch, time, feature]
 predictor.main_labels = [1 2 3];              % 1=flat, 2=stall, 3=slope
 predictor.turn_labels = [-1 0 1];             % -1=right, 0=straight, 1=left
 predictor.theta_unit = "rad";
@@ -76,5 +77,33 @@ if contains(lower(char(onnx_file)), 'causal')
     namespace = "modern_tcn_causal_onnx_layers";
 else
     namespace = "modern_tcn_onnx_layers";
+end
+end
+
+function input_size = local_onnx_input_size(onnx_file)
+% Prefer the export sidecar because MATLAB's imported network does not expose
+% a stable cross-version API for the original ONNX input shape.
+input_size = [128 22];
+[folder, name, ~] = fileparts(char(onnx_file));
+meta_file = fullfile(folder, [name '_onnx_export.json']);
+if exist(meta_file, 'file') == 2
+    try
+        meta = jsondecode(fileread(meta_file));
+        if isfield(meta, 'input_shape')
+            shape = double(meta.input_shape(:)).';
+            if numel(shape) == 3 && all(isfinite(shape(2:3))) && all(shape(2:3) > 0)
+                input_size = shape(2:3);
+                return;
+            end
+        end
+    catch ME
+        warning('ModernTCN:ONNXInputShapeReadFailed', ...
+            'Cannot read ONNX input shape from %s: %s', meta_file, ME.message);
+    end
+end
+if contains(lower(char(onnx_file)), 'cmdresp_lite_v1')
+    input_size = [128 30];
+elseif contains(lower(char(onnx_file)), 'cmdresp_lag1_only_v1')
+    input_size = [128 24];
 end
 end

@@ -1,0 +1,9 @@
+path_tag,path_file,out_dir,modern_file,gru_file,tcn_file,theta0_file,oracle_file,summary_file,rank_file,status,message
+path_factory_logistics_showcase_theta10_v3,E:\Matlab\Simulink\S-Function_16\data\paths\path_factory_logistics_showcase_theta10_v3.mat,E:\Matlab\Simulink\S-Function_16\results\paper\agv_model_parameter_correction_workflow\09_closed_loop\path_factory_logistics_showcase_theta10_v3,,,,,,,,error,"Dataset feature dim is 19, but passive17_plus_all5 requires 22.
+	Error in SimulationInput.sim.p
+	Error in run_closed_loop_model_once.m (<a href=""matlab: opentoline('E:\Matlab\Simulink\S-Function_16\src\Compare\run_closed_loop_model_once.m', 139)"">line 139</a>)
+	Error in local_run_learned.m (<a href=""matlab: opentoline('E:\Matlab\Simulink\S-Function_16\results\paper\agv_model_parameter_correction_workflow\09_closed_loop\run_stage1_closed_loop_validation.m', 258)"">line 258</a>)
+	Error in local_run_all.m (<a href=""matlab: opentoline('E:\Matlab\Simulink\S-Function_16\results\paper\agv_model_parameter_correction_workflow\09_closed_loop\run_stage1_closed_loop_validation.m', 185)"">line 185</a>)
+	Error in run_stage1_closed_loop_validation.m (<a href=""matlab: opentoline('E:\Matlab\Simulink\S-Function_16\results\paper\agv_model_parameter_correction_workflow\09_closed_loop\run_stage1_closed_loop_validation.m', 67)"">line 67</a>)
+	Error in TCN_State_Classifier_sim.m (<a href=""matlab: opentoline('E:\Matlab\Simulink\S-Function_16\src\TCN\TCN_State_Classifier_sim.m', 31)"">line 31</a>)
+	'<a href=""matlab:hilite_system('LPVMPC_AGV_simulink_TCN/TCN_State_Classifier')"">LPVMPC_AGV_simulink_TCN/TCN_State_Classifier</a>' (<a href=""matlab:sf('Open', sfprivate('block2chart', 'LPVMPC_AGV_simulink_TCN/TCN_State_Classifier'), 2, -2);"">line 3</a>) 中出现错误"

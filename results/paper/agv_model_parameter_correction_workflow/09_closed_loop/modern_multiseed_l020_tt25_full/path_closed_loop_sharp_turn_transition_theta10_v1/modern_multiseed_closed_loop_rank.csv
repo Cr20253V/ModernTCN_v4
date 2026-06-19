@@ -1,0 +1,5 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+ModernTCN_turn_seed101_champion,16,6,7,29,1
+ModernTCN_turn_seed101_multiseed,13,9,8,30,2
+ModernTCN_turn_seed303_multiseed,14,9,10,33,3
+ModernTCN_turn_seed202_multiseed,17,6,15,38,4

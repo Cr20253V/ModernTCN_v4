@@ -1,230 +1,296 @@
-这版 Fig. 10 **总体方向是正确的，基本符合当前论文中 causal ModernTCN ablation 的叙事目标**：离线指标与默认 ModernTCN 接近，但闭环指标显著恶化，主路径横向误差也出现明显发散。因此，它可以作为 “offline–closed-loop mismatch” 的核心图来使用。
+我认为导师指出的问题**非常关键，而且建议是合理的**。当前论文确实把输入描述为 19 维历史窗口，其中包括 acceleration、yaw rate、pitch-related estimation 等信息，图 1 和 Fig. 4 也都把这些作为 AGV measurements / proprioceptive features 的一部分展示。 这样会带来一个潜在风险：审稿人可能认为 ModernTCN 只是对 IMU / pitch-derived slope 信息做了时序滤波或误差修正，而不是从 AGV 的驱动、转向和运动响应中学习 scheduling perception。
 
-## 1. 内容是否符合当前项目实际？
-
-**基本符合。**
-
-图中三部分逻辑很清楚：
-
-* **(a) Offline perception**：默认 ModernTCN 和 causal ModernTCN 的离线感知指标接近；
-* **(b) Closed-loop metrics**：causal ModernTCN 的闭环指标相对默认模型显著恶化；
-* **(c) Main-route lateral error**：causal ModernTCN 在主路径横向误差上出现明显偏离，而默认 ModernTCN 保持较小误差。
-
-这与当前论文中 “offline perception metrics are not enough” 和 “causal ModernTCN ablation” 两节的论点一致：**离线分类/回归指标接近，并不能保证闭环控制性能接近**。
-
-但这里有一个需要特别注意的点：Fig. 10 不能被解释成 “causal convolution 一定不适合控制”。它只能说明：**当前这组 causal ModernTCN 改动和训练设置下，离线指标接近默认模型，但闭环表现显著退化**。这一点你正文中已经有类似表述，后续图注也应保持这种谨慎说法。
+我的建议是：**接受导师建议，把“去 IMU 化输入”作为下一版方法的主线。**
 
 ---
 
-## 2. 是否符合制图技术要求？
+## 1. 当前方案的问题在哪里？
 
-**整体符合，但还需要几个关键小修。**
+当前方案不是不能做，但论文叙事会变弱。
 
-### 优点
+如果训练输入里包含 IMU 分量、pitch-related estimate，甚至包含可以直接或间接推出坡度的特征，那么 ModernTCN 的 slope-related regression 可能被理解成：
 
-1. **结构合理。**
-   三个子图分别对应离线指标、闭环指标、时域横向误差，逻辑递进非常清楚。
+```text
+IMU slope / pitch signal → 神经网络滤波 / 修正 → θ_hat
+```
 
-2. **对比对象简洁。**
-   只比较 default ModernTCN 和 causal ModernTCN，没有再加入 GRU/TCN，这样焦点很集中。
+这样一来，论文创新点会从：
 
-3. **颜色选择合理。**
-   Default ModernTCN 继续使用蓝色，和前面 Fig. 6–Fig. 9 的 ModernTCN 颜色一致。Causal ModernTCN 使用棕红色虚线，与默认模型区分明显。
+```text
+利用 AGV 历史运行状态进行多任务时序调度感知
+```
 
-4. **Panel (b) 使用 log scale 是合理的。**
-   由于 causal closed-loop degradation ratio 跨越几十倍到上百倍，log scale 能避免小柱被完全压扁。
+弱化成：
+
+```text
+用神经网络修正一个已有的 IMU 坡度估计
+```
+
+这对审稿不利。因为你文章中有一个重要对比基线是 **LPV-MPC IMU theta**。如果 ModernTCN 输入里也含有 IMU / pitch-related 分量，那么审稿人会问：
+
+1. ModernTCN 是否只是用了 IMU 基线的同源信息？
+2. ModernTCN 相比 IMU baseline 的优势来自网络结构，还是来自额外特征和时序滤波？
+3. IMU 误差模型是否定义清楚？
+4. 如果 IMU 误差是随机且分布相关的，网络是否只是拟合了仿真噪声分布？
+
+导师说这个误差“不利于算法模型描述和定量分析”，本质上就是这个问题。
 
 ---
 
-## 3. 当前还需要修改的地方
+## 2. 去掉 IMU 分量后，论文反而更容易讲清楚
 
-### 3.1 Panel (a) 的指标方向需要说明
-
-Panel (a) 里包含：
-
-* Main acc.
-* Turn acc.
-* Trans. turn
-* Slope MAE
-
-前三个是 accuracy，**越大越好**；但 Slope MAE 是误差，**越小越好**。现在统一写成：
+如果你把 IMU / pitch-derived slope 相关分量从网络输入中移除，论文逻辑会更强：
 
 ```text
-Offline metric (relative to default)
+IMU baseline：使用简化物理传感器坡度估计
+ModernTCN：不使用直接 IMU 坡度信息，而是从 AGV 驱动、转向、轮速、电流和运动响应历史中学习调度相关状态
+Oracle：使用真实坡度，作为上界
 ```
 
-读者可能会误以为所有柱子大于 1 都代表更好，或者小于 1 都代表更差。
+这样三者分工非常清楚：
 
-建议在 x 轴标签或图注中明确方向：
+| 方法              | 信息来源               | 论文角色      |
+| --------------- | ------------------ | --------- |
+| theta0          | 不使用坡度              | 证明无坡度调度不足 |
+| IMU theta       | 使用简化传感器坡度估计        | 物理传感器基线   |
+| ModernTCN-noIMU | 使用非 IMU 的 AGV 历史状态 | 本文方法      |
+| Oracle          | 使用真实坡度             | 上界参考      |
 
-```text
-Main acc. ↑
-Turn acc. ↑
-Trans.-turn acc. ↑
-Slope MAE ↓
-```
-
-或者在图注中写：
-
-```latex
-For offline metrics, larger values are better for the accuracy metrics, while smaller values are better for slope MAE.
-```
-
-这是 Fig. 10 最需要补充说明的地方之一。
+这会让论文的创新点更独立，也更容易回应审稿人。
 
 ---
 
-### 3.2 Panel (b) 的 y 轴名称建议修改
+## 3. 具体应该移除哪些特征？
 
-当前 panel (b) 的纵轴写的是：
+这里要先区分两类“IMU相关特征”。
 
-```text
-Closed-loop cost (relative to default)
-```
+### 第一类：必须移除
 
-但其中包括：
-
-* (e_y) RMSE
-* (e_\psi) RMSE
-* XY RMSE
-* (J_{\Delta u})
-
-前三个是 tracking error metrics，不严格叫 cost。建议改成：
+这些特征会直接泄露或强烈暗示坡度：
 
 ```text
-Closed-loop metric
-(relative to default)
+pitch angle
+pitch-related estimate
+IMU-derived slope
+theta_imu
+gravity-compensated acceleration used for slope
+filtered pitch / pitch rate
+roll / pitch diagnostic variables
 ```
 
-或者更明确：
+这类特征如果保留，论文容易被质疑为 “using a slope sensor and learning a correction”。
+
+### 第二类：建议谨慎处理
+
+这些特征本身也是常规车体运动信号，但很多时候来自 IMU：
 
 ```text
-Closed-loop degradation ratio
-(default = 1)
+longitudinal acceleration
+lateral acceleration
+yaw rate
+angular velocity
 ```
 
-我更推荐：
+如果导师明确要求“IMU 分量移除”，那这些也应该移除。否则你可以保留 yaw rate 作为车辆状态反馈，但必须说明它不是用于坡度直接估计的 IMU/pitch 通道。为了避免争议，我建议你这次**严格一点**：
 
-```text
-Closed-loop metric
-(relative to default)
-```
+> 主方法使用 non-IMU feature set，不包含 acceleration、yaw rate、pitch-related estimate、IMU-slope estimate 等惯性测量通道。
 
-因为它最稳妥。
+然后用其他 AGV 信息训练。
 
 ---
 
-### 3.3 Panel (b) 的最高柱可能贴近顶部
+## 4. 可以保留哪些 AGV 信息？
 
-Causal ModernTCN 的 (e_y) RMSE 相对默认模型接近 (10^3)，柱子已经接近 y 轴上边界，而且这个柱子的数值标注似乎不明显。建议：
+建议保留这些更能体现 AGV 自身运行响应的信息：
 
-* y 轴上限稍微提高，比如到 (1.5\times 10^3) 或 (2\times 10^3)；
-* 给最高柱添加清晰标注，例如 `1.0e3` 或具体倍率；
-* 可以只给 causal bars 标数值，默认 bars 已经有 dashed baseline 表示 1，不一定每个都标 `1`。
+```text
+wheel speeds
+left-front / right-rear steering angles
+steering angle rates, if available
+motor-current-related features
+driving command history F_cmd, if available
+yaw-rate command history ω_cmd, if available
+velocity estimate from wheel encoders
+velocity error or speed-related derived features
+path-tracking state/history, if already available in controller
+diagnostic variables not derived from IMU/pitch
+```
 
-这样 panel (b) 会更清楚。
+这些特征更符合你的论文主线：坡度会改变车辆阻力、轮速响应、电流需求、控制输入和运动演化，网络从历史响应中学习 scheduling-related state，而不是直接读一个 IMU 坡度估计。
 
 ---
 
-### 3.4 `Default baseline` 建议改名
+## 5. 是否会导致性能下降？
 
-顶部 legend 中有：
+**有可能，但不一定是坏事。**
+
+去掉 IMU 后，模型失去了直接坡度线索，(\theta^{sch}) MAE 很可能变大。尤其是在匀速、控制输入变化不明显、坡度变化平缓的区间，坡度的可观测性会变弱。
+
+但这不一定会破坏论文。你现在已经建立了一个很好的论点：
 
 ```text
-Default baseline
+pointwise slope error does not fully determine closed-loop performance
 ```
 
-但图里已经有：
+也就是说，主方法不需要在每个时间点估计最准确的坡度，只要能给 LPV-MPC 提供更有利的闭环调度行为即可。
+
+不过，如果去掉 IMU 后闭环效果明显差于 GRU / TCN，甚至不如 IMU baseline，那就要重新评估主线。因此建议先做小规模验证。
+
+---
+
+## 6. 我建议的实验路线
+
+不要一上来就全部重做。建议分三步。
+
+### 第一步：做 feature audit
+
+先把 19 个特征按来源分组：
 
 ```text
-Default ModernTCN
+A. Direct IMU / pitch / slope-related features
+B. Motion-state features
+C. Encoder / wheel / steering features
+D. Motor-current / actuator features
+E. Command / controller-history features
+F. Derived diagnostic features
 ```
 
-二者容易混淆。黑色虚线实际上表示 relative ratio = 1，而不是一个额外控制器。建议改成：
+然后标记每个特征是否可能直接泄露坡度。
+
+### 第二步：训练两个输入版本
+
+建议至少训练两个版本：
 
 ```text
-Default ratio (=1)
+Full-19：
+当前版本，用于内部对照，不建议作为最终主方法。
+
+No-IMU：
+移除 IMU / pitch / acceleration / yaw-rate 等惯性通道，保留轮速、转角、电流、速度、控制历史和非 IMU derived features。
+```
+
+如果你担心严格 No-IMU 性能掉太多，可以再加一个中间版本：
+
+```text
+No-pitch：
+只移除 pitch-related estimate / imu-slope / direct grade channels，保留 yaw rate 和 acceleration。
+```
+
+但最终论文主方法最好是 **No-IMU** 或至少 **No-pitch/direct-slope-free**。
+
+### 第三步：先跑最小闭环验证
+
+不用一开始重跑全部 Fig. 6–Fig. 10。先跑：
+
+```text
+1. Offline metrics
+2. Main-route closed-loop Table 6
+3. Fig. 6 main closed-loop
+4. Fig. 7 scheduled slope
+```
+
+如果 No-IMU ModernTCN 仍然优于 GRU / TCN，并且明显优于 theta0 / IMU baseline，就可以把整篇论文切换到 No-IMU 版本。
+
+---
+
+## 7. 如果改成 No-IMU，论文需要怎么改？
+
+改动会比较系统，但不一定很大。
+
+### Fig. 1
+
+当前 Fig. 1 中有：
+
+```text
+acceleration | yaw rate
+velocity / pitch-related features
+```
+
+需要改成类似：
+
+```text
+wheel speeds | steering angles
+motor-current-related features
+velocity / command-history features
+non-IMU diagnostic features
+```
+
+### Fig. 4 和 Table 3
+
+当前 (Z_k \in \mathbb{R}^{128\times19})。去掉 IMU 后输入维度肯定会变：
+
+```text
+Z_k \in R^{128 × F_noIMU}
+```
+
+Table 3 也要更新：
+
+```text
+Input dimension: F_noIMU
+Feature categories: encoder / steering / current / command / non-IMU derived diagnostics
+```
+
+### 摘要和贡献
+
+可以把方法说得更有力：
+
+```text
+from non-IMU proprioceptive and actuator-related measurements
 ```
 
 或者：
 
 ```text
-Default reference (=1)
+without relying on direct IMU-derived slope channels
 ```
 
-我建议用：
+但不要说得太绝对，除非你确实删除了所有 IMU 通道。
+
+### IMU baseline
+
+IMU baseline 继续保留，而且它会变得更有意义：
 
 ```text
-Default reference (=1)
+IMU baseline = physical sensor-based scheduler
+ModernTCN = non-IMU temporal scheduling perception
 ```
 
-这样读者更容易理解它是 panel (a)(b) 的归一化参考线。
+这比当前版本更清楚。
 
 ---
 
-### 3.5 Panel (c) 可加零误差参考线，但不是必须
+## 8. 是否需要把 Full-19 作为消融实验保留？
 
-Panel (c) 展示横向误差 (e_y)。如果想让横向误差偏离更明显，可以加一条很细的 (e_y=0) 水平参考线。但当前图中默认 ModernTCN 基本贴近零，causal ModernTCN 的偏离已经很明显，不加也可以。
+我建议先不要在主文里保留 Full-19，除非它对结论特别有帮助。
 
-如果加，不建议放入 legend，避免图例更复杂。
+如果你保留 Full-19，审稿人可能会把注意力重新拉回“IMU 信息泄露”问题。更好的做法是：
+
+* 主文全部使用 No-IMU；
+* 如果需要，在附录或补充说明中提一句做过 feature-set sanity check；
+* 不把 Full-19 作为核心结果。
+
+如果 No-IMU 性能明显低于 Full-19，但仍然有价值，可以在限制性讨论中说：
+
+```text
+Removing direct IMU/pitch channels makes the scheduling perception problem more challenging, but it avoids direct reliance on slope-sensor information and provides a cleaner evaluation of vehicle-response-based temporal perception.
+```
 
 ---
 
-## 4. 图注建议
+## 9. 最终建议
 
-建议 Fig. 10 的 caption 写成：
+我的建议很明确：
 
-```latex
-\caption{Offline--closed-loop mismatch of the causal ModernTCN ablation:
-(a) offline perception metrics normalized by the default ModernTCN, 
-(b) closed-loop metrics normalized by the default ModernTCN on a logarithmic scale, 
-and (c) main-route lateral error. The dashed horizontal line in (a) and (b) denotes 
-the default reference ratio of one. For offline metrics, larger values are better 
-for the accuracy metrics, whereas smaller values are better for slope MAE.}
-```
+**应该按导师建议改。**
 
-如果想更强调结论，可以加一句：
+推荐最终方法定义为：
 
-```latex
-The causal variant remains close to the default model in offline perception metrics, 
-but its closed-loop performance deteriorates substantially.
-```
+> ModernTCN 使用不含直接 IMU / pitch-derived slope 信息的 AGV 历史运行特征，通过多任务时序建模估计 slope-related scheduling variable。
 
-不过图注太长的话，这句话放正文更合适。
+这样论文主线会从“神经网络修正 IMU”变成：
 
----
+> 从 AGV 驱动、转向、轮速、电流和运动响应历史中学习 LPV-MPC 调度信息。
 
-## 5. 正文需要配合说明的内容
+这比当前版本更有学术说服力，也更容易应对审稿。
 
-在 Section VI-H 或 “Offline perception metrics are not enough” 后面，可以加一句类似：
-
-```latex
-Fig.~\ref{fig:offline_closed_loop_mismatch} shows that the causal ModernTCN variant 
-has offline perception metrics close to the default ModernTCN, but its closed-loop 
-tracking and smoothness metrics deteriorate substantially. This result indicates 
-that the tested causal modification changes the feedback behavior of the scheduler, 
-even though the window-level perception metrics remain competitive.
-```
-
-再补一句避免过度泛化：
-
-```latex
-This observation should not be interpreted as a general limitation of causal 
-temporal convolution; it only reflects the particular causalization and training 
-setting evaluated in this study.
-```
-
-你论文当前已经有这个意思，后续插入 Fig. 10 后可以保持这类谨慎表述。
-
----
-
-## 6. 最终判断
-
-Fig. 10 **可以作为论文插图使用**，但正式插入前建议做四个小修：
-
-1. Panel (a) 标清指标方向，尤其是 `Slope MAE` 是越小越好；
-2. Panel (b) y 轴从 `Closed-loop cost` 改成 `Closed-loop metric` 或 `Closed-loop degradation ratio`；
-3. `Default baseline` 改成 `Default reference (=1)`；
-4. Panel (b) 顶部留出更多空间，并给最高 causal bar 添加清晰倍率标注。
-
-完成这些后，Fig. 10 的图像逻辑会非常清楚：**离线指标接近不代表闭环行为接近**。
+下一步最重要的是让 Codex 先做一件事：**列出 19 个特征名，并按 IMU / non-IMU / possible leakage 三类标注。** 然后我们再决定最终删哪些通道。

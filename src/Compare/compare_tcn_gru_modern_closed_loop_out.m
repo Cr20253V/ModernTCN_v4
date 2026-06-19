@@ -9,6 +9,8 @@ if nargin < 2 || isempty(gru_file)
 end
 if nargin < 3 || isempty(tcn_file)
     tcn_file = fullfile(local_project_root(), 'TCN_out.mat');
+elseif local_is_skip_tcn_token(tcn_file)
+    tcn_file = '';
 end
 if nargin < 4 || isempty(path_file)
     path_file = fullfile(local_project_root(), 'data', 'paths', ...
@@ -102,7 +104,9 @@ function specs = local_build_run_specs(modern_label, modern_file, gru_file, tcn_
 specs = struct('label', {}, 'file', {});
 specs(end+1) = struct('label', string(modern_label), 'file', char(modern_file));
 specs(end+1) = struct('label', "GRU", 'file', char(gru_file));
-specs(end+1) = struct('label', "TCN", 'file', char(tcn_file));
+if ~isempty(tcn_file) && ~local_is_skip_tcn_token(tcn_file)
+    specs(end+1) = struct('label', "TCN", 'file', char(tcn_file));
+end
 
 if isempty(extra_runs)
     return;
@@ -143,6 +147,10 @@ end
 
 error('compare_tcn_gru_modern:BadExtraRuns', ...
     'extra_runs must be a struct array or an Nx2 cell array.');
+end
+
+function tf = local_is_skip_tcn_token(tcn_file)
+tf = strcmpi(char(string(tcn_file)), '__skip_tcn__');
 end
 
 function run = local_analyze_one(controller, mat_file, zones, ref)
@@ -639,7 +647,7 @@ Z = result.zone_table;
 R = result.rank_table;
 
 fid = fopen(report_file, 'w', 'n', 'UTF-8');
-cleanup = onCleanup(@() fclose(fid)); %#ok<NASGU>
+cleanup = onCleanup(@() fclose(fid));
 
 fprintf(fid, '# %s\n\n', char(result.report_title));
 fprintf(fid, '- 输出文件：\n');

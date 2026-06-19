@@ -53,6 +53,9 @@ end
 if ~isfield(cfg, 'theta_mpc_deadzone') || isempty(cfg.theta_mpc_deadzone)
     cfg.theta_mpc_deadzone = local_field_or_default(default_cfg, 'theta_mpc_deadzone', deg2rad(2.0));
 end
+if ~isfield(cfg, 'disable_predictor') || isempty(cfg.disable_predictor)
+    cfg.disable_predictor = false;
+end
 
 if exist(cfg.dataset_file, 'file') ~= 2
     error('TCN:MissingDataset', '找不到 TCN 数据集: %s', cfg.dataset_file);
@@ -72,6 +75,12 @@ state.scaler = scaler;
 state.feat_names = dataset.feat_names;
 state.seq_len = local_field_or_default(dataset.meta, 'seq_len', 128);
 state.feat_dim = numel(scaler.mean);
+feature_contract = extract_passive_features('contract');
+if state.feat_dim ~= feature_contract.input_dim
+    error('TCN:FeatureContractMismatch', ...
+        'Dataset feature dim is %d, but %s requires %d.', ...
+        state.feat_dim, feature_contract.feature_contract, feature_contract.input_dim);
+end
 state.buffer = zeros(state.seq_len, state.feat_dim, 'single');
 state.buffer_count = 0;
 
@@ -81,16 +90,11 @@ state.step = 0;
 
 state.tau_accel_lp = local_field_or_default(scaler, 'tau_accel_lp', 0.4);
 state.tau_diff = local_field_or_default(scaler, 'tau_diff', 0.3);
-state.tau_pitch = local_field_or_default(scaler, 'tau_pitch', 2.0);
 state.alpha_accel = state.Ts / (state.tau_accel_lp + state.Ts);
 state.alpha_diff = state.Ts / (state.tau_diff + state.Ts);
-state.lambda_pitch = exp(-state.Ts / state.tau_pitch);
 
-state.feature_started = false;
-state.v_hat_prev = 0.0;
-state.dv_hat_dt_prev = 0.0;
-state.accel_x_lp_prev = 0.0;
-state.pitch_angle_est_prev = 0.0;
+feature_cfg = struct('tau_diff', state.tau_diff, 'tau_accel_lp', state.tau_accel_lp);
+state.feature_state = extract_passive_features('init', params, state.Ts, feature_cfg);
 
 state.dwell_main = 0.20;
 state.dwell_turn = 0.40;
@@ -114,19 +118,13 @@ state.theta_abs_limit = double(cfg.theta_abs_limit);
 state.theta_rate_limit = double(cfg.theta_rate_limit);
 state.theta_hat_output_prev = 0.0;
 
-state.feat_indices = struct();
-state.feat_indices.accel_x = 9;
-state.feat_indices.gyro_y = 10;
-state.feat_indices.gyro_z = 11;
-state.feat_indices.I_lf = 12;
-state.feat_indices.I_rr = 13;
-state.feat_indices.omega_wheel_lf = 17;
-state.feat_indices.omega_wheel_rr = 18;
-state.feat_indices.delta_lf = 6;
-state.feat_indices.delta_rr = 7;
 state.eps = 1e-8;
 
-state.predictor = TCN_load_predictor(state.model_file);
+if cfg.disable_predictor
+    state.predictor = [];
+else
+    state.predictor = TCN_load_predictor(state.model_file);
+end
 state.is_ready = true;
 end
 
@@ -215,7 +213,7 @@ out.debug.buffer_count = state.buffer_count;
 out.debug.ready = true;
 out.debug.did_predict = true;
 out.debug.skip_initial_steps = state.skip_initial_steps;
-out.debug.feature_contract = 'GRU_compatible_observable_19';
+out.debug.feature_contract = state.feature_state.feature_contract;
 out.debug.theta_output_gain = state.theta_output_gain;
 out.debug.theta_abs_limit = state.theta_abs_limit;
 out.debug.theta_rate_limit = state.theta_rate_limit;
@@ -224,52 +222,7 @@ out.debug.note = 'TCN online output';
 end
 
 function [features, state] = local_extract_features(y_raw, state)
-params = state.params;
-Ts = state.Ts;
-r = local_field_or_default(params, 'wheel_radius', 0.1);
-W = local_field_or_default(params, 'W', 1.0);
-
-accel_x = y_raw(state.feat_indices.accel_x);
-gyro_y = y_raw(state.feat_indices.gyro_y);
-gyro_z = y_raw(state.feat_indices.gyro_z);
-I_lf = y_raw(state.feat_indices.I_lf);
-I_rr = y_raw(state.feat_indices.I_rr);
-omega_wheel_lf = y_raw(state.feat_indices.omega_wheel_lf);
-omega_wheel_rr = y_raw(state.feat_indices.omega_wheel_rr);
-delta_lf = y_raw(state.feat_indices.delta_lf);
-delta_rr = y_raw(state.feat_indices.delta_rr);
-
-v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-if ~state.feature_started
-    dv_hat_dt = 0.0;
-    accel_x_lp = accel_x;
-    pitch_angle_est = 0.0;
-    state.feature_started = true;
-else
-    dv_raw = (v_hat - state.v_hat_prev) / Ts;
-    dv_hat_dt = state.alpha_diff * dv_raw + ...
-        (1 - state.alpha_diff) * state.dv_hat_dt_prev;
-    accel_x_lp = state.alpha_accel * accel_x + ...
-        (1 - state.alpha_accel) * state.accel_x_lp_prev;
-    pitch_angle_est = state.lambda_pitch * state.pitch_angle_est_prev + gyro_y * Ts;
-end
-
-state.v_hat_prev = v_hat;
-state.dv_hat_dt_prev = dv_hat_dt;
-state.accel_x_lp_prev = accel_x_lp;
-state.pitch_angle_est_prev = pitch_angle_est;
-
-ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-I_sum = abs(I_lf) + abs(I_rr);
-I_diff_signed = I_lf - I_rr;
-I_diff_abs = abs(I_lf) - abs(I_rr);
-kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-accel_per_current = accel_x_lp / max(I_sum, 0.1);
-
-features = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-    delta_lf, delta_rr, gyro_y, v_hat, dv_hat_dt, ws_imbalance, ...
-    I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-    accel_per_current, pitch_angle_est];
+[features, state.feature_state] = extract_passive_features('step', y_raw, state.feature_state);
 end
 
 function [current, candidate, count] = local_apply_dwell(raw_label, current, candidate, count, required_count)
@@ -318,8 +271,8 @@ out.label_turn_raw = state.label_turn_current;
 out.theta_hat_raw = state.theta_hat_current;
 out.main_prob = [1; 0; 0];
 out.turn_prob = [0; 1; 0];
-out.features = nan(19, 1);
-out.features_norm = nan(19, 1);
+out.features = nan(state.feat_dim, 1);
+out.features_norm = nan(state.feat_dim, 1);
 out.debug = struct();
 out.debug.step = state.step;
 out.debug.buffer_count = state.buffer_count;

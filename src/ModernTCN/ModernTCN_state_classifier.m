@@ -2,13 +2,14 @@ function [state, out] = ModernTCN_state_classifier(action, varargin)
 %MODERNTCN_STATE_CLASSIFIER ModernTCN 在线工况识别状态机。
 %
 % 功能说明：
-%   本函数从每个仿真步的 34 维 y_raw 中提取与 ModernTCN_dataset_v4_industrial
-%   完全一致的 19 维可观测特征，使用该数据集内保存的 scaler 做归一化，
+%   本函数从每个仿真步的 y_raw 中提取与 passive17_plus_all5
+%   完全一致的 22 维 IMU-free 特征，使用该数据集内保存的 scaler 做归一化，
 %   维护 128 步滑动窗口，然后调用当前推荐 ModernTCN ONNX predictor 推理。
 %
 % 设计边界：
 %   1. 本函数只用于 MATLAB/Simulink 仿真，不用于代码生成部署。
-%   2. 输入是原始 y_raw 单帧，不是已经归一化的 [128,19] 窗口。
+%   2. 输入是原始 y_raw 单帧，不是已经归一化的 [128,22] 窗口。
+%      Plan B-lite command-response datasets additionally accept u_cmd.
 %   3. theta_hat 先作为诊断输出；第一阶段不建议直接接入 RhoFilter。
 %
 % 用法：
@@ -32,7 +33,12 @@ switch lower(action)
         if nargin < 3
             error('ModernTCN:update', '更新需要提供 state 和 y_raw_t。');
         end
-        [state, out] = local_update(varargin{1}, varargin{2});
+        if nargin >= 4
+            u_cmd = varargin{3};
+        else
+            u_cmd = [];
+        end
+        [state, out] = local_update(varargin{1}, varargin{2}, u_cmd);
 
     otherwise
         error('ModernTCN:BadAction', '未知操作: %s，应为 init 或 update。', action);
@@ -42,6 +48,7 @@ end
 function state = local_init(params, cfg)
 root = local_project_root();
 default_cfg = ModernTCN_default_config(root);
+cfg = local_apply_deployment_override(cfg);
 
 if ~isfield(cfg, 'seed') || isempty(cfg.seed)
     cfg.seed = default_cfg.seed;
@@ -64,6 +71,71 @@ end
 if ~isfield(cfg, 'theta_mpc_deadzone') || isempty(cfg.theta_mpc_deadzone)
     cfg.theta_mpc_deadzone = local_field_or_default(default_cfg, 'theta_mpc_deadzone', deg2rad(2.0));
 end
+if ~isfield(cfg, 'theta_mpc_deadzone_soft') || isempty(cfg.theta_mpc_deadzone_soft)
+    cfg.theta_mpc_deadzone_soft = local_field_or_default( ...
+        default_cfg, 'theta_mpc_deadzone_soft', cfg.theta_mpc_deadzone);
+end
+if ~isfield(cfg, 'theta_mpc_rate_limit') || isempty(cfg.theta_mpc_rate_limit)
+    cfg.theta_mpc_rate_limit = local_field_or_default(default_cfg, 'theta_mpc_rate_limit', inf);
+end
+if ~isfield(cfg, 'tau_theta') || isempty(cfg.tau_theta)
+    cfg.tau_theta = local_field_or_default(default_cfg, 'tau_theta', 0.15);
+end
+if ~isfield(cfg, 'dwell_main') || isempty(cfg.dwell_main)
+    cfg.dwell_main = local_field_or_default(default_cfg, 'dwell_main', 0.20);
+end
+if ~isfield(cfg, 'dwell_turn') || isempty(cfg.dwell_turn)
+    cfg.dwell_turn = local_field_or_default(default_cfg, 'dwell_turn', 0.40);
+end
+if ~isfield(cfg, 'disable_predictor') || isempty(cfg.disable_predictor)
+    cfg.disable_predictor = false;
+end
+if ~isfield(cfg, 'turn_command_guard_enable') || isempty(cfg.turn_command_guard_enable)
+    cfg.turn_command_guard_enable = local_field_or_default(default_cfg, 'turn_command_guard_enable', false);
+end
+if ~isfield(cfg, 'turn_command_guard_omega_abs') || isempty(cfg.turn_command_guard_omega_abs)
+    cfg.turn_command_guard_omega_abs = local_field_or_default(default_cfg, 'turn_command_guard_omega_abs', 0.0);
+end
+if ~isfield(cfg, 'turn_command_guard_mean_abs') || isempty(cfg.turn_command_guard_mean_abs)
+    cfg.turn_command_guard_mean_abs = local_field_or_default( ...
+        default_cfg, 'turn_command_guard_mean_abs', cfg.turn_command_guard_omega_abs);
+end
+if ~isfield(cfg, 'turn_command_guard_min_active_sec') || isempty(cfg.turn_command_guard_min_active_sec)
+    cfg.turn_command_guard_min_active_sec = local_field_or_default( ...
+        default_cfg, 'turn_command_guard_min_active_sec', 0.0);
+end
+if ~isfield(cfg, 'main_slope_release_enable') || isempty(cfg.main_slope_release_enable)
+    cfg.main_slope_release_enable = local_field_or_default(default_cfg, 'main_slope_release_enable', false);
+end
+if ~isfield(cfg, 'main_slope_release_theta_abs_deg') || isempty(cfg.main_slope_release_theta_abs_deg)
+    cfg.main_slope_release_theta_abs_deg = local_field_or_default(default_cfg, 'main_slope_release_theta_abs_deg', 0.0);
+end
+if ~isfield(cfg, 'main_slope_release_omega_abs') || isempty(cfg.main_slope_release_omega_abs)
+    cfg.main_slope_release_omega_abs = local_field_or_default(default_cfg, 'main_slope_release_omega_abs', 0.0);
+end
+if ~isfield(cfg, 'main_slope_release_omega_mean_abs') || isempty(cfg.main_slope_release_omega_mean_abs)
+    cfg.main_slope_release_omega_mean_abs = local_field_or_default( ...
+        default_cfg, 'main_slope_release_omega_mean_abs', cfg.main_slope_release_omega_abs);
+end
+if ~isfield(cfg, 'main_slope_release_min_active_sec') || isempty(cfg.main_slope_release_min_active_sec)
+    cfg.main_slope_release_min_active_sec = local_field_or_default( ...
+        default_cfg, 'main_slope_release_min_active_sec', 0.0);
+end
+if ~isfield(cfg, 'main_slope_release_force_turn_straight') || isempty(cfg.main_slope_release_force_turn_straight)
+    cfg.main_slope_release_force_turn_straight = local_field_or_default( ...
+        default_cfg, 'main_slope_release_force_turn_straight', false);
+end
+if ~isfield(cfg, 'hybrid_mode') || isempty(cfg.hybrid_mode)
+    cfg.hybrid_mode = 'none';
+end
+if ~isfield(cfg, 'hybrid_main_conf_threshold') || isempty(cfg.hybrid_main_conf_threshold)
+    cfg.hybrid_main_conf_threshold = 0.55;
+end
+if ~isfield(cfg, 'hybrid_turn_conf_threshold') || isempty(cfg.hybrid_turn_conf_threshold)
+    cfg.hybrid_turn_conf_threshold = 0.55;
+end
+state_force_label_main = local_label_override_from_cfg(cfg, 'force_label_main', [1 2 3]);
+state_force_label_turn = local_label_override_from_cfg(cfg, 'force_label_turn', [-1 0 1]);
 onnx_file = '';
 if isfield(cfg, 'onnx_file') && ~isempty(cfg.onnx_file)
     onnx_file = char(cfg.onnx_file);
@@ -90,6 +162,14 @@ state.scaler = scaler;
 state.feat_names = dataset.feat_names;
 state.seq_len = local_field_or_default(dataset.meta, 'seq_len', 128);
 state.feat_dim = numel(scaler.mean);
+state.feature_contract_name = local_field_or_default(scaler, 'feature_contract', ...
+    local_field_or_default(dataset.meta, 'feature_contract', 'passive17_plus_all5'));
+feature_contract = local_feature_contract(state.feature_contract_name);
+if state.feat_dim ~= feature_contract.input_dim
+    error('ModernTCN:FeatureContractMismatch', ...
+        'Dataset feature dim is %d, but %s requires %d.', ...
+        state.feat_dim, feature_contract.feature_contract, feature_contract.input_dim);
+end
 state.buffer = zeros(state.seq_len, state.feat_dim, 'single');
 state.buffer_count = 0;
 
@@ -101,23 +181,28 @@ state.step = 0;
 % 特征提取参数。字段来自 TCN scaler，缺省值与 TCN_prepare_dataset.m 一致。
 state.tau_accel_lp = local_field_or_default(scaler, 'tau_accel_lp', 0.4);
 state.tau_diff = local_field_or_default(scaler, 'tau_diff', 0.3);
-state.tau_pitch = local_field_or_default(scaler, 'tau_pitch', 2.0);
 state.alpha_accel = state.Ts / (state.tau_accel_lp + state.Ts);
 state.alpha_diff = state.Ts / (state.tau_diff + state.Ts);
-state.lambda_pitch = exp(-state.Ts / state.tau_pitch);
 
-% 特征递推状态。首个有效样本按离线 local_lowpass/local_leaky_integral 的
-% 初值约定初始化，避免在线/离线开头一段不一致。
-state.feature_started = false;
-state.v_hat_prev = 0.0;
-state.dv_hat_dt_prev = 0.0;
-state.accel_x_lp_prev = 0.0;
-state.pitch_angle_est_prev = 0.0;
+state.cmd_stats_window_sec = local_field_or_default(feature_contract, 'command_stats_window_sec', 0.2);
+state.u_cmd_already_lagged = logical(local_field_or_default(cfg, ...
+    'u_cmd_already_lagged', false));
+feature_cfg = struct('tau_diff', state.tau_diff, ...
+    'tau_accel_lp', state.tau_accel_lp, ...
+    'cmd_stats_window_sec', state.cmd_stats_window_sec, ...
+    'u_cmd_already_lagged', state.u_cmd_already_lagged);
+if strcmpi(feature_contract.feature_contract, 'passive17_plus_all5_cmdresp_lite_v1')
+    state.feature_state = extract_command_response_features('init', params, state.Ts, feature_cfg);
+elseif strcmpi(feature_contract.feature_contract, 'passive17_plus_all5_cmdresp_lag1_only_v1')
+    state.feature_state = extract_command_response_lag1_features('init', params, state.Ts, feature_cfg);
+else
+    state.feature_state = extract_passive_features('init', params, state.Ts, feature_cfg);
+end
 
 % 标签驻留时间。ModernTCN 的 offline 指标较稳，但 Simulink 中单步更新仍需
 % 抑制边界跳变，先沿用 GRU 侧成熟参数。
-state.dwell_main = 0.20;
-state.dwell_turn = 0.40;
+state.dwell_main = max(0, double(cfg.dwell_main));
+state.dwell_turn = max(0, double(cfg.dwell_turn));
 state.dwell_main_steps = max(1, round(state.dwell_main / state.Ts));
 state.dwell_turn_steps = max(1, round(state.dwell_turn / state.Ts));
 state.label_main_current = 1;
@@ -128,34 +213,56 @@ state.label_main_stable_count = 0;
 state.label_turn_stable_count = 0;
 state.conf_main_current = 1.0;
 state.conf_turn_current = 1.0;
+state.force_label_main = state_force_label_main;
+state.force_label_turn = state_force_label_turn;
+state.turn_command_guard_enable = logical(cfg.turn_command_guard_enable);
+state.turn_command_guard_omega_abs = max(0, double(cfg.turn_command_guard_omega_abs));
+state.turn_command_guard_mean_abs = max(0, double(cfg.turn_command_guard_mean_abs));
+state.turn_command_guard_min_active_steps = max(0, ...
+    round(max(0, double(cfg.turn_command_guard_min_active_sec)) / state.Ts));
+state.main_slope_release_enable = logical(cfg.main_slope_release_enable);
+state.main_slope_release_theta_abs = deg2rad(max(0, double(cfg.main_slope_release_theta_abs_deg)));
+state.main_slope_release_omega_abs = max(0, double(cfg.main_slope_release_omega_abs));
+state.main_slope_release_omega_mean_abs = max(0, double(cfg.main_slope_release_omega_mean_abs));
+state.main_slope_release_min_active_steps = max(0, ...
+    round(max(0, double(cfg.main_slope_release_min_active_sec)) / state.Ts));
+state.main_slope_release_force_turn_straight = logical(cfg.main_slope_release_force_turn_straight);
+state.hybrid_mode = lower(strtrim(char(cfg.hybrid_mode)));
+state.hybrid_gru_enabled = ~strcmp(state.hybrid_mode, 'none');
+state.hybrid_main_conf_threshold = max(0, min(1, double(cfg.hybrid_main_conf_threshold)));
+state.hybrid_turn_conf_threshold = max(0, min(1, double(cfg.hybrid_turn_conf_threshold)));
+state.hybrid_gru_available = false;
+state.hybrid_gru_model_file = '';
+state.hybrid_gru_state = [];
+state.hybrid_last_gru_out = [];
+state.hybrid_last_error = '';
+if state.hybrid_gru_enabled
+    [gru_model, state.hybrid_gru_model_file] = local_load_hybrid_gru_model(root, cfg);
+    state.hybrid_gru_state = GRU_state_classifier('init', params, gru_model);
+    state.hybrid_gru_available = true;
+end
 
 % theta raw/conditioned output remains a model estimate. MPC scheduling can
 % use theta_hat_for_mpc, which applies the deployment deadzone outside the
 % learned regressor.
-state.tau_theta = 0.15;
+state.tau_theta = max(0, double(cfg.tau_theta));
 state.alpha_theta = state.Ts / (state.tau_theta + state.Ts);
 state.theta_hat_current = 0.0;
 state.theta_mpc_deadzone = double(cfg.theta_mpc_deadzone);
+state.theta_mpc_deadzone_soft = max(double(cfg.theta_mpc_deadzone_soft), state.theta_mpc_deadzone);
+state.theta_mpc_rate_limit = double(cfg.theta_mpc_rate_limit);
 state.theta_output_gain = double(cfg.theta_output_gain);
 state.theta_abs_limit = double(cfg.theta_abs_limit);
 state.theta_rate_limit = double(cfg.theta_rate_limit);
 state.theta_hat_output_prev = 0.0;
+state.theta_hat_for_mpc_prev = 0.0;
 
-% 19 维特征对应的 y_raw 索引，与 TCN_prepare_dataset.m 的 local_extract_runs 一致。
-state.feat_indices = struct();
-state.feat_indices.accel_x = 9;
-state.feat_indices.gyro_y = 10;
-state.feat_indices.gyro_z = 11;
-state.feat_indices.I_lf = 12;
-state.feat_indices.I_rr = 13;
-state.feat_indices.omega_wheel_lf = 17;
-state.feat_indices.omega_wheel_rr = 18;
-state.feat_indices.delta_lf = 6;
-state.feat_indices.delta_rr = 7;
 state.eps = 1e-8;
 
 % ONNX predictor 只在初始化时加载一次，避免每个仿真步重复导入网络。
-if isempty(state.onnx_file)
+if cfg.disable_predictor
+    state.predictor = [];
+elseif isempty(state.onnx_file)
     state.predictor = ModernTCN_load_predictor(state.seed);
 else
     state.predictor = ModernTCN_load_predictor(state.seed, state.onnx_file);
@@ -163,7 +270,7 @@ end
 state.is_ready = true;
 end
 
-function [state, out] = local_update(state, y_raw_t)
+function [state, out] = local_update(state, y_raw_t, u_cmd)
 state.step = state.step + 1;
 
 if isempty(y_raw_t) || numel(y_raw_t) < 18
@@ -171,13 +278,15 @@ if isempty(y_raw_t) || numel(y_raw_t) < 18
     return;
 end
 
+state = local_update_hybrid_gru(state, y_raw_t);
+
 % 与训练预处理保持一致：跳过起始 transient，跳过期间不更新特征滤波状态。
 if state.step <= state.skip_initial_steps
     out = local_default_output(state, 'skip_initial_sec 内输出默认值');
     return;
 end
 
-[features, state] = local_extract_features(double(y_raw_t(:)), state);
+[features, state] = local_extract_features(double(y_raw_t(:)), u_cmd, state);
 if any(~isfinite(features))
     out = local_default_output(state, '特征含 NaN/Inf');
     return;
@@ -225,16 +334,36 @@ state.conf_turn_current = conf_turn_raw;
 state.theta_hat_current = state.alpha_theta * theta_hat_raw + ...
     (1 - state.alpha_theta) * state.theta_hat_current;
 
+label_main_model_out = state.label_main_current;
+[label_main_guarded, main_slope_release_applied, main_slope_release_theta_abs, ...
+    main_slope_release_omega_lag1, main_slope_release_omega_mean] = ...
+    local_apply_main_slope_release_guard(label_main_model_out, features, state);
+label_turn_model_out = state.label_turn_current;
+[label_turn_guarded, turn_guard_applied, turn_guard_omega_lag1, turn_guard_omega_mean] = ...
+    local_apply_turn_command_guard(label_turn_model_out, features, state);
+if main_slope_release_applied && state.main_slope_release_force_turn_straight
+    label_turn_guarded = 0;
+end
+modern_conf_main_out = state.conf_main_current;
+[label_main_hybrid, label_turn_hybrid, conf_main_hybrid, hybrid_debug] = ...
+    local_apply_hybrid_labels(label_main_guarded, label_turn_guarded, ...
+    modern_conf_main_out, state.conf_turn_current, state);
+label_main_out = local_apply_forced_label(label_main_hybrid, state.force_label_main);
+label_turn_out = local_apply_forced_label(label_turn_guarded, state.force_label_turn);
+label_turn_out = local_apply_forced_label(label_turn_hybrid, state.force_label_turn);
+
 theta_hat_out = local_apply_theta_conditioning(state.theta_hat_current, state);
 theta_hat_for_mpc = local_apply_theta_mpc_deadzone(theta_hat_out, state);
+theta_hat_for_mpc = local_apply_theta_mpc_rate_limit(theta_hat_for_mpc, state);
 state.theta_hat_output_prev = theta_hat_out;
+state.theta_hat_for_mpc_prev = theta_hat_for_mpc;
 
 out = struct();
-out.label_main = state.label_main_current;
-out.label_turn = state.label_turn_current;
+out.label_main = label_main_out;
+out.label_turn = label_turn_out;
 out.theta_hat = theta_hat_out;
 out.theta_hat_for_mpc = theta_hat_for_mpc;
-out.conf_main = state.conf_main_current;
+out.conf_main = conf_main_hybrid;
 out.conf_turn = state.conf_turn_current;
 out.label_main_raw = label_main_raw;
 out.label_turn_raw = label_turn_raw;
@@ -249,62 +378,179 @@ out.debug.buffer_count = state.buffer_count;
 out.debug.ready = true;
 out.debug.did_predict = true;
 out.debug.skip_initial_steps = state.skip_initial_steps;
-out.debug.feature_contract = 'GRU_compatible_observable_19';
+out.debug.feature_contract = state.feature_state.feature_contract;
+out.debug.u_cmd_already_lagged = state.u_cmd_already_lagged;
 out.debug.theta_output_gain = state.theta_output_gain;
 out.debug.theta_abs_limit = state.theta_abs_limit;
 out.debug.theta_rate_limit = state.theta_rate_limit;
 out.debug.theta_mpc_deadzone = state.theta_mpc_deadzone;
+out.debug.theta_mpc_deadzone_soft = state.theta_mpc_deadzone_soft;
+out.debug.theta_mpc_rate_limit = state.theta_mpc_rate_limit;
+out.debug.tau_theta = state.tau_theta;
+out.debug.dwell_main = state.dwell_main;
+out.debug.dwell_turn = state.dwell_turn;
+out.debug.force_label_main = state.force_label_main;
+out.debug.force_label_turn = state.force_label_turn;
+out.debug.hybrid = hybrid_debug;
+out.debug.hybrid_mode = state.hybrid_mode;
+out.debug.hybrid_applied = hybrid_debug.applied;
+out.debug.hybrid_reason = hybrid_debug.reason;
+out.debug.hybrid_gru_available = state.hybrid_gru_available;
+out.debug.hybrid_gru_model_file = state.hybrid_gru_model_file;
+out.debug.hybrid_gru_label_main = hybrid_debug.gru_label_main;
+out.debug.hybrid_gru_label_turn = hybrid_debug.gru_label_turn;
+out.debug.hybrid_gru_conf_main = hybrid_debug.gru_conf_main;
+out.debug.hybrid_modern_conf_main = modern_conf_main_out;
+out.debug.hybrid_modern_conf_turn = state.conf_turn_current;
+out.debug.main_slope_release_enable = state.main_slope_release_enable;
+out.debug.main_slope_release_theta_abs = state.main_slope_release_theta_abs;
+out.debug.main_slope_release_omega_abs = state.main_slope_release_omega_abs;
+out.debug.main_slope_release_omega_mean_abs = state.main_slope_release_omega_mean_abs;
+out.debug.main_slope_release_min_active_steps = state.main_slope_release_min_active_steps;
+out.debug.main_slope_release_force_turn_straight = state.main_slope_release_force_turn_straight;
+out.debug.main_slope_release_applied = main_slope_release_applied;
+out.debug.main_slope_release_theta_abs_now = main_slope_release_theta_abs;
+out.debug.main_slope_release_omega_lag1 = main_slope_release_omega_lag1;
+out.debug.main_slope_release_omega_mean = main_slope_release_omega_mean;
+out.debug.turn_command_guard_enable = state.turn_command_guard_enable;
+out.debug.turn_command_guard_omega_abs = state.turn_command_guard_omega_abs;
+out.debug.turn_command_guard_mean_abs = state.turn_command_guard_mean_abs;
+out.debug.turn_command_guard_min_active_steps = state.turn_command_guard_min_active_steps;
+out.debug.turn_command_guard_applied = turn_guard_applied;
+out.debug.turn_command_guard_omega_lag1 = turn_guard_omega_lag1;
+out.debug.turn_command_guard_omega_mean = turn_guard_omega_mean;
 out.debug.note = 'ModernTCN online output';
 end
 
-function [features, state] = local_extract_features(y_raw, state)
-params = state.params;
-Ts = state.Ts;
-r = local_field_or_default(params, 'wheel_radius', 0.1);
-W = local_field_or_default(params, 'W', 1.0);
-
-accel_x = y_raw(state.feat_indices.accel_x);
-gyro_y = y_raw(state.feat_indices.gyro_y);
-gyro_z = y_raw(state.feat_indices.gyro_z);
-I_lf = y_raw(state.feat_indices.I_lf);
-I_rr = y_raw(state.feat_indices.I_rr);
-omega_wheel_lf = y_raw(state.feat_indices.omega_wheel_lf);
-omega_wheel_rr = y_raw(state.feat_indices.omega_wheel_rr);
-delta_lf = y_raw(state.feat_indices.delta_lf);
-delta_rr = y_raw(state.feat_indices.delta_rr);
-
-v_hat = r * (omega_wheel_lf + omega_wheel_rr) / 2;
-if ~state.feature_started
-    dv_raw = 0.0;
-    dv_hat_dt = 0.0;
-    accel_x_lp = accel_x;
-    pitch_angle_est = 0.0;
-    state.feature_started = true;
+function [features, state] = local_extract_features(y_raw, u_cmd, state)
+if strcmpi(state.feature_contract_name, 'passive17_plus_all5_cmdresp_lite_v1')
+    if isempty(u_cmd)
+        u_cmd = [0; 0];
+    end
+    [features, state.feature_state] = extract_command_response_features( ...
+        'step', y_raw, double(u_cmd(:)).', state.feature_state);
+elseif strcmpi(state.feature_contract_name, 'passive17_plus_all5_cmdresp_lag1_only_v1')
+    if isempty(u_cmd)
+        u_cmd = [0; 0];
+    end
+    [features, state.feature_state] = extract_command_response_lag1_features( ...
+        'step', y_raw, double(u_cmd(:)).', state.feature_state);
 else
-    dv_raw = (v_hat - state.v_hat_prev) / Ts;
-    dv_hat_dt = state.alpha_diff * dv_raw + ...
-        (1 - state.alpha_diff) * state.dv_hat_dt_prev;
-    accel_x_lp = state.alpha_accel * accel_x + ...
-        (1 - state.alpha_accel) * state.accel_x_lp_prev;
-    pitch_angle_est = state.lambda_pitch * state.pitch_angle_est_prev + gyro_y * Ts;
+    [features, state.feature_state] = extract_passive_features('step', y_raw, state.feature_state);
+end
 end
 
-state.v_hat_prev = v_hat;
-state.dv_hat_dt_prev = dv_hat_dt;
-state.accel_x_lp_prev = accel_x_lp;
-state.pitch_angle_est_prev = pitch_angle_est;
+function state = local_update_hybrid_gru(state, y_raw_t)
+if ~isfield(state, 'hybrid_gru_enabled') || ~state.hybrid_gru_enabled || ...
+        ~state.hybrid_gru_available
+    return;
+end
+if isempty(y_raw_t) || numel(y_raw_t) < 31
+    return;
+end
+try
+    [state.hybrid_gru_state, gru_out] = GRU_state_classifier( ...
+        'update', state.hybrid_gru_state, double(y_raw_t(1:31)));
+    if ~isempty(gru_out)
+        state.hybrid_last_gru_out = gru_out;
+    end
+catch ME
+    state.hybrid_gru_available = false;
+    state.hybrid_last_error = ME.message;
+    warning('ModernTCN:HybridGRUFailed', ...
+        'Hybrid GRU update failed and was disabled: %s', ME.message);
+end
+end
 
-ws_imbalance = abs(omega_wheel_lf - omega_wheel_rr);
-I_sum = abs(I_lf) + abs(I_rr);
-I_diff_signed = I_lf - I_rr;
-I_diff_abs = abs(I_lf) - abs(I_rr);
-kappa_proxy = (tan(delta_lf) - tan(delta_rr)) / W;
-accel_per_current = accel_x_lp / max(I_sum, 0.1);
+function [label_main, label_turn, conf_main, dbg] = local_apply_hybrid_labels( ...
+        modern_label_main, modern_label_turn, modern_conf_main, modern_conf_turn, state)
+label_main = modern_label_main;
+label_turn = modern_label_turn;
+conf_main = modern_conf_main;
+dbg = local_hybrid_debug(state, modern_label_main, modern_label_turn, ...
+    modern_conf_main, modern_conf_turn);
+if ~state.hybrid_gru_enabled || ~state.hybrid_gru_available || ...
+        isempty(state.hybrid_last_gru_out)
+    return;
+end
 
-features = [accel_x, gyro_z, I_lf, I_rr, omega_wheel_lf, omega_wheel_rr, ...
-    delta_lf, delta_rr, gyro_y, v_hat, dv_hat_dt, ws_imbalance, ...
-    I_sum, I_diff_signed, I_diff_abs, accel_x_lp, kappa_proxy, ...
-    accel_per_current, pitch_angle_est];
+gru_out = state.hybrid_last_gru_out;
+if ~isfield(gru_out, 'label_main') || ~isfield(gru_out, 'label_turn')
+    return;
+end
+gru_label_main = double(gru_out.label_main);
+gru_label_turn = double(gru_out.label_turn);
+gru_conf_main = local_gru_conf_main(gru_out);
+dbg.gru_label_main = gru_label_main;
+dbg.gru_label_turn = gru_label_turn;
+dbg.gru_conf_main = gru_conf_main;
+
+mode = state.hybrid_mode;
+apply_gru = false;
+reason = 'modern';
+switch mode
+    case {'mt_theta_gru_labels', 'modern_theta_gru_labels', 'gru_labels'}
+        apply_gru = true;
+        reason = 'gru_labels';
+    case {'lowconf_gru_labels', 'gru_fallback_labels'}
+        apply_gru = modern_conf_main < state.hybrid_main_conf_threshold || ...
+            modern_conf_turn < state.hybrid_turn_conf_threshold;
+        if apply_gru
+            reason = 'low_confidence';
+        end
+    case {'disagreement_gru_labels'}
+        apply_gru = gru_label_main ~= modern_label_main || ...
+            gru_label_turn ~= modern_label_turn;
+        if apply_gru
+            reason = 'disagreement';
+        end
+    case {'lowconf_or_disagreement_gru_labels'}
+        apply_gru = modern_conf_main < state.hybrid_main_conf_threshold || ...
+            modern_conf_turn < state.hybrid_turn_conf_threshold || ...
+            gru_label_main ~= modern_label_main || gru_label_turn ~= modern_label_turn;
+        if apply_gru
+            reason = 'low_confidence_or_disagreement';
+        end
+end
+
+if apply_gru
+    label_main = gru_label_main;
+    label_turn = gru_label_turn;
+    conf_main = gru_conf_main;
+    dbg.applied = true;
+    dbg.reason = reason;
+else
+    dbg.reason = reason;
+end
+end
+
+function dbg = local_hybrid_debug(state, modern_label_main, modern_label_turn, ...
+        modern_conf_main, modern_conf_turn)
+dbg = struct();
+dbg.mode = state.hybrid_mode;
+dbg.enabled = state.hybrid_gru_enabled;
+dbg.available = state.hybrid_gru_available;
+dbg.applied = false;
+dbg.reason = 'modern';
+dbg.modern_label_main = modern_label_main;
+dbg.modern_label_turn = modern_label_turn;
+dbg.modern_conf_main = modern_conf_main;
+dbg.modern_conf_turn = modern_conf_turn;
+dbg.gru_label_main = NaN;
+dbg.gru_label_turn = NaN;
+dbg.gru_conf_main = NaN;
+dbg.gru_model_file = state.hybrid_gru_model_file;
+dbg.last_error = state.hybrid_last_error;
+end
+
+function c = local_gru_conf_main(gru_out)
+c = 1.0;
+if isfield(gru_out, 'conf_main') && ~isempty(gru_out.conf_main)
+    c = max(double(gru_out.conf_main(:)));
+end
+if ~isfinite(c)
+    c = 1.0;
+end
 end
 
 function [current, candidate, count] = local_apply_dwell(raw_label, current, candidate, count, required_count)
@@ -338,31 +584,188 @@ function theta_hat = local_apply_theta_mpc_deadzone(theta_hat, state)
 theta_abs = abs(theta_hat);
 if theta_abs <= state.theta_mpc_deadzone
     theta_hat = 0.0;
+elseif state.theta_mpc_deadzone_soft > state.theta_mpc_deadzone && ...
+        theta_abs < state.theta_mpc_deadzone_soft
+    span = state.theta_mpc_deadzone_soft - state.theta_mpc_deadzone;
+    scale = (theta_abs - state.theta_mpc_deadzone) / max(span, state.eps);
+    theta_hat = sign(theta_hat) * scale * (theta_abs - state.theta_mpc_deadzone);
+end
+end
+
+function theta_hat = local_apply_theta_mpc_rate_limit(theta_hat, state)
+if isfinite(state.theta_mpc_rate_limit) && state.theta_mpc_rate_limit > 0
+    max_step = state.theta_mpc_rate_limit * state.Ts;
+    theta_delta = theta_hat - state.theta_hat_for_mpc_prev;
+    theta_delta = min(max(theta_delta, -max_step), max_step);
+    theta_hat = state.theta_hat_for_mpc_prev + theta_delta;
+end
+end
+
+function [label_turn, applied, omega_lag1, omega_mean] = local_apply_turn_command_guard(label_turn, features, state)
+applied = false;
+omega_lag1 = NaN;
+omega_mean = NaN;
+if ~state.turn_command_guard_enable || label_turn == 0 || numel(features) < 30
+    return;
+end
+if state.label_turn_stable_count < state.turn_command_guard_min_active_steps
+    return;
+end
+
+% Command-response features are appended as:
+% F_lag1, omega_lag1, dF_lag1, domega_lag1, F_mean, F_std, omega_mean, omega_std.
+omega_lag1 = double(features(end - 6));
+omega_mean = double(features(end - 1));
+if abs(omega_lag1) <= state.turn_command_guard_omega_abs && ...
+        abs(omega_mean) <= state.turn_command_guard_mean_abs
+    label_turn = 0;
+    applied = true;
+end
+end
+
+function [label_main, applied, theta_abs_now, omega_lag1, omega_mean] = ...
+        local_apply_main_slope_release_guard(label_main, features, state)
+applied = false;
+theta_abs_now = NaN;
+omega_lag1 = NaN;
+omega_mean = NaN;
+if ~state.main_slope_release_enable || label_main ~= 3 || numel(features) < 30
+    return;
+end
+if state.label_main_stable_count < state.main_slope_release_min_active_steps
+    return;
+end
+
+theta_abs_now = abs(state.theta_hat_current);
+omega_lag1 = double(features(end - 6));
+omega_mean = double(features(end - 1));
+if theta_abs_now <= state.main_slope_release_theta_abs && ...
+        abs(omega_lag1) <= state.main_slope_release_omega_abs && ...
+        abs(omega_mean) <= state.main_slope_release_omega_mean_abs
+    label_main = 1;
+    applied = true;
 end
 end
 
 function out = local_default_output(state, note)
 out = struct();
-out.label_main = state.label_main_current;
-out.label_turn = state.label_turn_current;
+modern_conf_main_out = state.conf_main_current;
+[label_main_hybrid, label_turn_hybrid, conf_main_hybrid, hybrid_debug] = ...
+    local_apply_hybrid_labels(state.label_main_current, state.label_turn_current, ...
+    modern_conf_main_out, state.conf_turn_current, state);
+out.label_main = local_apply_forced_label(label_main_hybrid, state.force_label_main);
+out.label_turn = local_apply_forced_label(label_turn_hybrid, state.force_label_turn);
 out.theta_hat = state.theta_hat_current;
-out.theta_hat_for_mpc = local_apply_theta_mpc_deadzone(state.theta_hat_current, state);
-out.conf_main = state.conf_main_current;
+theta_hat_for_mpc = local_apply_theta_mpc_deadzone(state.theta_hat_current, state);
+out.theta_hat_for_mpc = local_apply_theta_mpc_rate_limit(theta_hat_for_mpc, state);
+out.conf_main = conf_main_hybrid;
 out.conf_turn = state.conf_turn_current;
 out.label_main_raw = state.label_main_current;
 out.label_turn_raw = state.label_turn_current;
 out.theta_hat_raw = state.theta_hat_current;
 out.main_prob = [1; 0; 0];
 out.turn_prob = [0; 1; 0];
-out.features = nan(19, 1);
-out.features_norm = nan(19, 1);
+out.features = nan(state.feat_dim, 1);
+out.features_norm = nan(state.feat_dim, 1);
 out.debug = struct();
 out.debug.step = state.step;
 out.debug.buffer_count = state.buffer_count;
 out.debug.ready = state.buffer_count >= state.seq_len;
 out.debug.did_predict = false;
 out.debug.skip_initial_steps = state.skip_initial_steps;
+out.debug.theta_output_gain = state.theta_output_gain;
+out.debug.theta_abs_limit = state.theta_abs_limit;
+out.debug.theta_rate_limit = state.theta_rate_limit;
+out.debug.theta_mpc_deadzone = state.theta_mpc_deadzone;
+out.debug.theta_mpc_deadzone_soft = state.theta_mpc_deadzone_soft;
+out.debug.theta_mpc_rate_limit = state.theta_mpc_rate_limit;
+out.debug.tau_theta = state.tau_theta;
+out.debug.dwell_main = state.dwell_main;
+out.debug.dwell_turn = state.dwell_turn;
+out.debug.force_label_main = state.force_label_main;
+out.debug.force_label_turn = state.force_label_turn;
+out.debug.hybrid = hybrid_debug;
+out.debug.hybrid_mode = state.hybrid_mode;
+out.debug.hybrid_applied = hybrid_debug.applied;
+out.debug.hybrid_reason = hybrid_debug.reason;
+out.debug.hybrid_gru_available = state.hybrid_gru_available;
+out.debug.hybrid_gru_model_file = state.hybrid_gru_model_file;
+out.debug.hybrid_gru_label_main = hybrid_debug.gru_label_main;
+out.debug.hybrid_gru_label_turn = hybrid_debug.gru_label_turn;
+out.debug.hybrid_gru_conf_main = hybrid_debug.gru_conf_main;
+out.debug.hybrid_modern_conf_main = modern_conf_main_out;
+out.debug.hybrid_modern_conf_turn = state.conf_turn_current;
+out.debug.main_slope_release_enable = state.main_slope_release_enable;
+out.debug.main_slope_release_theta_abs = state.main_slope_release_theta_abs;
+out.debug.main_slope_release_omega_abs = state.main_slope_release_omega_abs;
+out.debug.main_slope_release_omega_mean_abs = state.main_slope_release_omega_mean_abs;
+out.debug.main_slope_release_min_active_steps = state.main_slope_release_min_active_steps;
+out.debug.main_slope_release_force_turn_straight = state.main_slope_release_force_turn_straight;
+out.debug.main_slope_release_applied = false;
+out.debug.main_slope_release_theta_abs_now = NaN;
+out.debug.main_slope_release_omega_lag1 = NaN;
+out.debug.main_slope_release_omega_mean = NaN;
+out.debug.turn_command_guard_enable = state.turn_command_guard_enable;
+out.debug.turn_command_guard_omega_abs = state.turn_command_guard_omega_abs;
+out.debug.turn_command_guard_mean_abs = state.turn_command_guard_mean_abs;
+out.debug.turn_command_guard_min_active_steps = state.turn_command_guard_min_active_steps;
+out.debug.turn_command_guard_applied = false;
+out.debug.turn_command_guard_omega_lag1 = NaN;
+out.debug.turn_command_guard_omega_mean = NaN;
 out.debug.note = note;
+end
+
+function cfg = local_apply_deployment_override(cfg)
+override_names = {'deploy_override', 'deployment_override', ...
+    'classifier_override', 'deployment_params'};
+for i = 1:numel(override_names)
+    name = override_names{i};
+    if isfield(cfg, name) && isstruct(cfg.(name))
+        cfg = local_merge_allowed_deploy_fields(cfg, cfg.(name));
+    end
+end
+end
+
+function cfg = local_merge_allowed_deploy_fields(cfg, override)
+allowed = {'theta_output_gain', 'theta_abs_limit', 'theta_rate_limit', ...
+    'theta_mpc_deadzone', 'theta_mpc_deadzone_soft', ...
+    'theta_mpc_rate_limit', 'tau_theta', 'dwell_main', 'dwell_turn', ...
+    'force_label_main', 'force_label_turn', 'disable_predictor', ...
+    'turn_command_guard_enable', 'turn_command_guard_omega_abs', ...
+    'turn_command_guard_mean_abs', 'turn_command_guard_min_active_sec', ...
+    'main_slope_release_enable', 'main_slope_release_theta_abs_deg', ...
+    'main_slope_release_omega_abs', 'main_slope_release_omega_mean_abs', ...
+    'main_slope_release_min_active_sec', 'main_slope_release_force_turn_straight', ...
+    'hybrid_mode', 'hybrid_main_conf_threshold', 'hybrid_turn_conf_threshold', ...
+    'hybrid_gru_model_file'};
+for i = 1:numel(allowed)
+    name = allowed{i};
+    if isfield(override, name) && ~isempty(override.(name))
+        cfg.(name) = override.(name);
+    end
+end
+end
+
+function v = local_label_override_from_cfg(cfg, field_name, allowed_values)
+v = NaN;
+if ~isstruct(cfg) || ~isfield(cfg, field_name) || isempty(cfg.(field_name))
+    return;
+end
+raw = double(cfg.(field_name));
+if ~isscalar(raw) || ~isfinite(raw)
+    return;
+end
+v = round(raw);
+if ~any(v == allowed_values)
+    error('ModernTCN:BadLabelOverride', ...
+        '%s must be one of %s, got %.6g.', field_name, mat2str(allowed_values), raw);
+end
+end
+
+function y = local_apply_forced_label(y, forced_value)
+if isfinite(forced_value)
+    y = forced_value;
+end
 end
 
 function v = local_field_or_default(s, field_name, default_value)
@@ -370,6 +773,51 @@ if isstruct(s) && isfield(s, field_name) && ~isempty(s.(field_name))
     v = s.(field_name);
 else
     v = default_value;
+end
+end
+
+function [model, model_file] = local_load_hybrid_gru_model(root, cfg)
+if isfield(cfg, 'hybrid_gru_model_file') && ~isempty(cfg.hybrid_gru_model_file)
+    model_file = char(cfg.hybrid_gru_model_file);
+else
+    gru_cfg = GRU_default_config(root);
+    model_file = gru_cfg.model_file;
+end
+if exist(model_file, 'file') ~= 2
+    error('ModernTCN:MissingHybridGRUModel', ...
+        'Hybrid GRU model not found: %s', model_file);
+end
+S = load(model_file);
+if isfield(S, 'model')
+    model = S.model;
+elseif isfield(S, 'gru_model')
+    model = S.gru_model;
+elseif isfield(S, 'net')
+    model = S.net;
+else
+    error('ModernTCN:BadHybridGRUModel', ...
+        'Hybrid GRU model file has no model/gru_model/net field: %s', model_file);
+end
+if ~isfield(model, 'seq_len') && isfield(model, 'cfg') && isfield(model.cfg, 'seq_len')
+    model.seq_len = model.cfg.seq_len;
+end
+if ~isfield(model, 'class_labels_main')
+    model.class_labels_main = {'flat', 'stall', 'slope'};
+end
+if ~isfield(model, 'class_labels_turn')
+    model.class_labels_turn = {'right', 'straight', 'left'};
+end
+end
+
+function contract = local_feature_contract(feature_contract_name)
+name = lower(char(feature_contract_name));
+switch name
+    case {'passive17_plus_all5_cmdresp_lite_v1','command_response','cmdresp_lite_v1'}
+        contract = extract_command_response_features('contract');
+    case {'passive17_plus_all5_cmdresp_lag1_only_v1','cmdresp_lag1_only_v1','cmdresp_lag1_only'}
+        contract = extract_command_response_lag1_features('contract');
+    otherwise
+        contract = extract_passive_features('contract');
 end
 end
 

@@ -1,0 +1,72 @@
+{
+  "created_at": "2026-06-17 03:22:28",
+  "dataset_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "cases": [
+    {
+      "case": "l018_tt22_bal",
+      "lambda_turn": 0.18,
+      "turn_transition_weight": 2.2,
+      "turn_class_multipliers": [
+        1.35,
+        0.85,
+        1.35
+      ],
+      "select_turn_weight": 0.55,
+      "select_turn_transition_weight": 1.25,
+      "select_turn_lr_weight": 0.55,
+      "note": "slightly softer than champion"
+    },
+    {
+      "case": "l020_tt25_bal",
+      "lambda_turn": 0.2,
+      "turn_transition_weight": 2.5,
+      "turn_class_multipliers": [
+        1.4,
+        0.8,
+        1.4
+      ],
+      "select_turn_weight": 0.55,
+      "select_turn_transition_weight": 1.2,
+      "select_turn_lr_weight": 0.6,
+      "note": "current champion neighborhood"
+    },
+    {
+      "case": "l022_tt28_turn",
+      "lambda_turn": 0.22,
+      "turn_transition_weight": 2.8,
+      "turn_class_multipliers": [
+        1.45,
+        0.75,
+        1.45
+      ],
+      "select_turn_weight": 0.62,
+      "select_turn_transition_weight": 1.35,
+      "select_turn_lr_weight": 0.7,
+      "note": "stronger turn transition focus"
+    },
+    {
+      "case": "l020_tt30_lr",
+      "lambda_turn": 0.2,
+      "turn_transition_weight": 3.0,
+      "turn_class_multipliers": [
+        1.5,
+        0.75,
+        1.5
+      ],
+      "select_turn_weight": 0.6,
+      "select_turn_transition_weight": 1.45,
+      "select_turn_lr_weight": 0.8,
+      "note": "strongest L/R balance focus"
+    }
+  ],
+  "seeds": [
+    101,
+    303
+  ],
+  "checks": {
+    "dataset_exists": true,
+    "champion_onnx_exists": true,
+    "modern_src_exists": true
+  },
+  "pass": true
+}

@@ -1,0 +1,235 @@
+{
+  "kind": "ref_oracle",
+  "oracle_model": "LPVMPC_AGV_simulink_ref",
+  "theta_mode_used": null,
+  "plant_revision": "agv_physics_v2_plantfix",
+  "mpc_runtime_override": {
+    "id": "stage1_plantfix_p0",
+    "Np": 150,
+    "Nc": 30,
+    "Q": [
+      100,
+      100,
+      15,
+      3
+    ],
+    "R": [
+      3E-5,
+      3E-5
+    ],
+    "dR": [
+      0.001,
+      0.001
+    ],
+    "maps_template": {
+      "rho_min": [
+        0.02,
+        -1.2,
+        -0.20943951023931956
+      ],
+      "rho_max": [
+        1.2,
+        1.2,
+        0.20943951023931956
+      ],
+      "Q_range": [
+        [
+          100,
+          100,
+          15,
+          3
+        ],
+        [
+          100,
+          100,
+          15,
+          3
+        ]
+      ],
+      "R_range": [
+        [
+          3E-5,
+          3E-5
+        ],
+        [
+          3E-5,
+          3E-5
+        ]
+      ],
+      "dR_range": [
+        [
+          0.001,
+          0.001
+        ],
+        [
+          0.001,
+          0.001
+        ]
+      ],
+      "alpha_Q": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "beta_Q": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "alpha_R": [
+        0,
+        0
+      ],
+      "beta_R": [
+        1,
+        1
+      ],
+      "alpha_dR": [
+        0,
+        0
+      ],
+      "beta_dR": [
+        1,
+        1
+      ],
+      "enable_factor": false,
+      "factor_y": [
+        0.3,
+        0.2,
+        0.5
+      ],
+      "factor_psi": [
+        0.1,
+        0.7,
+        0.2
+      ],
+      "factor_v": [
+        0.8,
+        0.1,
+        0.1
+      ],
+      "factor_omega": [
+        0.2,
+        0.6,
+        0.2
+      ],
+      "factor_R_F": [
+        0.6,
+        0.3,
+        0.1
+      ],
+      "factor_R_omega": [
+        0.2,
+        0.7,
+        0.1
+      ],
+      "factor_dR_F": [
+        0.5,
+        0.3,
+        0.2
+      ],
+      "factor_dR_omega": [
+        0.2,
+        0.6,
+        0.2
+      ],
+      "scale_umin_lo": [
+        1,
+        1
+      ],
+      "scale_umin_hi": [
+        1,
+        1
+      ],
+      "scale_umax_lo": [
+        1,
+        1
+      ],
+      "scale_umax_hi": [
+        1,
+        1
+      ],
+      "enable_weight_interp": true,
+      "umin_range": [
+        [
+          -720,
+          -1.44
+        ],
+        [
+          -600,
+          -1.2
+        ]
+      ],
+      "umax_range": [
+        [
+          600,
+          1.2
+        ],
+        [
+          720,
+          1.44
+        ]
+      ],
+      "ey_max": 1,
+      "epsi_max": 0.5,
+      "ev_max": 0.5,
+      "eomega_max": 0.3,
+      "omega_threshold": 0.15,
+      "q_y_gain_max": 2.5,
+      "transition_width": 0.05,
+      "theta_threshold": 0.035,
+      "q_v_gain_max": 5,
+      "R_F_gain_max_uphill": 1,
+      "theta_transition_width": 0.017,
+      "id": "stage1_plantfix_p0",
+      "plant_revision": {
+        "id": "agv_physics_v2_plantfix",
+        "created_at": "2026-06-15 23:48:08",
+        "description": "current repaired plant: higher AGV cornering stiffness, configurable yaw damping, and no normal-speed artificial beta damping",
+        "params_version": "V4.1",
+        "Ts": 0.01,
+        "mass": 200,
+        "front_cornering_stiffness": 3000,
+        "rear_cornering_stiffness": 3000,
+        "yaw_damping": 250,
+        "sideslip_damping": 0,
+        "sideslip_low_speed_damping": 1,
+        "rules": [
+          "do not restore the old hard-coded high yaw damping constant",
+          "do not restore the old normal-speed artificial beta feedback term",
+          "MPC retuning must be done through controller weights/horizon/constraints"
+        ],
+        "source_files": [
+          "src/core/parameters.m",
+          "src/core/state_eq.m",
+          "src/core/state_eq_ref.m",
+          "src/core/state_eq_ref_train_data.m"
+        ]
+      },
+      "Np": 150,
+      "Nc": 30,
+      "Q": [
+        100,
+        100,
+        15,
+        3
+      ],
+      "R": [
+        3E-5,
+        3E-5
+      ],
+      "dR": [
+        0.001,
+        0.001
+      ],
+      "timestamp": "2026-06-15 23:48:09",
+      "version": "stage1_plantfix_candidate",
+      "db_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\04_lpv_database\\lin_agv_db_agv_physics_v2_plantfix.mat"
+    },
+    "db_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\04_lpv_database\\lin_agv_db_agv_physics_v2_plantfix.mat"
+  },
+  "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_closed_loop_long_updown_theta10_v1.mat",
+  "time": "2026-06-15 23:50:03"
+}

@@ -47,13 +47,25 @@ if contains(model_name, 'Modern_TCN', 'IgnoreCase', true)
     end
 elseif contains(model_name, 'GRU', 'IgnoreCase', true)
     clear GRU_State_Classifier_gru_sim GRU_state_classifier GRU_load_default_to_base
+    if ~isfield(cfg, 'gru_sim_cfg')
+        evalin('base', 'clear gru_sim_cfg');
+    end
 elseif contains(model_name, 'TCN', 'IgnoreCase', true)
     clear TCN_State_Classifier_sim TCN_state_classifier TCN_load_predictor
+    if ~isfield(cfg, 'tcn_sim_cfg')
+        evalin('base', 'clear tcn_sim_cfg');
+    end
 end
 
 assignin('base', 'ref', ref);
 if isfield(cfg, 'modern_tcn_sim_cfg')
     assignin('base', 'modern_tcn_sim_cfg', cfg.modern_tcn_sim_cfg);
+end
+if isfield(cfg, 'gru_sim_cfg')
+    assignin('base', 'gru_sim_cfg', cfg.gru_sim_cfg);
+end
+if isfield(cfg, 'tcn_sim_cfg')
+    assignin('base', 'tcn_sim_cfg', cfg.tcn_sim_cfg);
 end
 if isfield(cfg, 'params_override') && ~isempty(cfg.params_override)
     assignin('base', 'params', cfg.params_override);
@@ -61,6 +73,23 @@ if isfield(cfg, 'params_override') && ~isempty(cfg.params_override)
 end
 if isfield(cfg, 'ff_rt_override') && ~isempty(cfg.ff_rt_override)
     assignin('base', 'ff_rt', cfg.ff_rt_override);
+end
+if isfield(cfg, 'mpc_runtime_maps') && ~isempty(cfg.mpc_runtime_maps)
+    assignin('base', 'mpc_runtime_maps', cfg.mpc_runtime_maps);
+    local_assign_runtime_map_scalars(cfg.mpc_runtime_maps);
+else
+    evalin('base', 'clear mpc_runtime_maps');
+    local_clear_runtime_map_scalars();
+end
+if isfield(cfg, 'mpc_runtime_override') && ~isempty(cfg.mpc_runtime_override)
+    assignin('base', 'mpc_runtime_override', cfg.mpc_runtime_override);
+else
+    evalin('base', 'clear mpc_runtime_override');
+end
+if isfield(cfg, 'mpc_runtime_omega_cmd_clip') && ~isempty(cfg.mpc_runtime_omega_cmd_clip)
+    assignin('base', 'mpc_runtime_omega_cmd_clip', double(cfg.mpc_runtime_omega_cmd_clip));
+else
+    evalin('base', 'clear mpc_runtime_omega_cmd_clip');
 end
 
 model_file = fullfile(root, 'simulink', [model_name '.slx']);
@@ -79,6 +108,14 @@ if isfield(cfg, 'modern_tcn_sim_cfg')
     simIn = local_set_variable_dual(simIn, model_name, ...
         'modern_tcn_sim_cfg', cfg.modern_tcn_sim_cfg);
 end
+if isfield(cfg, 'gru_sim_cfg')
+    simIn = local_set_variable_dual(simIn, model_name, ...
+        'gru_sim_cfg', cfg.gru_sim_cfg);
+end
+if isfield(cfg, 'tcn_sim_cfg')
+    simIn = local_set_variable_dual(simIn, model_name, ...
+        'tcn_sim_cfg', cfg.tcn_sim_cfg);
+end
 if isfield(cfg, 'params_override') && ~isempty(cfg.params_override)
     simIn = local_set_variable_dual(simIn, model_name, ...
         'params', cfg.params_override);
@@ -88,6 +125,19 @@ end
 if isfield(cfg, 'ff_rt_override') && ~isempty(cfg.ff_rt_override)
     simIn = local_set_variable_dual(simIn, model_name, ...
         'ff_rt', cfg.ff_rt_override);
+end
+if isfield(cfg, 'mpc_runtime_maps') && ~isempty(cfg.mpc_runtime_maps)
+    simIn = local_set_variable_dual(simIn, model_name, ...
+        'mpc_runtime_maps', cfg.mpc_runtime_maps);
+    simIn = local_set_runtime_map_scalars(simIn, model_name, cfg.mpc_runtime_maps);
+end
+if isfield(cfg, 'mpc_runtime_override') && ~isempty(cfg.mpc_runtime_override)
+    simIn = local_set_variable_dual(simIn, model_name, ...
+        'mpc_runtime_override', cfg.mpc_runtime_override);
+end
+if isfield(cfg, 'mpc_runtime_omega_cmd_clip') && ~isempty(cfg.mpc_runtime_omega_cmd_clip)
+    simIn = local_set_variable_dual(simIn, model_name, ...
+        'mpc_runtime_omega_cmd_clip', double(cfg.mpc_runtime_omega_cmd_clip));
 end
 if isfield(cfg, 'robustness_case') && ~isempty(cfg.robustness_case)
     simIn = local_set_variable_dual(simIn, model_name, ...
@@ -100,8 +150,36 @@ simOut = sim(simIn);
 
 logsout = local_materialize_dataset(simOut.logsout);
 SimulationMetadata = simOut.SimulationMetadata; %#ok<NASGU>
-save(out_file, 'logsout', 'SimulationMetadata', '-v7.3');
+local_save_closed_loop_output(out_file, logsout, SimulationMetadata);
 fprintf('[closed-loop] saved: %s\n', out_file);
+end
+
+function local_save_closed_loop_output(out_file, logsout, SimulationMetadata)
+out_dir = fileparts(out_file);
+if ~isempty(out_dir) && exist(out_dir, 'dir') ~= 7
+    mkdir(out_dir);
+end
+if exist(out_file, 'file') == 2
+    d = dir(out_file);
+    if ~isempty(d) && d.bytes == 0
+        delete(out_file);
+    end
+end
+
+tmp_file = [tempname(out_dir) '.mat'];
+cleanup = onCleanup(@() local_delete_if_exists(tmp_file));
+save(tmp_file, 'logsout', 'SimulationMetadata', '-v7.3');
+if exist(out_file, 'file') == 2
+    delete(out_file);
+end
+movefile(tmp_file, out_file, 'f');
+delete(cleanup);
+end
+
+function local_delete_if_exists(file)
+if exist(file, 'file') == 2
+    delete(file);
+end
 end
 
 function logsout = local_materialize_dataset(logs)
@@ -125,6 +203,63 @@ end
 function simIn = local_set_variable_dual(simIn, model_name, var_name, var_value)
 simIn = simIn.setVariable(var_name, var_value);
 simIn = simIn.setVariable(var_name, var_value, 'Workspace', model_name);
+end
+
+function simIn = local_set_runtime_map_scalars(simIn, model_name, runtime_maps)
+fields = local_runtime_map_scalar_fields();
+for i = 1:numel(fields)
+    field_name = fields{i};
+    if ~isfield(runtime_maps, field_name)
+        continue;
+    end
+    value = runtime_maps.(field_name);
+    if islogical(value)
+        value = logical(value);
+    elseif isnumeric(value)
+        value = double(value);
+    else
+        continue;
+    end
+    simIn = local_set_variable_dual(simIn, model_name, ...
+        ['mpc_runtime_' field_name], value);
+end
+end
+
+function local_assign_runtime_map_scalars(runtime_maps)
+fields = local_runtime_map_scalar_fields();
+for i = 1:numel(fields)
+    field_name = fields{i};
+    if ~isfield(runtime_maps, field_name)
+        continue;
+    end
+    value = runtime_maps.(field_name);
+    if islogical(value)
+        value = logical(value);
+    elseif isnumeric(value)
+        value = double(value);
+    else
+        continue;
+    end
+    assignin('base', ['mpc_runtime_' field_name], value);
+end
+end
+
+function local_clear_runtime_map_scalars()
+fields = local_runtime_map_scalar_fields();
+for i = 1:numel(fields)
+    evalin('base', sprintf('clear mpc_runtime_%s', fields{i}));
+end
+end
+
+function fields = local_runtime_map_scalar_fields()
+fields = {'enable_weight_interp', 'Q_range', 'R_range', 'dR_range', ...
+    'alpha_Q', 'beta_Q', 'alpha_R', 'beta_R', 'alpha_dR', 'beta_dR', ...
+    'scale_umin_lo', 'scale_umin_hi', 'scale_umax_lo', 'scale_umax_hi', ...
+    'rho_min', 'rho_max', 'tau', 'omega_threshold', 'q_y_gain_max', ...
+    'transition_width', 'theta_threshold', 'q_v_gain_max', ...
+    'theta_transition_width', 'R_F_gain_max_uphill', ...
+    'R_F_gain_max_downhill', 'dR_F_gain_max_uphill', ...
+    'dR_F_gain_max_downhill', 'umin_range', 'umax_range'};
 end
 
 function local_close_model(model_name)
