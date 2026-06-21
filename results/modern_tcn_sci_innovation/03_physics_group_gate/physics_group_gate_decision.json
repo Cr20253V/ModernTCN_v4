@@ -1,0 +1,46 @@
+{
+  "phase": "E3_physics_group_gate",
+  "e3_status": "PASS",
+  "n_formal_runs": 2,
+  "n_eligible_runs": 0,
+  "n_promotable_runs": 0,
+  "best_run_tag": "pg_alpha01_seed21",
+  "can_expand_seeds_42_101": false,
+  "can_enter_e4": true,
+  "e4_base_strategy": {
+    "source": "baseline_fixed_loss",
+    "model_family": "small",
+    "reason": "E3 has no promotable run"
+  },
+  "no_onnx_export": true,
+  "no_matlab_simulink_closed_loop": true,
+  "no_baseline_overwrite": true,
+  "ranking": [
+    {
+      "run_tag": "pg_alpha01_seed21",
+      "rank_score": 0.053173902654231664,
+      "eligible": false,
+      "promotable": false,
+      "alpha_final": 0.3643222153186798,
+      "gate_interpretability_score": 2,
+      "delta_acc_turn_transition": 0.014903129657228065,
+      "delta_stall_recall": -0.08333333333333337,
+      "delta_theta_mae_deg": 0.044386088848114014,
+      "eligible_reason": "stall_recall >= 0.668750, actual 0.635417; theta_edge_p95_abs_err <= 2.755057, actual 3.253798; flat_peak_theta_error <= 5.335740, actual 5.831338",
+      "promotable_reason": "not eligible"
+    },
+    {
+      "run_tag": "pg_alpha0_seed21",
+      "rank_score": -0.4972621138071869,
+      "eligible": false,
+      "promotable": false,
+      "alpha_final": 0.20843319594860077,
+      "gate_interpretability_score": 1,
+      "delta_acc_turn_transition": 0.010432190760059634,
+      "delta_stall_recall": -0.08333333333333337,
+      "delta_theta_mae_deg": 0.021671831607818604,
+      "eligible_reason": "acc_main >= 0.963963, actual 0.957246; flat_recall >= 0.959577, actual 0.920635; stall_recall >= 0.668750, actual 0.635417; theta_edge_p95_abs_err <= 2.755057, actual 3.422165; flat_peak_theta_error <= 5.335740, actual 6.597940",
+      "promotable_reason": "not eligible"
+    }
+  ]
+}

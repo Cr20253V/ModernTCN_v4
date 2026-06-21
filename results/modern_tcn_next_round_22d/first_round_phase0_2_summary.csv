@@ -1,0 +1,4 @@
+phase,status,artifact
+0,PASS,results/modern_tcn_next_round_22d/00_evidence_lock/evidence_lock.md
+1,PASS,results/modern_tcn_next_round_22d/01_error_diagnosis/diagnosis_summary.md
+2,PASS,results/modern_tcn_next_round_22d/02_seq256_dataset/seq256_dataset_validation.md

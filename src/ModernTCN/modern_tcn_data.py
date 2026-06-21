@@ -129,17 +129,33 @@ def load_modern_tcn_dataset(
         feat_names = _read_feat_names(f, root)
         scaler = _read_scaler(root)
 
-        feature_contract = _read_dataset_feature_contract(root, feat_names)
+        shape_seq_len = int(train.X.shape[1])
+        shape_input_dim = int(train.X.shape[2])
+        derived_feature_contract = _read_dataset_feature_contract(root, feat_names)
+        meta_seq_len = _read_optional_meta_int(root, "seq_len", shape_seq_len)
+        meta_input_dim = _read_optional_meta_int(root, "input_dim", shape_input_dim)
+        if meta_seq_len != shape_seq_len:
+            raise ValueError(f"ModernTCN dataset meta.seq_len={meta_seq_len} 与 X shape seq_len={shape_seq_len} 不一致")
+        if meta_input_dim != shape_input_dim:
+            raise ValueError(f"ModernTCN dataset meta.input_dim={meta_input_dim} 与 X shape input_dim={shape_input_dim} 不一致")
+        feature_contract = _read_optional_meta_string(root, "feature_contract", derived_feature_contract)
+        if feature_contract != derived_feature_contract:
+            raise ValueError(
+                f"ModernTCN dataset meta.feature_contract={feature_contract} 与特征列推断={derived_feature_contract} 不一致"
+            )
         feature_policy = _feature_policy_for_contract(feature_contract)
         contract = ModernTCNContract(
             dataset_file=str(dataset_file),
-            seq_len=int(train.X.shape[1]),
-            input_dim=int(train.X.shape[2]),
+            seq_len=shape_seq_len,
+            input_dim=shape_input_dim,
             output_contract="logits_main3_logits_turn3_theta1",
             split_policy="use_existing_run_level_split_from_mat",
             scaler_policy="use_existing_normalized_X_and_existing_scaler_only",
             feature_policy=feature_policy,
             feature_contract=feature_contract,
+            label_time_policy=_read_optional_meta_string(root, "label_time_policy", "current_window_end"),
+            horizon_steps=_read_optional_meta_int(root, "horizon_steps", 0),
+            horizon_seconds=_read_optional_meta_float(root, "horizon_seconds", 0.0),
         )
 
     _check_contract(contract)
@@ -256,8 +272,10 @@ def _decode_matlab_char(ds: h5py.Dataset) -> str:
 
 
 def _check_contract(contract: ModernTCNContract) -> None:
-    if contract.seq_len != 128:
-        raise ValueError(f"ModernTCN 第一阶段要求 seq_len=128，实际为 {contract.seq_len}")
+    allowed_seq_len = {128, 256}
+    if contract.seq_len not in allowed_seq_len:
+        allowed = "/".join(str(x) for x in sorted(allowed_seq_len))
+        raise ValueError(f"ModernTCN 第一阶段仅允许 seq_len={allowed}，实际为 {contract.seq_len}")
     expected = {
         "passive17_plus_all5": 22,
         "passive17_plus_all5_cmdresp_lite_v1": 30,
@@ -269,12 +287,41 @@ def _check_contract(contract: ModernTCNContract) -> None:
             raise ValueError(
                 f"ModernTCN {contract.feature_contract} 要求 input_dim={need}，实际为 {contract.input_dim}"
             )
-    elif contract.input_dim not in (22, 24, 30):
+    else:
+        raise ValueError(f"未知 ModernTCN feature contract={contract.feature_contract} 不受支持")
+    if contract.label_time_policy != "current_window_end":
         raise ValueError(
-            f"未知 ModernTCN feature contract={contract.feature_contract} 且 input_dim={contract.input_dim} 不受支持"
+            f"ModernTCN 当前模型固定为 label_time_policy=current_window_end，实际为 {contract.label_time_policy}"
         )
     if contract.horizon_steps != 0:
         raise ValueError(f"ModernTCN 当前模型固定为当前状态估计 horizon_steps=0，实际为 {contract.horizon_steps}")
+
+
+def _read_optional_meta_int(root: h5py.Group, field_name: str, default: int) -> int:
+    value = _read_optional_meta_scalar(root, field_name, default)
+    return int(round(float(value)))
+
+
+def _read_optional_meta_float(root: h5py.Group, field_name: str, default: float) -> float:
+    value = _read_optional_meta_scalar(root, field_name, default)
+    return float(value)
+
+
+def _read_optional_meta_scalar(root: h5py.Group, field_name: str, default: float) -> float:
+    meta = root.get("meta")
+    if meta is None or field_name not in meta:
+        return default
+    return float(np.asarray(meta[field_name]).reshape(-1)[0])
+
+
+def _read_optional_meta_string(root: h5py.Group, field_name: str, default: str) -> str:
+    meta = root.get("meta")
+    if meta is None or field_name not in meta:
+        return default
+    ds = meta[field_name]
+    if not isinstance(ds, h5py.Dataset):
+        return default
+    return _decode_matlab_char(ds)
 
 
 def _read_dataset_feature_contract(root: h5py.Group, feat_names: List[str]) -> str:

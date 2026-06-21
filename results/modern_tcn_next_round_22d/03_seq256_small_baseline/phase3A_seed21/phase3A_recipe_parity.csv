@@ -1,0 +1,20 @@
+parameter,baseline_recipe_value,phase3_value,match
+channels,64,64,1
+blocks,5,5,1
+kernel_size,31,31,1
+dropout,0.15,0.15,1
+temporal_padding,"""same""","""same""",1
+lambda_turn,0.2,0.2,1
+lambda_theta,0.55,0.55,1
+lambda_theta_flat,0.12,0.12,1
+turn_transition_weight,2.5,2.5,1
+main_class_weight_method,"""sqrt_inverse""","""sqrt_inverse""",1
+turn_class_weight_method,"""sqrt_inverse""","""sqrt_inverse""",1
+main_class_multipliers,"[1.2, 1.0, 0.95]","[1.2, 1.0, 0.95]",1
+turn_class_multipliers,"[1.4, 0.8, 1.4]","[1.4, 0.8, 1.4]",1
+select_turn_weight,0.55,0.55,1
+select_turn_transition_weight,1.2,1.2,1
+select_turn_transition_target,0.82,0.82,1
+select_theta_weight,0.3,0.3,1
+theta_flat_loss_mode,"""near_zero""","""near_zero""",1
+theta_flat_zero_tol_deg,0.3,0.3,1

@@ -1,0 +1,3 @@
+[ModernTCN small dry-run] 数据和模型前向检查通过
+  X: (4, 128, 22)
+  logits_main/logits_turn/theta: [(4, 3), (4, 3), (4, 1)]

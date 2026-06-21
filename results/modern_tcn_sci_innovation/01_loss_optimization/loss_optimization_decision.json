@@ -1,0 +1,56 @@
+{
+  "phase": "E1_loss_optimization",
+  "e1_status": "PASS",
+  "can_enter_e2": true,
+  "recommended_e2_loss_mode": "fixed",
+  "best_loss_mode": "fixed",
+  "method_stats": [
+    {
+      "loss_mode": "uncertainty_weighting",
+      "n_runs": 3,
+      "n_eligible_runs": 0,
+      "eligible": false,
+      "median_metrics": {
+        "acc_main": 0.9672404219877846,
+        "acc_turn": 0.5644086618545253,
+        "acc_turn_transition": 0.4918032786885246,
+        "theta_mae_deg": 0.8750448226928711,
+        "flat_recall": 0.9404761904761905,
+        "stall_recall": 0.6979166666666666,
+        "slope_recall": 0.9792727272727273,
+        "theta_edge_p95_abs_err": 2.4368855953216553,
+        "flat_peak_theta_error": 5.893237590789795
+      },
+      "improvements_vs_baseline": 2,
+      "degradations_vs_baseline": 5,
+      "score": -3,
+      "reason": "protection metrics failed or no eligible runs"
+    },
+    {
+      "loss_mode": "gradnorm",
+      "n_runs": 3,
+      "n_eligible_runs": 0,
+      "eligible": false,
+      "median_metrics": {
+        "acc_main": 0.966129927817879,
+        "acc_turn": 0.5732926152137702,
+        "acc_turn_transition": 0.511177347242921,
+        "theta_mae_deg": 0.757793664932251,
+        "flat_recall": 0.9616402116402116,
+        "stall_recall": 0.6875,
+        "slope_recall": 0.9774545454545455,
+        "theta_edge_p95_abs_err": 2.85585355758667,
+        "flat_peak_theta_error": 6.475679397583008
+      },
+      "improvements_vs_baseline": 2,
+      "degradations_vs_baseline": 5,
+      "score": -3,
+      "reason": "protection metrics failed or no eligible runs"
+    }
+  ],
+  "baseline_source": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\baseline_offline_metrics.csv",
+  "no_onnx_export": true,
+  "no_matlab_simulink_closed_loop": true,
+  "no_baseline_overwrite": true,
+  "generated_at": "2026-06-21 16:40:58"
+}

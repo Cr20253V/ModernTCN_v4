@@ -1,0 +1,29 @@
+# E5 Offline Run: rate_limit_only_d01
+
+## Config
+
+```json
+{
+  "tag": "rate_limit_only_d01",
+  "confidence_mode": "rate_limit_only",
+  "conf_threshold": 0.0,
+  "delta_theta_max_deg_per_step": 0.1,
+  "offline_only": true
+}
+```
+
+## Metrics
+
+- offline_safe: False
+- reason: theta_sched_mae_deg 1.305625 > raw+0.010 0.689395; flat_peak_theta_error 9.731826 > raw+0.300 5.635740; theta_edge_p95_abs_err 9.825619 > raw+0.300 2.493127
+- theta_raw_mae_deg: 0.679395
+- theta_sched_mae_deg: 1.305625
+- theta_raw_step_p95_deg: 14.589640
+- theta_sched_step_p95_deg: 0.100000
+- low_conf_window_ratio: 0.000000
+- rate_limit_hit_ratio: 0.116602
+- flat_peak_theta_error: 9.731826
+- theta_edge_p95_abs_err: 9.825619
+- advisory_step_metrics: True
+
+Offline step/smoothness metrics are advisory if the test split order is not a true time sequence.

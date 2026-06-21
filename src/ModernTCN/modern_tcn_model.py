@@ -9,7 +9,7 @@ Reshape/Transpose 等标准算子构成，便于后续导入 MATLAB R2024b。
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict, fields
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 from torch import nn
@@ -50,6 +50,11 @@ class ModernTCNConfig:
     lambda_theta_small_neg_excess: float = 0.0
     lambda_turn_release: float = 0.0
     lambda_false_turn_straight: float = 0.0
+    lambda_transition_focal: float = 0.0
+    lambda_stall_focal: float = 0.0
+    lambda_theta_smooth: float = 0.0
+    focal_gamma: float = 2.0
+    theta_smooth_mode: str = "off"
     theta_excess_target_deg: float = 1.0
     theta_flat_excess_target_deg: float = 0.5
     theta_true_zero_tol_deg: float = 1e-4
@@ -135,6 +140,38 @@ class ModernTCNDualKernelConfig(ModernTCNConfig):
     dual_branch_scale: float = 0.5
     small_branch_init: str = "default"
     layer_scale_init: float = 1e-2
+
+
+@dataclass
+class ModernTCNPhysicsGroupGateConfig(ModernTCNConfig):
+    """AGV physics-group residual gate variant for SCI E3."""
+
+    branch_channels: int = 16
+    branch_kernel: int = 31
+    alpha_init: float = 0.0
+    gate_hidden: int = 32
+    physics_group_spec: str = "default_22d_agv"
+    physics_group_names: Tuple[str, ...] = (
+        "yaw_steering",
+        "drive_current_load",
+        "velocity_acceleration",
+        "wheel_imbalance",
+    )
+    physics_group_indices: Tuple[Tuple[int, ...], ...] = (
+        (0, 5, 6, 13, 21),
+        (1, 2, 10, 11, 12, 17, 19, 18, 14),
+        (7, 8, 15, 16, 20),
+        (3, 4, 9),
+    )
+
+
+@dataclass
+class ModernTCNModeThetaConfig(ModernTCNConfig):
+    """Mode-conditioned theta expert variant for SCI E4."""
+
+    theta_gate_detach: bool = True
+    flat_theta_reg_lambda: float = 0.0
+    theta_expert_hidden: int = 0
 
 
 class CausalDepthwiseConv1d(nn.Module):
@@ -409,6 +446,260 @@ class ModernTCNDualKernelSmall(ModernTCNSmall):
                 for _ in range(cfg.blocks)
             ]
         )
+
+
+class PhysicsGroupTemporalBranch(nn.Module):
+    """Lightweight temporal branch for one physics feature group."""
+
+    def __init__(self, group_dim: int, channels: int, branch_channels: int, kernel_size: int) -> None:
+        super().__init__()
+        if group_dim < 1:
+            raise ValueError("physics group_dim must be >= 1")
+        if branch_channels < 1:
+            raise ValueError("branch_channels must be >= 1")
+        if kernel_size < 1 or kernel_size % 2 != 1:
+            raise ValueError("branch_kernel must be a positive odd integer")
+        self.net = nn.Sequential(
+            nn.Conv1d(group_dim, branch_channels, kernel_size=1),
+            nn.BatchNorm1d(branch_channels),
+            nn.ReLU(inplace=False),
+            nn.Conv1d(
+                branch_channels,
+                branch_channels,
+                kernel_size=kernel_size,
+                padding=kernel_size // 2,
+                groups=branch_channels,
+            ),
+            nn.BatchNorm1d(branch_channels),
+            nn.ReLU(inplace=False),
+            nn.Conv1d(branch_channels, channels, kernel_size=1),
+            nn.BatchNorm1d(channels),
+            nn.ReLU(inplace=False),
+        )
+
+    def forward(self, x_ct: torch.Tensor) -> torch.Tensor:
+        return self.net(x_ct)
+
+
+class ModernTCNPhysicsGroupGateSmall(ModernTCNSmall):
+    """ModernTCN-small with trunk-level AGV physics-group residual gate."""
+
+    def __init__(self, cfg: ModernTCNPhysicsGroupGateConfig) -> None:
+        if str(cfg.temporal_padding).lower() != "same":
+            raise ValueError("small_physics_group_gate 第一阶段只支持 same padding。")
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.group_names = tuple(str(x) for x in cfg.physics_group_names)
+        self.group_indices = tuple(tuple(int(i) for i in group) for group in cfg.physics_group_indices)
+        self._validate_groups(cfg.input_dim)
+        self.group_branches = nn.ModuleList(
+            [
+                PhysicsGroupTemporalBranch(
+                    len(indices),
+                    cfg.channels,
+                    int(cfg.branch_channels),
+                    int(cfg.branch_kernel),
+                )
+                for indices in self.group_indices
+            ]
+        )
+        for idx, indices in enumerate(self.group_indices):
+            self.register_buffer(
+                f"physics_group_indices_{idx}",
+                torch.tensor(indices, dtype=torch.long),
+                persistent=False,
+            )
+        n_groups = len(self.group_indices)
+        gate_in = int(cfg.channels) * n_groups
+        self.physics_gate = nn.Sequential(
+            nn.Linear(gate_in, int(cfg.gate_hidden)),
+            nn.ReLU(inplace=False),
+            nn.Linear(int(cfg.gate_hidden), n_groups),
+        )
+        self.alpha = nn.Parameter(torch.tensor(float(cfg.alpha_init), dtype=torch.float32))
+        self._last_gate_weights = None
+
+    def _validate_groups(self, input_dim: int) -> None:
+        if len(self.group_names) != len(self.group_indices):
+            raise ValueError("physics_group_names and physics_group_indices length mismatch")
+        if not self.group_indices:
+            raise ValueError("small_physics_group_gate requires at least one non-empty group")
+        seen: List[int] = []
+        for name, indices in zip(self.group_names, self.group_indices):
+            if not indices:
+                raise ValueError(f"physics group {name} is empty; omit empty groups from the gate")
+            for idx in indices:
+                if idx < 0 or idx >= input_dim:
+                    raise ValueError(f"physics group {name} index {idx} is outside input_dim={input_dim}")
+                seen.append(idx)
+        if len(seen) != len(set(seen)):
+            raise ValueError("physics group indices contain duplicates")
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if not torch.jit.is_tracing() and x.ndim != 3:
+            raise ValueError(f"ModernTCNPhysicsGroupGateSmall 期望输入 [B,T,F]，实际 ndim={x.ndim}")
+        x_ct = x.transpose(1, 2)
+        z = self.stem(x_ct)
+        for block in self.blocks:
+            z = block(z)
+
+        group_z = []
+        group_pooled = []
+        for idx, branch in enumerate(self.group_branches):
+            indices = getattr(self, f"physics_group_indices_{idx}")
+            x_group = x_ct.index_select(1, indices)
+            z_group = branch(x_group)
+            group_z.append(z_group)
+            group_pooled.append(z_group.mean(dim=2))
+        gate_logits = self.physics_gate(torch.cat(group_pooled, dim=1))
+        gate_weights = torch.softmax(gate_logits, dim=1)
+        z_phys = torch.zeros_like(z)
+        for idx, z_group in enumerate(group_z):
+            z_phys = z_phys + gate_weights[:, idx].reshape(-1, 1, 1) * z_group
+        z = z + self.alpha * z_phys
+        if not torch.jit.is_tracing():
+            self._last_gate_weights = gate_weights.detach()
+
+        h_last = z[:, :, -1]
+        h_mean = z.mean(dim=2)
+        h_max = z.amax(dim=2)
+        pieces = [h_last, h_mean, h_max]
+        input_stats = self._input_stats(x_ct)
+        if self.cfg.readout_input_stats:
+            pieces.append(input_stats)
+        h = torch.cat(pieces, dim=1)
+        logits_main = self.main_head(h)
+        if self.turn_head_source == "full":
+            h_turn = h
+        elif self.turn_head_source == "inputstats":
+            h_turn = input_stats
+        else:
+            h_turn = input_stats.index_select(1, self.turn_stats_indices)
+        logits_turn = self.turn_head(h_turn)
+        theta_hat = self.theta_head(h)
+        theta_hat = self._apply_theta_gate(theta_hat, logits_main)
+        return logits_main, logits_turn, theta_hat
+
+    @torch.no_grad()
+    def collect_gate_weights(self, x: torch.Tensor) -> torch.Tensor:
+        was_training = self.training
+        self.eval()
+        x_ct = x.transpose(1, 2)
+        group_pooled = []
+        for idx, branch in enumerate(self.group_branches):
+            indices = getattr(self, f"physics_group_indices_{idx}")
+            group_pooled.append(branch(x_ct.index_select(1, indices)).mean(dim=2))
+        gate_weights = torch.softmax(self.physics_gate(torch.cat(group_pooled, dim=1)), dim=1)
+        if was_training:
+            self.train()
+        return gate_weights
+
+    def e3_state(self) -> Dict[str, object]:
+        return {
+            "alpha": float(self.alpha.detach().cpu()),
+            "physics_group_names": list(self.group_names),
+            "physics_group_indices": [list(x) for x in self.group_indices],
+        }
+
+
+class ModernTCNModeThetaSmall(ModernTCNSmall):
+    """ModernTCN-small with mode-conditioned theta experts."""
+
+    def __init__(self, cfg: ModernTCNModeThetaConfig) -> None:
+        super().__init__(cfg)
+        self.cfg = cfg
+        feature_dim = int(self.theta_head.in_features)
+        self.theta_flat_head = self._make_theta_expert(feature_dim, cfg)
+        self.theta_stall_head = self._make_theta_expert(feature_dim, cfg)
+        self.theta_slope_head = self._make_theta_expert(feature_dim, cfg)
+        del self.theta_head
+
+    @staticmethod
+    def _make_theta_expert(feature_dim: int, cfg: ModernTCNModeThetaConfig) -> nn.Module:
+        hidden = int(getattr(cfg, "theta_expert_hidden", 0) or 0)
+        if hidden <= 0:
+            return nn.Linear(feature_dim, 1)
+        return nn.Sequential(
+            nn.Linear(feature_dim, hidden),
+            nn.ReLU(inplace=False),
+            nn.Linear(hidden, 1),
+        )
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        logits_main, logits_turn, theta_hat, _ = self._forward_impl(x, detach_override=None, include_details=False)
+        return logits_main, logits_turn, theta_hat
+
+    def forward_experts(self, x: torch.Tensor, detach_override: bool | None = None) -> Dict[str, torch.Tensor]:
+        logits_main, logits_turn, theta_hat, details = self._forward_impl(
+            x,
+            detach_override=detach_override,
+            include_details=True,
+        )
+        details["logits_main"] = logits_main
+        details["logits_turn"] = logits_turn
+        details["theta_hat"] = theta_hat
+        return details
+
+    def _forward_impl(
+        self,
+        x: torch.Tensor,
+        detach_override: bool | None,
+        include_details: bool,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
+        x_ct = x.transpose(1, 2)
+        z = self.stem(x_ct)
+        for block in self.blocks:
+            z = block(z)
+
+        h_last = z[:, :, -1]
+        h_mean = z.mean(dim=2)
+        h_max = z.amax(dim=2)
+        pieces = [h_last, h_mean, h_max]
+        input_stats = self._input_stats(x_ct)
+        if self.cfg.readout_input_stats:
+            pieces.append(input_stats)
+        h = torch.cat(pieces, dim=1)
+
+        logits_main = self.main_head(h)
+        if self.turn_head_source == "full":
+            h_turn = h
+        elif self.turn_head_source == "inputstats":
+            h_turn = input_stats
+        else:
+            h_turn = input_stats.index_select(1, self.turn_stats_indices)
+        logits_turn = self.turn_head(h_turn)
+
+        theta_flat = self.theta_flat_head(h)
+        theta_stall = self.theta_stall_head(h)
+        theta_slope = self.theta_slope_head(h)
+        main_prob = torch.softmax(logits_main, dim=1)
+        detach = bool(getattr(self.cfg, "theta_gate_detach", True)) if detach_override is None else bool(detach_override)
+        gate_prob = main_prob.detach() if detach else main_prob
+        experts = torch.cat([theta_flat, theta_stall, theta_slope], dim=1)
+        contributions = experts * gate_prob
+        theta_hat = contributions.sum(dim=1, keepdim=True)
+        theta_hat = self._apply_theta_gate(theta_hat, logits_main)
+
+        details: Dict[str, torch.Tensor] = {}
+        if include_details:
+            details = {
+                "theta_flat": theta_flat,
+                "theta_stall": theta_stall,
+                "theta_slope": theta_slope,
+                "theta_experts": experts,
+                "main_prob": main_prob,
+                "gate_prob": gate_prob,
+                "theta_contributions": contributions,
+                "theta_gate_detach": torch.tensor(detach, device=x.device),
+            }
+        return logits_main, logits_turn, theta_hat, details
+
+    def e4_state(self) -> Dict[str, object]:
+        return {
+            "theta_gate_detach": bool(getattr(self.cfg, "theta_gate_detach", True)),
+            "flat_theta_reg_lambda": float(getattr(self.cfg, "flat_theta_reg_lambda", 0.0)),
+            "theta_expert_hidden": int(getattr(self.cfg, "theta_expert_hidden", 0)),
+        }
 
 
 class ModernTCNFullProjection(nn.Module):
@@ -837,6 +1128,8 @@ _TUPLE_CONFIG_FIELDS = {
     "stage_blocks",
     "large_kernels",
     "small_kernels",
+    "physics_group_names",
+    "physics_group_indices",
 }
 
 
@@ -860,9 +1153,16 @@ def normalize_model_family(model_family: object) -> str:
         "moderntcndualkernel": "small_dualkernel",
         "dualkernel": "small_dualkernel",
         "dual_kernel": "small_dualkernel",
+        "modern_tcn_physics_group_gate": "small_physics_group_gate",
+        "modern_tcn_pg": "small_physics_group_gate",
+        "pg_modern_tcn_small": "small_physics_group_gate",
+        "physics_group_gate": "small_physics_group_gate",
+        "modern_tcn_mode_theta": "small_mode_theta",
+        "mode_theta": "small_mode_theta",
+        "mode_conditioned_theta": "small_mode_theta",
     }
     family = aliases.get(family, family)
-    if family not in {"small", "full", "small_gffn", "small_dualkernel"}:
+    if family not in {"small", "full", "small_gffn", "small_dualkernel", "small_physics_group_gate", "small_mode_theta"}:
         raise ValueError(f"未知 model_family: {model_family}")
     return family
 
@@ -872,7 +1172,10 @@ def _config_from_dict(cfg_cls, cfg_dict: Dict[str, object]):
     filtered = {k: v for k, v in dict(cfg_dict).items() if k in valid_fields}
     for key in _TUPLE_CONFIG_FIELDS:
         if key in filtered and filtered[key] is not None:
-            filtered[key] = tuple(filtered[key])
+            if key == "physics_group_indices":
+                filtered[key] = tuple(tuple(int(i) for i in group) for group in filtered[key])
+            else:
+                filtered[key] = tuple(filtered[key])
     return cfg_cls(**filtered)
 
 
@@ -892,6 +1195,18 @@ def build_model_from_config(cfg: ModernTCNConfig, model_family: object = "small"
         else:
             grouped_cfg = _config_from_dict(ModernTCNGroupedConfig, cfg.to_dict())
         return ModernTCNGroupedSmall(grouped_cfg)
+    if family == "small_physics_group_gate":
+        if isinstance(cfg, ModernTCNPhysicsGroupGateConfig):
+            pg_cfg = cfg
+        else:
+            pg_cfg = _config_from_dict(ModernTCNPhysicsGroupGateConfig, cfg.to_dict())
+        return ModernTCNPhysicsGroupGateSmall(pg_cfg)
+    if family == "small_mode_theta":
+        if isinstance(cfg, ModernTCNModeThetaConfig):
+            mt_cfg = cfg
+        else:
+            mt_cfg = _config_from_dict(ModernTCNModeThetaConfig, cfg.to_dict())
+        return ModernTCNModeThetaSmall(mt_cfg)
     if family == "full":
         if isinstance(cfg, ModernTCNFullConfig):
             full_cfg = cfg
@@ -916,6 +1231,10 @@ def build_model_from_checkpoint_dict(ckpt: Dict[str, object]) -> nn.Module:
         if family == "small_dualkernel"
         else ModernTCNGroupedConfig
         if family == "small_gffn"
+        else ModernTCNPhysicsGroupGateConfig
+        if family == "small_physics_group_gate"
+        else ModernTCNModeThetaConfig
+        if family == "small_mode_theta"
         else ModernTCNConfig
     )
     cfg = _config_from_dict(cfg_cls, dict(ckpt["model_config"]))

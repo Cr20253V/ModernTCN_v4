@@ -1,0 +1,68 @@
+{
+  "phase": "E4_mode_conditioned_theta",
+  "e4_status": "PASS",
+  "n_formal_runs": 3,
+  "n_safe_eligible_runs": 0,
+  "n_promotable_runs": 0,
+  "best_run_tag": "mode_theta_detach_flatreg001_seed21",
+  "can_expand_seeds_42_101": false,
+  "can_enter_e5": true,
+  "e5_base_strategy": {
+    "source": "baseline_small",
+    "model_family": "small",
+    "reason": "E4 has no promotable run; E5 sandbox may still proceed"
+  },
+  "no_onnx_export": true,
+  "no_matlab_simulink_closed_loop": true,
+  "no_baseline_overwrite": true,
+  "ranking": [
+    {
+      "run_tag": "mode_theta_detach_flatreg001_seed21",
+      "rank_score": -0.25363816088228075,
+      "safe_eligible": false,
+      "promotable": false,
+      "flat_theta_reg_lambda": 0.01,
+      "theta_mae_deg": 0.6164333820343018,
+      "flat_peak_theta_error": 6.068907737731934,
+      "theta_edge_p95_abs_err": 2.6512889862060547,
+      "acc_main": 0.9697390338700722,
+      "acc_turn": 0.5813436979455858,
+      "acc_turn_transition": 0.4828614008941878,
+      "expert_not_differentiated": false,
+      "safe_eligible_reason": "stall_recall >= 0.668750, actual 0.666667; acc_turn_transition >= 0.487765, actual 0.482861; flat_peak_theta_error <= 5.635740, actual 6.068908",
+      "promotable_reason": "not safe_eligible"
+    },
+    {
+      "run_tag": "mode_theta_detach_flatreg003_seed21",
+      "rank_score": -0.3735914715973582,
+      "safe_eligible": false,
+      "promotable": false,
+      "flat_theta_reg_lambda": 0.03,
+      "theta_mae_deg": 0.6668739914894104,
+      "flat_peak_theta_error": 5.95268440246582,
+      "theta_edge_p95_abs_err": 2.8699493408203125,
+      "acc_main": 0.9583564686285397,
+      "acc_turn": 0.579400333148251,
+      "acc_turn_transition": 0.4918032786885246,
+      "expert_not_differentiated": false,
+      "safe_eligible_reason": "acc_main >= 0.963963, actual 0.958356; flat_recall >= 0.959577, actual 0.936508; flat_peak_theta_error <= 5.635740, actual 5.952684",
+      "promotable_reason": "not safe_eligible"
+    },
+    {
+      "run_tag": "mode_theta_detach_flatreg000_seed21",
+      "rank_score": -0.97928916157134,
+      "safe_eligible": false,
+      "promotable": false,
+      "flat_theta_reg_lambda": 0.0,
+      "theta_mae_deg": 0.6515087485313416,
+      "flat_peak_theta_error": 6.434471607208252,
+      "theta_edge_p95_abs_err": 3.6929423809051514,
+      "acc_main": 0.970294280955025,
+      "acc_turn": 0.5874514158800667,
+      "acc_turn_transition": 0.5067064083457526,
+      "expert_not_differentiated": false,
+      "safe_eligible_reason": "flat_peak_theta_error <= 5.635740, actual 6.434472; theta_edge_p95_abs_err <= 3.055057, actual 3.692942",
+      "promotable_reason": "not safe_eligible"
+    }
+  ]
+}

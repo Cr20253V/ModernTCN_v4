@@ -1,0 +1,42 @@
+{
+  "dataset": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5_seq256.mat",
+  "contract": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5_seq256_contract.json",
+  "input_dim": 22,
+  "seq_len": 256,
+  "feature_contract": "passive17_plus_all5",
+  "feature_names": [
+    "gyro_z",
+    "I_lf",
+    "I_rr",
+    "omega_wheel_lf",
+    "omega_wheel_rr",
+    "delta_lf",
+    "delta_rr",
+    "v_hat",
+    "dv_hat_dt",
+    "ws_imbalance",
+    "I_sum",
+    "I_diff_signed",
+    "I_diff_abs",
+    "kappa_proxy",
+    "accel_per_current",
+    "dv_hat_dt_lp",
+    "accel_x_wheel",
+    "I_drive_signed",
+    "current_per_accel",
+    "drive_load_proxy",
+    "a_hp",
+    "yaw_consistency_error"
+  ],
+  "split_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_shared_run_split_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "split_policy": "run_level_no_window_leakage",
+  "scaler_policy": "fit_train_only_apply_val_test_online",
+  "label_time_policy": "current_window_end",
+  "horizon_steps": 0,
+  "leakage_check": {
+    "pass": true,
+    "train_val_overlap": [],
+    "train_test_overlap": [],
+    "val_test_overlap": []
+  }
+}

@@ -1,0 +1,7 @@
+path,exists,size_bytes,modified_time
+results/modern_tcn_ablation/_baseline_snapshot/baseline_identity.md,1,1088,2026-06-21 11:40:40
+results/modern_tcn_ablation/_baseline_snapshot/baseline_offline_metrics.csv,1,1083,2026-06-21 11:40:40
+results/modern_tcn_ablation/ABLATION_CLEANUP_SUMMARY.md,1,5298,2026-06-21 11:40:40
+results/modern_tcn_ablation/exp1_grouped_ffn/grouped_ffn_final_report.md,1,3352,2026-06-21 11:40:40
+results/modern_tcn_ablation/exp2_dual_kernel/dual_kernel_final_report.md,1,2275,2026-06-21 11:40:40
+results/modern_tcn_ablation/exp3_patch_full_densepatch_continuation/continuation_report.md,1,3147,2026-06-21 11:40:40

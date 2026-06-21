@@ -1,0 +1,29 @@
+{
+  "decision": "NO_PROMOTION",
+  "dataset_status": "exploratory_python_builder",
+  "matlab_parity_required_before_promotion": true,
+  "seed21_screening_only": true,
+  "not_replacement_for_seed101_champion": true,
+  "next_allowed_step": "STOP seq256 small; no seed expansion, no deployment",
+  "baseline_summary": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101_summary.csv",
+  "candidate_summary": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_next_round_22d\\03_seq256_small_baseline\\phase3A_seed21\\phase3A_seq256_small_seed21_summary.csv",
+  "seq256_builder_policy_audit": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_next_round_22d\\02_seq256_dataset\\seq256_builder_policy_audit.md",
+  "full_gate_failures": [
+    "acc_main",
+    "theta_mae_deg",
+    "flat_recall",
+    "stall_recall",
+    "theta_edge_p95_abs_err"
+  ],
+  "near_hard_floor_failures": [
+    "acc_main",
+    "stall_recall",
+    "theta_mae_deg"
+  ],
+  "onnx_executed": false,
+  "matlab_executed": false,
+  "simulink_executed": false,
+  "closed_loop_executed": false,
+  "old_dir_isolation_ok": true,
+  "old_dir_snapshot_diff": "results/modern_tcn_next_round_22d/03_seq256_small_baseline/phase3A_seed21/phase3A_old_dir_snapshot_diff.csv"
+}

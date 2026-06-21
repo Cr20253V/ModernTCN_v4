@@ -1,0 +1,47 @@
+{
+  "phase": "Phase7_ablation_summary",
+  "status": "PASS",
+  "baseline_still_best": true,
+  "has_promotable_candidate": false,
+  "can_enter_phase6": false,
+  "can_enter_phase8": true,
+  "recommended_main_method": "frozen_ModernTCN_small_baseline",
+  "recommended_paper_positioning": "negative_ablation_and_baseline_preservation",
+  "next_step": "Phase8_final_report",
+  "no_training": true,
+  "no_onnx_export": true,
+  "no_matlab_simulink": true,
+  "no_baseline_overwrite": true,
+  "no_old_ablation_overwrite": true,
+  "no_old_compare_overwrite": true,
+  "phase6_gate": {
+    "can_enter_phase6_sandbox_expansion": false,
+    "can_enter_phase6_formal": false,
+    "sandbox_closed_loop_executed": false,
+    "source": "results/modern_tcn_sci_innovation/05_confidence_scheduling/confidence_scheduling_decision.json"
+  },
+  "upstream_status": {
+    "E0": "PASS",
+    "E1": "PASS",
+    "E2": "PASS",
+    "E3": "PASS",
+    "E4": "PASS",
+    "E5": "PASS"
+  },
+  "promotable_counts": {
+    "E1_dynamic_loss_methods_eligible": 0,
+    "E2": 0,
+    "E3": 0,
+    "E4": 0,
+    "E5_offline_safe_configs": 0
+  },
+  "generated_files": {
+    "phase7_preflight": "results/modern_tcn_sci_innovation/07_ablation_summary/phase7_preflight.md",
+    "master_table": "results/modern_tcn_sci_innovation/07_ablation_summary/sci_innovation_ablation_master_table.csv",
+    "negative_result_analysis": "results/modern_tcn_sci_innovation/07_ablation_summary/negative_result_analysis.md",
+    "phase7_summary": "results/modern_tcn_sci_innovation/07_ablation_summary/phase7_summary.md",
+    "phase7_decision": "results/modern_tcn_sci_innovation/07_ablation_summary/phase7_decision.json",
+    "handoff": "results/modern_tcn_sci_innovation/07_ablation_summary/HANDOFF_NEXT_CHAT.md"
+  },
+  "generated_at": "2026-06-21T21:28:49"
+}

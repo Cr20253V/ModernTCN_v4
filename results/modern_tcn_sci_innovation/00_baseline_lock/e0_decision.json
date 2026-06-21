@@ -1,0 +1,144 @@
+{
+  "phase": "E0_baseline_lock",
+  "decision": "PASS",
+  "can_enter_e1": true,
+  "current_git_hash": "4abb19583b524424c7d7aec4061c101fcba6da55",
+  "historical_baseline_snapshot_git_hash": "b0217f9149e8616a4a276cab48820373acaed963",
+  "git_status_short": [
+    " M src/ModernTCN/modern_tcn_data.py",
+    "?? data/tcn/ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5_seq256_contract.json",
+    "?? data/tcn/ModernTCN_prepare_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5_seq256_report.md",
+    "?? results/modern_tcn_ablation/ModernTCN_v4_next_round_22D_technical_plan_for_CODEX.md",
+    "?? results/modern_tcn_next_round_22d/",
+    "?? results/modern_tcn_sci_innovation/",
+    "?? src/ModernTCN/run_next_round_22d_phase0_2.py",
+    "?? src/ModernTCN/run_next_round_22d_phase3A.py",
+    "?? src/ModernTCN/test_modern_tcn_contracts.py"
+  ],
+  "baseline_identity": {
+    "model": "ModernTCN_small",
+    "champion_branch": "turn_l020_tt25_tcm14_stw055_slrw060_seed101",
+    "plant_revision": "agv_physics_v2_plantfix",
+    "feature_contract": "passive17_plus_all5",
+    "input_dim": 22,
+    "seq_len": 128,
+    "train_windows": 16529,
+    "val_windows": 3695,
+    "test_windows": 3602,
+    "feature_names": [
+      "gyro_z",
+      "I_lf",
+      "I_rr",
+      "omega_wheel_lf",
+      "omega_wheel_rr",
+      "delta_lf",
+      "delta_rr",
+      "v_hat",
+      "dv_hat_dt",
+      "ws_imbalance",
+      "I_sum",
+      "I_diff_signed",
+      "I_diff_abs",
+      "kappa_proxy",
+      "accel_per_current",
+      "dv_hat_dt_lp",
+      "accel_x_wheel",
+      "I_drive_signed",
+      "current_per_accel",
+      "drive_load_proxy",
+      "a_hp",
+      "yaw_consistency_error"
+    ],
+    "checkpoint": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.pt",
+    "onnx": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.onnx",
+    "dataset": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+    "contract": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5_contract.json"
+  },
+  "required_files": {
+    "checkpoint": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.pt",
+      "exists": true,
+      "size_bytes": 521797,
+      "sha256": "E72F366F7378DB9E7CED49FD950D6E5C8EC4D5E27D7D88E0BD9D19B4EE01F3E0"
+    },
+    "onnx": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.onnx",
+      "exists": true,
+      "size_bytes": 472135,
+      "sha256": "D27D74558E2899C524494440594EEFE89583A66176EBB5CA5790B8265538C172"
+    },
+    "dataset": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+      "exists": true,
+      "size_bytes": 446285336,
+      "sha256": "AB5DDE32EF3627AA7032A3B4F7632C87CB471287A638F2B14A25A179A660196F"
+    },
+    "contract": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5_contract.json",
+      "exists": true,
+      "size_bytes": 3047,
+      "sha256": "6BB404DF7B3FD7B3ABB32EF664E0D558E4DC81505E1B2CE7DB3DECD0116A2457"
+    },
+    "current_dataset_pointer": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\CURRENT_ModernTCN_DATASET.json",
+      "exists": true,
+      "size_bytes": 1173,
+      "sha256": "7913926B6B73C5D27E22E73B0C53C56CA85A22A33D54F17B0EBB048C852CABAC"
+    },
+    "baseline_identity": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_baseline_snapshot\\baseline_identity.md",
+      "exists": true,
+      "size_bytes": 1088,
+      "sha256": "00D30F6478B3DB11CCA30CDBFD7E8A8D350A738C9D05B4FE4C136A4EAEC0B8BD"
+    },
+    "baseline_summary": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_baseline_snapshot\\baseline_summary.md",
+      "exists": true,
+      "size_bytes": 729,
+      "sha256": "3BD5664C7B2596CD6288C4BFAF9D30D8FD8DC185D232196AF37679D1020BDBE1"
+    },
+    "baseline_offline_metrics_source": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_baseline_snapshot\\baseline_offline_metrics.csv",
+      "exists": true,
+      "size_bytes": 1083,
+      "sha256": "9604A62FDE4C53CF32B61D6D8BEF148D8995CDC6C9CB1EC09CECAA72B51C9DAB"
+    },
+    "baseline_closed_loop_metrics_source": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_baseline_snapshot\\baseline_closed_loop_metrics.csv",
+      "exists": true,
+      "size_bytes": 3986,
+      "sha256": "A4DE3CBB1A25528222D6C59F1AF281DC4326951BAC16B8B3C5BB84B751052986"
+    },
+    "handoff": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\HANDOFF_NEXT_CHAT.md",
+      "exists": true,
+      "size_bytes": 7617,
+      "sha256": "46EB23E56097231D5250F911EFF746085E97EF5259464CA56B171E69375C8E21"
+    },
+    "current_result_manifest": {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\CURRENT_RESULT_MANIFEST_20260617.md",
+      "exists": true,
+      "size_bytes": 3737,
+      "sha256": "AD37B6FEC11C11657CD68ECC7813549E54E734E65D8C3348F12FE6285F04FC00"
+    }
+  },
+  "metrics_sources": {
+    "baseline_offline_metrics_source": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_baseline_snapshot\\baseline_offline_metrics.csv",
+    "baseline_closed_loop_metrics_source": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_baseline_snapshot\\baseline_closed_loop_metrics.csv",
+    "baseline_summary": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_baseline_snapshot\\baseline_summary.md",
+    "handoff": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\HANDOFF_NEXT_CHAT.md",
+    "manifest": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\CURRENT_RESULT_MANIFEST_20260617.md"
+  },
+  "generated_files": {
+    "baseline_lock": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\baseline_lock.md",
+    "baseline_offline_metrics": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\baseline_offline_metrics.csv",
+    "baseline_closed_loop_metrics": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\baseline_closed_loop_metrics.csv",
+    "baseline_file_check": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\baseline_file_check.csv",
+    "feature_names_audit": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\feature_names_audit.md",
+    "e0_decision": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\e0_decision.json"
+  },
+  "failure_reasons": [],
+  "no_training": true,
+  "no_onnx_export": true,
+  "no_simulink_closed_loop": true
+}

@@ -134,6 +134,18 @@ end
 if ~isfield(cfg, 'hybrid_turn_conf_threshold') || isempty(cfg.hybrid_turn_conf_threshold)
     cfg.hybrid_turn_conf_threshold = 0.55;
 end
+if ~isfield(cfg, 'e5_conf_sched_enable') || isempty(cfg.e5_conf_sched_enable)
+    cfg.e5_conf_sched_enable = false;
+end
+if ~isfield(cfg, 'e5_confidence_mode') || isempty(cfg.e5_confidence_mode)
+    cfg.e5_confidence_mode = 'main_conf';
+end
+if ~isfield(cfg, 'e5_conf_threshold') || isempty(cfg.e5_conf_threshold)
+    cfg.e5_conf_threshold = 0.6;
+end
+if ~isfield(cfg, 'e5_delta_theta_max_deg_per_step') || isempty(cfg.e5_delta_theta_max_deg_per_step)
+    cfg.e5_delta_theta_max_deg_per_step = 0.1;
+end
 state_force_label_main = local_label_override_from_cfg(cfg, 'force_label_main', [1 2 3]);
 state_force_label_turn = local_label_override_from_cfg(cfg, 'force_label_turn', [-1 0 1]);
 onnx_file = '';
@@ -256,6 +268,12 @@ state.theta_abs_limit = double(cfg.theta_abs_limit);
 state.theta_rate_limit = double(cfg.theta_rate_limit);
 state.theta_hat_output_prev = 0.0;
 state.theta_hat_for_mpc_prev = 0.0;
+state.e5_conf_sched_enable = logical(cfg.e5_conf_sched_enable);
+state.e5_confidence_mode = lower(strtrim(char(cfg.e5_confidence_mode)));
+state.e5_conf_threshold = max(0.0, min(1.0, double(cfg.e5_conf_threshold)));
+state.e5_delta_theta_max = deg2rad(max(0.0, double(cfg.e5_delta_theta_max_deg_per_step)));
+state.e5_theta_sched_prev = 0.0;
+state.e5_theta_sched_initialized = false;
 
 state.eps = 1e-8;
 
@@ -349,11 +367,12 @@ modern_conf_main_out = state.conf_main_current;
     local_apply_hybrid_labels(label_main_guarded, label_turn_guarded, ...
     modern_conf_main_out, state.conf_turn_current, state);
 label_main_out = local_apply_forced_label(label_main_hybrid, state.force_label_main);
-label_turn_out = local_apply_forced_label(label_turn_guarded, state.force_label_turn);
 label_turn_out = local_apply_forced_label(label_turn_hybrid, state.force_label_turn);
 
 theta_hat_out = local_apply_theta_conditioning(state.theta_hat_current, state);
-theta_hat_for_mpc = local_apply_theta_mpc_deadzone(theta_hat_out, state);
+[theta_sched_for_mpc_input, state, e5_debug] = local_apply_e5_confidence_scheduling( ...
+    theta_hat_out, theta_hat_raw, modern_conf_main_out, state.conf_turn_current, state);
+theta_hat_for_mpc = local_apply_theta_mpc_deadzone(theta_sched_for_mpc_input, state);
 theta_hat_for_mpc = local_apply_theta_mpc_rate_limit(theta_hat_for_mpc, state);
 state.theta_hat_output_prev = theta_hat_out;
 state.theta_hat_for_mpc_prev = theta_hat_for_mpc;
@@ -368,6 +387,8 @@ out.conf_turn = state.conf_turn_current;
 out.label_main_raw = label_main_raw;
 out.label_turn_raw = label_turn_raw;
 out.theta_hat_raw = theta_hat_raw;
+out.theta_sched = theta_sched_for_mpc_input;
+out.e5_conf_sched = e5_debug;
 out.main_prob = double(pred.main_prob(:));
 out.turn_prob = double(pred.turn_prob(:));
 out.features = double(features(:));
@@ -386,6 +407,17 @@ out.debug.theta_rate_limit = state.theta_rate_limit;
 out.debug.theta_mpc_deadzone = state.theta_mpc_deadzone;
 out.debug.theta_mpc_deadzone_soft = state.theta_mpc_deadzone_soft;
 out.debug.theta_mpc_rate_limit = state.theta_mpc_rate_limit;
+out.debug.e5_conf_sched_enable = state.e5_conf_sched_enable;
+out.debug.e5_confidence_mode = state.e5_confidence_mode;
+out.debug.e5_conf_threshold = state.e5_conf_threshold;
+out.debug.e5_delta_theta_max = state.e5_delta_theta_max;
+out.debug.theta_hat_raw = e5_debug.theta_hat_raw;
+out.debug.theta_sched = e5_debug.theta_sched;
+out.debug.main_conf = e5_debug.main_conf;
+out.debug.turn_conf = e5_debug.turn_conf;
+out.debug.c_eff = e5_debug.c_eff;
+out.debug.low_conf_flag = e5_debug.low_conf_flag;
+out.debug.rate_limit_hit_flag = e5_debug.rate_limit_hit_flag;
 out.debug.tau_theta = state.tau_theta;
 out.debug.dwell_main = state.dwell_main;
 out.debug.dwell_turn = state.dwell_turn;
@@ -580,6 +612,71 @@ if isfinite(state.theta_rate_limit) && state.theta_rate_limit > 0
 end
 end
 
+function [theta_sched, state, dbg] = local_apply_e5_confidence_scheduling( ...
+        theta_hat_conditioned, theta_hat_raw, main_conf, turn_conf, state)
+dbg = struct();
+dbg.enabled = state.e5_conf_sched_enable;
+dbg.theta_hat_raw = theta_hat_raw;
+dbg.theta_hat_conditioned = theta_hat_conditioned;
+dbg.theta_sched = theta_hat_conditioned;
+dbg.main_conf = main_conf;
+dbg.turn_conf = turn_conf;
+dbg.confidence_mode = state.e5_confidence_mode;
+dbg.conf_threshold = state.e5_conf_threshold;
+dbg.c_eff = 1.0;
+dbg.low_conf_flag = false;
+dbg.rate_limit_hit_flag = false;
+dbg.delta_theta_max = state.e5_delta_theta_max;
+
+theta_sched = theta_hat_conditioned;
+if ~state.e5_conf_sched_enable
+    return;
+end
+
+if ~state.e5_theta_sched_initialized
+    state.e5_theta_sched_prev = theta_hat_conditioned;
+    state.e5_theta_sched_initialized = true;
+    theta_sched = theta_hat_conditioned;
+    dbg.theta_sched = theta_sched;
+    return;
+end
+
+switch state.e5_confidence_mode
+    case {'main_conf', 'main'}
+        conf = main_conf;
+    case {'main_turn_conf', 'mainturn', 'main_conf*turn_conf'}
+        conf = main_conf * turn_conf;
+    otherwise
+        conf = main_conf;
+end
+if ~isfinite(conf)
+    conf = 0.0;
+end
+low_conf = conf < state.e5_conf_threshold;
+if low_conf
+    c_eff = 0.0;
+else
+    c_eff = min(max(conf, 0.0), 1.0);
+end
+
+theta_safe = state.e5_theta_sched_prev;
+theta_blend = c_eff * theta_hat_conditioned + (1.0 - c_eff) * theta_safe;
+theta_delta = theta_blend - theta_safe;
+if isfinite(state.e5_delta_theta_max) && state.e5_delta_theta_max > 0
+    theta_delta_clip = min(max(theta_delta, -state.e5_delta_theta_max), state.e5_delta_theta_max);
+else
+    theta_delta_clip = theta_delta;
+end
+theta_sched = theta_safe + theta_delta_clip;
+rate_hit = abs(theta_delta - theta_delta_clip) > 1e-12;
+state.e5_theta_sched_prev = theta_sched;
+
+dbg.theta_sched = theta_sched;
+dbg.c_eff = c_eff;
+dbg.low_conf_flag = low_conf;
+dbg.rate_limit_hit_flag = rate_hit;
+end
+
 function theta_hat = local_apply_theta_mpc_deadzone(theta_hat, state)
 theta_abs = abs(theta_hat);
 if theta_abs <= state.theta_mpc_deadzone
@@ -663,6 +760,8 @@ out.conf_turn = state.conf_turn_current;
 out.label_main_raw = state.label_main_current;
 out.label_turn_raw = state.label_turn_current;
 out.theta_hat_raw = state.theta_hat_current;
+out.theta_sched = state.theta_hat_current;
+out.e5_conf_sched = local_e5_default_debug(state);
 out.main_prob = [1; 0; 0];
 out.turn_prob = [0; 1; 0];
 out.features = nan(state.feat_dim, 1);
@@ -679,6 +778,17 @@ out.debug.theta_rate_limit = state.theta_rate_limit;
 out.debug.theta_mpc_deadzone = state.theta_mpc_deadzone;
 out.debug.theta_mpc_deadzone_soft = state.theta_mpc_deadzone_soft;
 out.debug.theta_mpc_rate_limit = state.theta_mpc_rate_limit;
+out.debug.e5_conf_sched_enable = state.e5_conf_sched_enable;
+out.debug.e5_confidence_mode = state.e5_confidence_mode;
+out.debug.e5_conf_threshold = state.e5_conf_threshold;
+out.debug.e5_delta_theta_max = state.e5_delta_theta_max;
+out.debug.theta_hat_raw = out.theta_hat_raw;
+out.debug.theta_sched = out.theta_sched;
+out.debug.main_conf = out.conf_main;
+out.debug.turn_conf = out.conf_turn;
+out.debug.c_eff = out.e5_conf_sched.c_eff;
+out.debug.low_conf_flag = out.e5_conf_sched.low_conf_flag;
+out.debug.rate_limit_hit_flag = out.e5_conf_sched.rate_limit_hit_flag;
 out.debug.tau_theta = state.tau_theta;
 out.debug.dwell_main = state.dwell_main;
 out.debug.dwell_turn = state.dwell_turn;
@@ -715,6 +825,22 @@ out.debug.turn_command_guard_omega_mean = NaN;
 out.debug.note = note;
 end
 
+function dbg = local_e5_default_debug(state)
+dbg = struct();
+dbg.enabled = state.e5_conf_sched_enable;
+dbg.theta_hat_raw = state.theta_hat_current;
+dbg.theta_hat_conditioned = state.theta_hat_current;
+dbg.theta_sched = state.theta_hat_current;
+dbg.main_conf = state.conf_main_current;
+dbg.turn_conf = state.conf_turn_current;
+dbg.confidence_mode = state.e5_confidence_mode;
+dbg.conf_threshold = state.e5_conf_threshold;
+dbg.c_eff = 1.0;
+dbg.low_conf_flag = false;
+dbg.rate_limit_hit_flag = false;
+dbg.delta_theta_max = state.e5_delta_theta_max;
+end
+
 function cfg = local_apply_deployment_override(cfg)
 override_names = {'deploy_override', 'deployment_override', ...
     'classifier_override', 'deployment_params'};
@@ -737,7 +863,8 @@ allowed = {'theta_output_gain', 'theta_abs_limit', 'theta_rate_limit', ...
     'main_slope_release_omega_abs', 'main_slope_release_omega_mean_abs', ...
     'main_slope_release_min_active_sec', 'main_slope_release_force_turn_straight', ...
     'hybrid_mode', 'hybrid_main_conf_threshold', 'hybrid_turn_conf_threshold', ...
-    'hybrid_gru_model_file'};
+    'hybrid_gru_model_file', 'e5_conf_sched_enable', 'e5_confidence_mode', ...
+    'e5_conf_threshold', 'e5_delta_theta_max_deg_per_step'};
 for i = 1:numel(allowed)
     name = allowed{i};
     if isfield(override, name) && ~isempty(override.(name))

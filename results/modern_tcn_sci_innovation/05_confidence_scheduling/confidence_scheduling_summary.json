@@ -1,0 +1,146 @@
+{
+  "baseline": {
+    "acc_main": 0.9669627984453082,
+    "acc_turn": 0.5788450860632982,
+    "acc_turn_transition": 0.4977645305514158,
+    "theta_mae_deg": 0.6793947815895081,
+    "theta_abs_le_10_p95_abs_err_deg": 1.8274656534194946,
+    "flat_recall": 0.9695767195767195,
+    "stall_recall": 0.71875,
+    "slope_recall": 0.974909090909091,
+    "turn_right_recall": 0.6120150187734669,
+    "turn_straight_recall": 0.5763062596999483,
+    "turn_left_recall": 0.5540229885057472,
+    "theta_edge_p95_abs_err": 2.755056858062744,
+    "flat_peak_theta_error": 5.335740089416504,
+    "closed_loop_ey_rmse_mean": 0.0293881212343404,
+    "closed_loop_xy_rmse_mean": 0.599794482657117,
+    "closed_loop_j_du_mean": 3.6807764852036
+  },
+  "decision": {
+    "phase": "E5_confidence_scheduling",
+    "e5_status": "PASS",
+    "method_label": "confidence-aware scheduling filter",
+    "base_strategy": {
+      "source": "baseline_small",
+      "model_family": "small",
+      "loss_mode": "fixed"
+    },
+    "offline_ranking": [
+      {
+        "run_tag": "cs_main_c06_d02",
+        "rank_score": 11.753298036169932,
+        "offline_safe": false,
+        "theta_raw_mae_deg": 0.6793947954610611,
+        "theta_sched_mae_deg": 1.2948003058541557,
+        "theta_raw_step_p95_deg": 14.589640283584595,
+        "theta_sched_step_p95_deg": 0.20000000000000018,
+        "low_conf_window_ratio": 0.009439200444197668,
+        "rate_limit_hit_ratio": 0.11438089950027762,
+        "flat_peak_theta_error": 9.631826210021973,
+        "theta_edge_p95_abs_err": 9.725618834793568,
+        "offline_safe_reason": "theta_sched_mae_deg 1.294800 > raw+0.010 0.689395; flat_peak_theta_error 9.631826 > raw+0.300 5.635740; theta_edge_p95_abs_err 9.725619 > raw+0.300 2.493127"
+      },
+      {
+        "run_tag": "cs_mainturn_c06_d01",
+        "rank_score": 11.750914689486711,
+        "offline_safe": false,
+        "theta_raw_mae_deg": 0.6793947954610611,
+        "theta_sched_mae_deg": 1.3070920024824109,
+        "theta_raw_step_p95_deg": 14.589640283584595,
+        "theta_sched_step_p95_deg": 0.10000000000000009,
+        "low_conf_window_ratio": 0.15935591338145474,
+        "rate_limit_hit_ratio": 0.10105496946141032,
+        "flat_peak_theta_error": 9.731826210021973,
+        "theta_edge_p95_abs_err": 9.825618834793568,
+        "offline_safe_reason": "theta_sched_mae_deg 1.307092 > raw+0.010 0.689395; flat_peak_theta_error 9.731826 > raw+0.300 5.635740; theta_edge_p95_abs_err 9.825619 > raw+0.300 2.493127"
+      },
+      {
+        "run_tag": "cs_main_c07_d01",
+        "rank_score": 11.737369262295386,
+        "offline_safe": false,
+        "theta_raw_mae_deg": 0.6793947954610611,
+        "theta_sched_mae_deg": 1.3056532780437453,
+        "theta_raw_step_p95_deg": 14.589640283584595,
+        "theta_sched_step_p95_deg": 0.10000000000000009,
+        "low_conf_window_ratio": 0.01526929483620211,
+        "rate_limit_hit_ratio": 0.11549139367018323,
+        "flat_peak_theta_error": 9.731826210021973,
+        "theta_edge_p95_abs_err": 9.825618834793568,
+        "offline_safe_reason": "theta_sched_mae_deg 1.305653 > raw+0.010 0.689395; flat_peak_theta_error 9.731826 > raw+0.300 5.635740; theta_edge_p95_abs_err 9.825619 > raw+0.300 2.493127"
+      },
+      {
+        "run_tag": "cs_main_c06_d01",
+        "rank_score": 11.736786252856186,
+        "offline_safe": false,
+        "theta_raw_mae_deg": 0.6793947954610611,
+        "theta_sched_mae_deg": 1.3056532780437453,
+        "theta_raw_step_p95_deg": 14.589640283584595,
+        "theta_sched_step_p95_deg": 0.10000000000000009,
+        "low_conf_window_ratio": 0.009439200444197668,
+        "rate_limit_hit_ratio": 0.11632426429761243,
+        "flat_peak_theta_error": 9.731826210021973,
+        "theta_edge_p95_abs_err": 9.825618834793568,
+        "offline_safe_reason": "theta_sched_mae_deg 1.305653 > raw+0.010 0.689395; flat_peak_theta_error 9.731826 > raw+0.300 5.635740; theta_edge_p95_abs_err 9.825619 > raw+0.300 2.493127"
+      },
+      {
+        "run_tag": "rate_limit_only_d01",
+        "rank_score": 11.73585943797597,
+        "offline_safe": false,
+        "theta_raw_mae_deg": 0.6793947954610611,
+        "theta_sched_mae_deg": 1.3056247694367364,
+        "theta_raw_step_p95_deg": 14.589640283584595,
+        "theta_sched_step_p95_deg": 0.10000000000000009,
+        "low_conf_window_ratio": 0.0,
+        "rate_limit_hit_ratio": 0.11660188784008883,
+        "flat_peak_theta_error": 9.731826210021973,
+        "theta_edge_p95_abs_err": 9.825618834793568,
+        "offline_safe_reason": "theta_sched_mae_deg 1.305625 > raw+0.010 0.689395; flat_peak_theta_error 9.731826 > raw+0.300 5.635740; theta_edge_p95_abs_err 9.825619 > raw+0.300 2.493127"
+      }
+    ],
+    "offline_gate": {
+      "can_enter_sandbox": false,
+      "reasons": [
+        "no confidence scheduling config passed offline safety screen"
+      ],
+      "best_confidence_run_tag": "",
+      "rate_limit_only_rank_score": 11.73585943797597,
+      "best_confidence_rank_score": null,
+      "offline_is_safety_screen_only": true
+    },
+    "selected_sandbox_candidate": "",
+    "sandbox_closed_loop_executed": false,
+    "sandbox_closed_loop_better_than_raw_baseline": false,
+    "sandbox_result": {
+      "executed": false,
+      "reason": "offline gate did not select a confidence scheduling candidate"
+    },
+    "can_enter_phase6_sandbox_expansion": false,
+    "can_enter_phase6_formal": false,
+    "order_audit": {
+      "n_windows": 3602,
+      "n_unique_run_id": 16,
+      "n_contiguous_segments": 3174,
+      "run_ids_are_contiguous": false,
+      "n_noncontiguous_run_id": 16,
+      "sample_noncontiguous_run_id": {
+        "2.0": 487,
+        "3.0": 508,
+        "9.0": 492,
+        "12.0": 483,
+        "22.0": 130,
+        "27.0": 110,
+        "33.0": 101,
+        "38.0": 89,
+        "40.0": 96,
+        "41.0": 95
+      },
+      "advisory_step_metrics": true,
+      "note": "step and smoothness metrics are advisory when run_id is interleaved"
+    },
+    "no_training": true,
+    "no_onnx_export": true,
+    "no_baseline_overwrite": true,
+    "no_formal_compare_write": true
+  }
+}

@@ -1,0 +1,5 @@
+path,exists,file_count,total_bytes,latest_mtime_epoch,latest_mtime_local,latest_file
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_ablation,1,75,412440,1782016441.327282,2026-06-21 12:34:01,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_ablation\ModernTCN_v4_next_round_22D_technical_plan_for_CODEX.md
+E:\Matlab\Simulink\S-Function_16\results\paper\agv_model_parameter_correction_workflow\08_models\modern_tcn\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101,1,9,1247730,1781618313.975783,2026-06-16 21:58:33,E:\Matlab\Simulink\S-Function_16\results\paper\agv_model_parameter_correction_workflow\08_models\modern_tcn\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\modern_tcn_seed101_onnxruntime_consistency.json
+E:\Matlab\Simulink\S-Function_16\results\compare,1,134,182922061,1778836830.977608,2026-05-15 17:20:30,E:\Matlab\Simulink\S-Function_16\results\compare\realtime_benchmark\realtime_report.md
+E:\Matlab\Simulink\S-Function_16\src\ModernTCN\generated_layers,1,36,732057,1781802938.861184,2026-06-19 01:15:38,E:\Matlab\Simulink\S-Function_16\src\ModernTCN\generated_layers\+modern_tcn_onnx_layers\GatherLayer1073.m

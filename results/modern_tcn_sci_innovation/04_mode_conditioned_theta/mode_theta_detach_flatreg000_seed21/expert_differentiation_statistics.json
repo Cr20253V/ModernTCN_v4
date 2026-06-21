@@ -1,0 +1,32 @@
+{
+  "expert_pairwise_corr": {
+    "flat_stall": 0.39787087252110775,
+    "flat_slope": 0.863298626562577,
+    "stall_slope": 0.5090468012055068
+  },
+  "expert_pairwise_mae_deg": {
+    "flat_stall": 14.361353874206543,
+    "flat_slope": 2.953655481338501,
+    "stall_slope": 13.436600685119629
+  },
+  "expert_pairwise_corr_min": 0.39787087252110775,
+  "expert_pairwise_mae_max_deg": 14.361353874206543,
+  "mean_abs_theta_flat_minus_theta_slope_deg": 2.953655481338501,
+  "dominant_expert_by_true_main": {
+    "flat": "flat",
+    "stall": "stall",
+    "slope": "slope"
+  },
+  "dominant_expert_by_pred_main": {
+    "flat": "flat",
+    "stall": "stall",
+    "slope": "slope"
+  },
+  "p_main_entropy": {
+    "mean": 0.03425898775458336,
+    "std": 0.11775651574134827
+  },
+  "contribution_share_max_delta_by_true_main": 0.9729777029715478,
+  "not_differentiated": false,
+  "not_differentiated_rule": "max pairwise MAE < 0.05 deg and min corr > 0.995 and contribution share delta < 0.05"
+}

@@ -20,6 +20,9 @@ GRU_out.mat
 ModernTCN_out.mat
 TCN_out.mat
 results/**/*.mat
+results/**/*.npz
+results/**/_smoke/
+results/**/smoke_*/
 
 # 模型权重和训练 checkpoint
 *.ckpt

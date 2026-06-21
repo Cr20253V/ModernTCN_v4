@@ -1,0 +1,3 @@
+Training log placeholder. Console logs are not captured by train_one_seed API.
+summary_csv: `E:\Matlab\Simulink\S-Function_16\results\modern_tcn_sci_innovation\02_hard_sample_loss\fs_t02_s02_sm000_seed21\modern_tcn_seed21_summary.csv`
+history_csv: `E:\Matlab\Simulink\S-Function_16\results\modern_tcn_sci_innovation\02_hard_sample_loss\fs_t02_s02_sm000_seed21\modern_tcn_seed21_history.csv`

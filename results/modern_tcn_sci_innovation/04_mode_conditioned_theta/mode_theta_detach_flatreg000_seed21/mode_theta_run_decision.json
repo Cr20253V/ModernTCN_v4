@@ -1,0 +1,10 @@
+{
+  "run_tag": "mode_theta_detach_flatreg000_seed21",
+  "safe_eligible": false,
+  "safe_eligible_reason": "flat_peak_theta_error <= 5.635740, actual 6.434472; theta_edge_p95_abs_err <= 3.055057, actual 3.692942",
+  "promotable": false,
+  "promotable_reason": "not safe_eligible",
+  "expert_not_differentiated": false,
+  "no_onnx_export": true,
+  "no_matlab_simulink_closed_loop": true
+}

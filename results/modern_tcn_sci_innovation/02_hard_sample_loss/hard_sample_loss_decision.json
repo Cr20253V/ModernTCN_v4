@@ -1,0 +1,82 @@
+{
+  "phase": "E2_hard_sample_focal_loss",
+  "e2_status": "PASS",
+  "method_label": "hard-sample focal only",
+  "theta_smooth_status": "disabled_contract_limited",
+  "formal_grid": [
+    "fs_t02_s02_sm000_seed21",
+    "fs_t05_s02_sm000_seed21",
+    "fs_t02_s05_sm000_seed21",
+    "fs_t05_s05_sm000_seed21"
+  ],
+  "high_loss_scale_detected": false,
+  "n_formal_runs": 4,
+  "n_eligible_runs": 0,
+  "n_promotable_runs": 0,
+  "best_run_tag": "fs_t05_s05_sm000_seed21",
+  "best_is_promotable": false,
+  "can_expand_seeds_42_101": false,
+  "can_enter_e3": true,
+  "e3_loss_strategy": {
+    "source": "baseline_fixed_loss",
+    "loss_mode": "fixed",
+    "reason": "E2 has no promotable run; continue E3 with original baseline fixed loss"
+  },
+  "no_onnx_export": true,
+  "no_matlab_simulink_closed_loop": true,
+  "no_baseline_overwrite": true,
+  "ranking": [
+    {
+      "run_tag": "fs_t05_s05_sm000_seed21",
+      "rank_score": -0.9607474944154044,
+      "eligible": false,
+      "promotable": false,
+      "delta_acc_turn_transition": -0.019374068554396384,
+      "delta_stall_recall": -0.0625,
+      "delta_theta_mae_deg": -0.10302263498306274,
+      "delta_theta_edge_p95_abs_err": -0.6096951961517334,
+      "delta_flat_peak_theta_error": -1.6990671157836914,
+      "eligible_reason": "acc_main >= 0.963963, actual 0.937257; acc_turn >= 0.573845, actual 0.490006; acc_turn_transition >= 0.497765, actual 0.478390; theta_mae_deg <= 0.689395, actual 0.782417; flat_recall >= 0.959577, actual 0.931217; stall_recall >= 0.668750, actual 0.656250; slope_recall >= 0.969909, actual 0.948727; theta_edge_p95_abs_err <= 2.755057, actual 3.364752; flat_peak_theta_error <= 5.335740, actual 7.034807",
+      "promotable_reason": "not eligible"
+    },
+    {
+      "run_tag": "fs_t02_s02_sm000_seed21",
+      "rank_score": -1.1717406759322124,
+      "eligible": false,
+      "promotable": false,
+      "delta_acc_turn_transition": -0.043219076005961254,
+      "delta_stall_recall": -0.05208333333333337,
+      "delta_theta_mae_deg": -0.13657063245773315,
+      "delta_theta_edge_p95_abs_err": -0.6817800998687744,
+      "delta_flat_peak_theta_error": -2.4199795722961426,
+      "eligible_reason": "acc_turn >= 0.573845, actual 0.494448; acc_turn_transition >= 0.497765, actual 0.454545; theta_mae_deg <= 0.689395, actual 0.815965; stall_recall >= 0.668750, actual 0.666667; theta_edge_p95_abs_err <= 2.755057, actual 3.436837; flat_peak_theta_error <= 5.335740, actual 7.755720",
+      "promotable_reason": "not eligible"
+    },
+    {
+      "run_tag": "fs_t02_s05_sm000_seed21",
+      "rank_score": -1.2728574051838688,
+      "eligible": false,
+      "promotable": false,
+      "delta_acc_turn_transition": -0.05514157973174366,
+      "delta_stall_recall": -0.04166666666666663,
+      "delta_theta_mae_deg": -0.2363719344139099,
+      "delta_theta_edge_p95_abs_err": -1.4965806007385254,
+      "delta_flat_peak_theta_error": -0.8604164123535156,
+      "eligible_reason": "acc_main >= 0.963963, actual 0.955303; acc_turn >= 0.573845, actual 0.464742; acc_turn_transition >= 0.497765, actual 0.442623; theta_mae_deg <= 0.689395, actual 0.915767; flat_recall >= 0.959577, actual 0.953704; slope_recall >= 0.969909, actual 0.965455; theta_edge_p95_abs_err <= 2.755057, actual 4.251637; flat_peak_theta_error <= 5.335740, actual 6.196157",
+      "promotable_reason": "not eligible"
+    },
+    {
+      "run_tag": "fs_t05_s02_sm000_seed21",
+      "rank_score": -1.4043773050387742,
+      "eligible": false,
+      "promotable": false,
+      "delta_acc_turn_transition": 0.008941877794336861,
+      "delta_stall_recall": -0.02083333333333337,
+      "delta_theta_mae_deg": -0.27511703968048096,
+      "delta_theta_edge_p95_abs_err": -0.9988465309143066,
+      "delta_flat_peak_theta_error": -2.91448974609375,
+      "eligible_reason": "acc_main >= 0.963963, actual 0.956691; acc_turn >= 0.573845, actual 0.483898; theta_mae_deg <= 0.689395, actual 0.954512; flat_recall >= 0.959577, actual 0.931217; theta_edge_p95_abs_err <= 2.755057, actual 3.753903; flat_peak_theta_error <= 5.335740, actual 8.250230",
+      "promotable_reason": "not eligible"
+    }
+  ]
+}

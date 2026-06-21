@@ -1,0 +1,305 @@
+{
+  "model_extra_state": {
+    "alpha": 0.20843319594860077,
+    "physics_group_names": [
+      "yaw_steering",
+      "drive_current_load",
+      "velocity_acceleration",
+      "wheel_imbalance"
+    ],
+    "physics_group_indices": [
+      [
+        0,
+        5,
+        6,
+        13,
+        21
+      ],
+      [
+        1,
+        2,
+        10,
+        11,
+        12,
+        17,
+        19,
+        18,
+        14
+      ],
+      [
+        7,
+        8,
+        15,
+        16,
+        20
+      ],
+      [
+        3,
+        4,
+        9
+      ]
+    ]
+  },
+  "val": {
+    "prefix": "val",
+    "stat_label_policy": "true label for main class; dataset turn_transition mask for transition",
+    "group_names": [
+      "yaw_steering",
+      "drive_current_load",
+      "velocity_acceleration",
+      "wheel_imbalance"
+    ],
+    "all_finite": true,
+    "single_collapse": false,
+    "mean_entropy": 0.10036618262529373,
+    "overall": {
+      "yaw_steering": {
+        "n": 3695,
+        "mean": 0.17148682475090027,
+        "std": 0.3596714735031128
+      },
+      "drive_current_load": {
+        "n": 3695,
+        "mean": 0.5809192657470703,
+        "std": 0.46339842677116394
+      },
+      "velocity_acceleration": {
+        "n": 3695,
+        "mean": 2.424312879156787e-05,
+        "std": 0.00012922563473694026
+      },
+      "wheel_imbalance": {
+        "n": 3695,
+        "mean": 0.24756965041160583,
+        "std": 0.41137734055519104
+      }
+    },
+    "by_main_true": {
+      "flat": {
+        "yaw_steering": {
+          "n": 657,
+          "mean": 0.003499237122014165,
+          "std": 0.015053274109959602
+        },
+        "drive_current_load": {
+          "n": 657,
+          "mean": 0.5211140513420105,
+          "std": 0.47766977548599243
+        },
+        "velocity_acceleration": {
+          "n": 657,
+          "mean": 2.8126347388024442e-05,
+          "std": 8.539304690202698e-05
+        },
+        "wheel_imbalance": {
+          "n": 657,
+          "mean": 0.47535860538482666,
+          "std": 0.4805890619754791
+        }
+      },
+      "stall": {
+        "yaw_steering": {
+          "n": 42,
+          "mean": 0.0003818461555056274,
+          "std": 0.0009024788741953671
+        },
+        "drive_current_load": {
+          "n": 42,
+          "mean": 0.3090008497238159,
+          "std": 0.43921878933906555
+        },
+        "velocity_acceleration": {
+          "n": 42,
+          "mean": 5.67870847589802e-06,
+          "std": 9.174732440442313e-06
+        },
+        "wheel_imbalance": {
+          "n": 42,
+          "mean": 0.6906115412712097,
+          "std": 0.4397733509540558
+        }
+      },
+      "slope": {
+        "yaw_steering": {
+          "n": 2996,
+          "mean": 0.210723876953125,
+          "std": 0.389046847820282
+        },
+        "drive_current_load": {
+          "n": 2996,
+          "mean": 0.5978460907936096,
+          "std": 0.4582482874393463
+        },
+        "velocity_acceleration": {
+          "n": 2996,
+          "mean": 2.36518208112102e-05,
+          "std": 0.00013779205619357526
+        },
+        "wheel_imbalance": {
+          "n": 2996,
+          "mean": 0.19140641391277313,
+          "std": 0.3715777099132538
+        }
+      }
+    },
+    "turn_transition": {
+      "yaw_steering": {
+        "n": 644,
+        "mean": 0.20289279520511627,
+        "std": 0.3794190287590027
+      },
+      "drive_current_load": {
+        "n": 644,
+        "mean": 0.5604791045188904,
+        "std": 0.4620269536972046
+      },
+      "velocity_acceleration": {
+        "n": 644,
+        "mean": 2.7971853342023678e-05,
+        "std": 9.115764987654984e-05
+      },
+      "wheel_imbalance": {
+        "n": 644,
+        "mean": 0.2366001009941101,
+        "std": 0.4061795771121979
+      }
+    },
+    "interpretability": {
+      "yaw_transition_minus_overall": 0.031406283378601074,
+      "drive_stall_minus_overall": -0.2719188928604126,
+      "velocity_slope_flat_abs_delta": 4.474526576814242e-06,
+      "score_0_to_3": 1
+    }
+  },
+  "test": {
+    "prefix": "test",
+    "stat_label_policy": "true label for main class; dataset turn_transition mask for transition",
+    "group_names": [
+      "yaw_steering",
+      "drive_current_load",
+      "velocity_acceleration",
+      "wheel_imbalance"
+    ],
+    "all_finite": true,
+    "single_collapse": false,
+    "mean_entropy": 0.11142974346876144,
+    "overall": {
+      "yaw_steering": {
+        "n": 3602,
+        "mean": 0.23363876342773438,
+        "std": 0.4037184715270996
+      },
+      "drive_current_load": {
+        "n": 3602,
+        "mean": 0.479098379611969,
+        "std": 0.4679017961025238
+      },
+      "velocity_acceleration": {
+        "n": 3602,
+        "mean": 4.1353589040227234e-05,
+        "std": 0.0001599408860784024
+      },
+      "wheel_imbalance": {
+        "n": 3602,
+        "mean": 0.2872215211391449,
+        "std": 0.43360865116119385
+      }
+    },
+    "by_main_true": {
+      "flat": {
+        "yaw_steering": {
+          "n": 756,
+          "mean": 0.023930992931127548,
+          "std": 0.0945868119597435
+        },
+        "drive_current_load": {
+          "n": 756,
+          "mean": 0.6583878397941589,
+          "std": 0.4382423162460327
+        },
+        "velocity_acceleration": {
+          "n": 756,
+          "mean": 9.386199235450476e-05,
+          "std": 0.0002763155789580196
+        },
+        "wheel_imbalance": {
+          "n": 756,
+          "mean": 0.31758731603622437,
+          "std": 0.4438282251358032
+        }
+      },
+      "stall": {
+        "yaw_steering": {
+          "n": 96,
+          "mean": 0.3799106180667877,
+          "std": 0.4556116759777069
+        },
+        "drive_current_load": {
+          "n": 96,
+          "mean": 0.6082081198692322,
+          "std": 0.4633888900279999
+        },
+        "velocity_acceleration": {
+          "n": 96,
+          "mean": 7.727761840214953e-05,
+          "std": 0.0002345420653000474
+        },
+        "wheel_imbalance": {
+          "n": 96,
+          "mean": 0.011803987435996532,
+          "std": 0.05336308851838112
+        }
+      },
+      "slope": {
+        "yaw_steering": {
+          "n": 2750,
+          "mean": 0.28618311882019043,
+          "std": 0.4337993264198303
+        },
+        "drive_current_load": {
+          "n": 2750,
+          "mean": 0.4253029525279999,
+          "std": 0.4627682566642761
+        },
+        "velocity_acceleration": {
+          "n": 2750,
+          "mean": 2.566447619756218e-05,
+          "std": 9.771223267307505e-05
+        },
+        "wheel_imbalance": {
+          "n": 2750,
+          "mean": 0.2884882688522339,
+          "std": 0.43487051129341125
+        }
+      }
+    },
+    "turn_transition": {
+      "yaw_steering": {
+        "n": 671,
+        "mean": 0.21171197295188904,
+        "std": 0.3944787383079529
+      },
+      "drive_current_load": {
+        "n": 671,
+        "mean": 0.5040322542190552,
+        "std": 0.4703752398490906
+      },
+      "velocity_acceleration": {
+        "n": 671,
+        "mean": 4.1897717892425135e-05,
+        "std": 0.0001721607695799321
+      },
+      "wheel_imbalance": {
+        "n": 671,
+        "mean": 0.2842139005661011,
+        "std": 0.430133193731308
+      }
+    },
+    "interpretability": {
+      "yaw_transition_minus_overall": -0.021926507353782654,
+      "drive_stall_minus_overall": 0.12911024689674377,
+      "velocity_slope_flat_abs_delta": 6.819751615694258e-05,
+      "score_0_to_3": 1
+    }
+  }
+}

@@ -8,6 +8,7 @@ recall、uphill/downhill recall。seed42 门槛只用于决定是否进入三 se
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Tuple
 
@@ -33,8 +34,34 @@ def multitask_loss(
     class_weights_main: torch.Tensor,
     class_weights_turn: torch.Tensor,
     cfg,
+    extra_outputs: Dict[str, torch.Tensor] | None = None,
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """计算与 MATLAB TCN/GRU baseline 对齐的多任务损失。"""
+
+    total, tensor_parts = multitask_loss_components(
+        logits_main,
+        logits_turn,
+        theta_hat,
+        batch,
+        class_weights_main,
+        class_weights_turn,
+        cfg,
+        extra_outputs=extra_outputs,
+    )
+    return total, {key: float(value.detach().cpu()) for key, value in tensor_parts.items()}
+
+
+def multitask_loss_components(
+    logits_main: torch.Tensor,
+    logits_turn: torch.Tensor,
+    theta_hat: torch.Tensor,
+    batch: Dict[str, torch.Tensor],
+    class_weights_main: torch.Tensor,
+    class_weights_turn: torch.Tensor,
+    cfg,
+    extra_outputs: Dict[str, torch.Tensor] | None = None,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    """Return differentiable loss components grouped into main/turn/theta bundles."""
 
     y_main = batch["y_main"]
     y_turn = batch["y_turn"]
@@ -101,6 +128,20 @@ def multitask_loss(
     loss_theta_small_neg_excess = _masked_weighted_abs_excess_mse(
         theta_hat, theta, small_neg_mask, theta_sample_weight, float(getattr(cfg, "theta_excess_target_deg", 1.0))
     )
+    loss_flat_theta_expert_reg = torch.zeros_like(loss_theta)
+    if extra_outputs is not None and "theta_flat" in extra_outputs:
+        theta_flat_expert = extra_outputs["theta_flat"].reshape(-1)
+        flat_expert_mask = (y_main == 0).float()
+        flat_expert_weight = torch.ones_like(flat_expert_mask, device=theta.device)
+        loss_flat_theta_expert_reg = _masked_weighted_mse(
+            theta_flat_expert,
+            torch.zeros_like(theta_flat_expert),
+            flat_expert_mask,
+            flat_expert_weight,
+        )
+    flat_theta_reg_lambda = float(getattr(cfg, "flat_theta_reg_lambda", 0.0))
+    if flat_theta_reg_lambda > 0.0 and (extra_outputs is None or "theta_flat" not in extra_outputs):
+        raise ValueError("flat_theta_reg_lambda requires model extra_outputs['theta_flat']")
     loss_turn_release = _turn_straight_probability_penalty(
         logits_turn,
         y_turn,
@@ -115,11 +156,42 @@ def multitask_loss(
         turn_sample_weight,
         transition_mask=False,
     )
+    loss_transition_focal_raw = _masked_focal_ce(
+        logits_turn,
+        y_turn,
+        class_weights_turn,
+        turn_sample_weight,
+        batch["turn_transition"].float(),
+        float(getattr(cfg, "focal_gamma", 2.0)),
+    )
+    loss_stall_focal_raw = _masked_focal_ce(
+        logits_main,
+        y_main,
+        class_weights_main,
+        main_sample_weight,
+        (y_main == 1).float(),
+        float(getattr(cfg, "focal_gamma", 2.0)),
+    )
+    lambda_transition_focal = float(getattr(cfg, "lambda_transition_focal", 0.0))
+    lambda_stall_focal = float(getattr(cfg, "lambda_stall_focal", 0.0))
+    lambda_theta_smooth = float(getattr(cfg, "lambda_theta_smooth", 0.0))
+    theta_smooth_mode = str(getattr(cfg, "theta_smooth_mode", "off") or "off").lower()
+    if lambda_theta_smooth > 0.0 or theta_smooth_mode not in {"off", "none", "disabled"}:
+        raise ValueError(
+            "theta smoothness is disabled for this dataset contract: no reliable same-run adjacent window order is available"
+        )
+    loss_transition_focal_weighted = lambda_transition_focal * loss_transition_focal_raw
+    loss_stall_focal_weighted = lambda_stall_focal * loss_stall_focal_raw
+    loss_theta_smooth = torch.zeros_like(loss_theta)
 
-    total = (
-        loss_main
-        + cfg.lambda_turn * loss_turn
-        + cfg.lambda_theta * loss_theta
+    loss_main_bundle_base = loss_main
+    loss_turn_bundle_base = (
+        cfg.lambda_turn * loss_turn
+        + float(getattr(cfg, "lambda_turn_release", 0.0)) * loss_turn_release
+        + float(getattr(cfg, "lambda_false_turn_straight", 0.0)) * loss_false_turn_straight
+    )
+    loss_theta_bundle_base = (
+        cfg.lambda_theta * loss_theta
         + cfg.lambda_theta_flat * loss_theta_flat
         + float(getattr(cfg, "lambda_theta_near_flat", 0.0)) * loss_theta_near_flat
         + float(getattr(cfg, "lambda_theta_error_excess", 0.0)) * loss_theta_error_excess
@@ -129,25 +201,43 @@ def multitask_loss(
         + float(getattr(cfg, "lambda_theta_active_excess", 0.0)) * loss_theta_active_excess
         + float(getattr(cfg, "lambda_theta_small_neg", 0.0)) * loss_theta_small_neg
         + float(getattr(cfg, "lambda_theta_small_neg_excess", 0.0)) * loss_theta_small_neg_excess
-        + float(getattr(cfg, "lambda_turn_release", 0.0)) * loss_turn_release
-        + float(getattr(cfg, "lambda_false_turn_straight", 0.0)) * loss_false_turn_straight
     )
+    loss_main_bundle = loss_main_bundle_base + loss_stall_focal_weighted
+    loss_turn_bundle = loss_turn_bundle_base + loss_transition_focal_weighted
+    loss_theta_bundle = loss_theta_bundle_base + lambda_theta_smooth * loss_theta_smooth
+    loss_flat_theta_expert_reg_weighted = flat_theta_reg_lambda * loss_flat_theta_expert_reg
+    loss_theta_bundle = loss_theta_bundle + loss_flat_theta_expert_reg_weighted
+    total = loss_main_bundle + loss_turn_bundle + loss_theta_bundle
     parts = {
-        "loss_total": float(total.detach().cpu()),
-        "loss_main": float(loss_main.detach().cpu()),
-        "loss_turn": float(loss_turn.detach().cpu()),
-        "loss_theta": float(loss_theta.detach().cpu()),
-        "loss_theta_flat": float(loss_theta_flat.detach().cpu()),
-        "loss_theta_near_flat": float(loss_theta_near_flat.detach().cpu()),
-        "loss_theta_error_excess": float(loss_theta_error_excess.detach().cpu()),
-        "loss_theta_flat_excess": float(loss_theta_flat_excess.detach().cpu()),
-        "loss_theta_near_flat_excess": float(loss_theta_near_flat_excess.detach().cpu()),
-        "loss_theta_true_zero_excess": float(loss_theta_true_zero_excess.detach().cpu()),
-        "loss_theta_active_excess": float(loss_theta_active_excess.detach().cpu()),
-        "loss_theta_small_neg": float(loss_theta_small_neg.detach().cpu()),
-        "loss_theta_small_neg_excess": float(loss_theta_small_neg_excess.detach().cpu()),
-        "loss_turn_release": float(loss_turn_release.detach().cpu()),
-        "loss_false_turn_straight": float(loss_false_turn_straight.detach().cpu()),
+        "loss_total": total,
+        "loss_main": loss_main,
+        "loss_turn": loss_turn,
+        "loss_theta": loss_theta,
+        "loss_main_bundle_base": loss_main_bundle_base,
+        "loss_turn_bundle_base": loss_turn_bundle_base,
+        "loss_theta_bundle_base": loss_theta_bundle_base,
+        "loss_main_bundle": loss_main_bundle,
+        "loss_turn_bundle": loss_turn_bundle,
+        "loss_theta_bundle": loss_theta_bundle,
+        "loss_theta_flat": loss_theta_flat,
+        "loss_theta_near_flat": loss_theta_near_flat,
+        "loss_theta_error_excess": loss_theta_error_excess,
+        "loss_theta_flat_excess": loss_theta_flat_excess,
+        "loss_theta_near_flat_excess": loss_theta_near_flat_excess,
+        "loss_theta_true_zero_excess": loss_theta_true_zero_excess,
+        "loss_theta_active_excess": loss_theta_active_excess,
+        "loss_theta_small_neg": loss_theta_small_neg,
+        "loss_theta_small_neg_excess": loss_theta_small_neg_excess,
+        "loss_flat_theta_expert_reg": loss_flat_theta_expert_reg,
+        "loss_flat_theta_expert_reg_weighted": loss_flat_theta_expert_reg_weighted,
+        "loss_turn_release": loss_turn_release,
+        "loss_false_turn_straight": loss_false_turn_straight,
+        "loss_transition_focal_raw": loss_transition_focal_raw,
+        "loss_transition_focal_weighted": loss_transition_focal_weighted,
+        "loss_stall_focal_raw": loss_stall_focal_raw,
+        "loss_stall_focal_weighted": loss_stall_focal_weighted,
+        "loss_theta_smooth": loss_theta_smooth,
+        "theta_smooth_status": torch.zeros_like(loss_theta),
     }
     return total, parts
 
@@ -223,6 +313,8 @@ def compute_metrics(
         "flat_recall": float(recall_main[0]),
         "stall_recall": float(recall_main[1]),
         "slope_recall": float(recall_main[2]),
+        "flat_as_stall_ratio": _cm_ratio(cm_main, 0, 1),
+        "stall_as_flat_ratio": _cm_ratio(cm_main, 1, 0),
         "recall_main": [float(x) for x in recall_main],
         "turn_right_recall": float(recall_turn[0]),
         "turn_straight_recall": float(recall_turn[1]),
@@ -500,6 +592,10 @@ def metric_row(seed: int, best_epoch: int, metrics: Dict[str, object], paths: Di
         "flat_recall": metrics["flat_recall"],
         "stall_recall": metrics["stall_recall"],
         "slope_recall": metrics["slope_recall"],
+        "flat_as_stall_ratio": metrics.get("flat_as_stall_ratio", float("nan")),
+        "stall_as_flat_ratio": metrics.get("stall_as_flat_ratio", float("nan")),
+        "cm_main": json.dumps(metrics.get("cm_main", []), ensure_ascii=False),
+        "cm_turn": json.dumps(metrics.get("cm_turn", []), ensure_ascii=False),
         "uphill_recall": metrics["uphill_recall"],
         "downhill_recall": metrics["downhill_recall"],
         "checkpoint_file": paths.get("checkpoint_file", ""),
@@ -513,6 +609,25 @@ def _weighted_ce(logits: torch.Tensor, labels: torch.Tensor, class_weights: torc
     per_sample = F.cross_entropy(logits, labels, weight=class_weights, reduction="none")
     denom = (class_weights[labels] * sample_weights).sum().clamp_min(1e-8)
     return (per_sample * sample_weights).sum() / denom
+
+
+def _masked_focal_ce(
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    class_weights: torch.Tensor,
+    sample_weights: torch.Tensor,
+    mask: torch.Tensor,
+    gamma: float,
+) -> torch.Tensor:
+    class_weights = class_weights.to(logits.device)
+    labels = labels.to(logits.device)
+    sample_weights = sample_weights.to(logits.device)
+    mask = mask.to(logits.device).float()
+    ce = F.cross_entropy(logits, labels, weight=class_weights, reduction="none")
+    prob = torch.softmax(logits, dim=1).gather(1, labels.reshape(-1, 1)).reshape(-1).clamp_min(1e-8)
+    focal = torch.pow(1.0 - prob, float(gamma))
+    denom = (class_weights[labels] * sample_weights * mask).sum().clamp_min(1e-8)
+    return (ce * focal * sample_weights * mask).sum() / denom
 
 
 def _masked_weighted_mse(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
@@ -573,6 +688,13 @@ def _confusion_matrix(truth: np.ndarray, pred: np.ndarray, num_classes: int) -> 
         if 0 <= int(t) < num_classes and 0 <= int(p) < num_classes:
             cm[int(t), int(p)] += 1
     return cm
+
+
+def _cm_ratio(cm: np.ndarray, truth_idx: int, pred_idx: int) -> float:
+    denom = int(cm[int(truth_idx), :].sum())
+    if denom <= 0:
+        return float("nan")
+    return float(cm[int(truth_idx), int(pred_idx)] / denom)
 
 
 def _softmax_np(logits: np.ndarray) -> np.ndarray:

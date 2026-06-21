@@ -21,19 +21,21 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
 from modern_tcn_data import AGVWindowDataset, class_weights, find_project_root, load_modern_tcn_dataset
-from modern_tcn_metrics import compute_metrics, metric_row, multitask_loss, seed42_gate, selection_score
+from modern_tcn_metrics import compute_metrics, metric_row, multitask_loss_components, seed42_gate, selection_score
 from modern_tcn_model import (
     ModernTCNConfig,
     ModernTCNDualKernelConfig,
     ModernTCNFullConfig,
     ModernTCNGroupedConfig,
+    ModernTCNModeThetaConfig,
+    ModernTCNPhysicsGroupGateConfig,
     build_model_from_config,
     normalize_model_family,
 )
@@ -52,6 +54,168 @@ PLANTFIX_22D_DATASET = (
 )
 
 
+TASK_NAMES = ("main", "turn", "theta")
+
+
+class DynamicLossController(torch.nn.Module):
+    """E1 loss-only controller. Fixed mode preserves the existing loss exactly."""
+
+    def __init__(self, mode: str, gradnorm_alpha: float = 1.5) -> None:
+        super().__init__()
+        self.mode = _normalize_loss_mode(mode)
+        self.gradnorm_alpha = float(gradnorm_alpha)
+        self.gradnorm_initial_losses: Optional[torch.Tensor] = None
+        self.last_gradnorm_stats: Dict[str, float] = {}
+        if self.mode == "uncertainty_weighting":
+            self.log_vars = torch.nn.Parameter(torch.zeros(3, dtype=torch.float32))
+        elif self.mode == "gradnorm":
+            self.log_task_weights = torch.nn.Parameter(torch.zeros(3, dtype=torch.float32))
+
+    def has_parameters(self) -> bool:
+        return any(True for _ in self.parameters())
+
+    def extra_state(self) -> Dict[str, object]:
+        state: Dict[str, object] = {"loss_mode": self.mode, "gradnorm_alpha": self.gradnorm_alpha}
+        if self.mode == "uncertainty_weighting":
+            s = self.log_vars.detach().cpu()
+            w = torch.exp(-self.log_vars.detach()).cpu()
+            for idx, name in enumerate(TASK_NAMES):
+                state[f"s_{name}"] = float(s[idx])
+                state[f"weight_{name}"] = float(w[idx])
+        elif self.mode == "gradnorm":
+            w = self.gradnorm_weights().detach().cpu()
+            for idx, name in enumerate(TASK_NAMES):
+                state[f"task_weight_{name}"] = float(w[idx])
+            if self.gradnorm_initial_losses is not None:
+                init = self.gradnorm_initial_losses.detach().cpu()
+                for idx, name in enumerate(TASK_NAMES):
+                    state[f"initial_loss_{name}"] = float(init[idx])
+        return state
+
+    def gradnorm_weights(self) -> torch.Tensor:
+        if self.mode != "gradnorm":
+            raise RuntimeError("gradnorm_weights called outside gradnorm mode")
+        return 3.0 * torch.softmax(self.log_task_weights, dim=0)
+
+    def compute_loss(
+        self,
+        components: Dict[str, torch.Tensor],
+        model: torch.nn.Module,
+        compute_gradnorm_aux: bool = True,
+    ) -> Tuple[torch.Tensor, Dict[str, object], Optional[torch.Tensor]]:
+        task_losses = torch.stack(
+            [
+                components["loss_main_bundle"],
+                components["loss_turn_bundle"],
+                components["loss_theta_bundle"],
+            ]
+        )
+        if self.mode == "fixed":
+            return components["loss_total"], {"loss_mode": self.mode}, None
+        if self.mode == "uncertainty_weighting":
+            weights = torch.exp(-self.log_vars)
+            loss = (weights * task_losses + self.log_vars).sum()
+            stats = {"loss_mode": self.mode}
+            for idx, name in enumerate(TASK_NAMES):
+                stats[f"s_{name}"] = float(self.log_vars[idx].detach().cpu())
+                stats[f"weight_{name}"] = float(weights[idx].detach().cpu())
+            return loss, stats, None
+        if self.mode == "gradnorm":
+            return self._gradnorm_loss(task_losses, model, compute_aux=compute_gradnorm_aux)
+        raise ValueError(f"unknown loss mode: {self.mode}")
+
+    def _gradnorm_loss(
+        self,
+        task_losses: torch.Tensor,
+        model: torch.nn.Module,
+        compute_aux: bool = True,
+    ) -> Tuple[torch.Tensor, Dict[str, object], Optional[torch.Tensor]]:
+        if self.gradnorm_initial_losses is None:
+            self.gradnorm_initial_losses = task_losses.detach().clamp_min(1e-8)
+        weights = self.gradnorm_weights()
+        weighted_losses = weights * task_losses
+        total = (weights.detach() * task_losses).sum()
+        stats = {"loss_mode": self.mode, "gradnorm_unstable": False}
+        for idx, name in enumerate(TASK_NAMES):
+            stats[f"task_weight_{name}"] = float(weights[idx].detach().cpu())
+            stats[f"initial_loss_{name}"] = float(self.gradnorm_initial_losses[idx].detach().cpu())
+        if not compute_aux:
+            for name in TASK_NAMES:
+                stats[f"grad_norm_{name}"] = self.last_gradnorm_stats.get(f"grad_norm_{name}", float("nan"))
+            stats["gradnorm_loss"] = self.last_gradnorm_stats.get("gradnorm_loss", float("nan"))
+            return total, stats, None
+        shared_params = _gradnorm_shared_parameters(model)
+        grad_norms: List[torch.Tensor] = []
+        for loss_i in weighted_losses:
+            grads = torch.autograd.grad(
+                loss_i,
+                shared_params,
+                retain_graph=True,
+                create_graph=True,
+                allow_unused=True,
+            )
+            grad_norms.append(_grad_norm_from_tensors(grads, loss_i))
+        grad_norm_tensor = torch.stack(grad_norms)
+        with torch.no_grad():
+            relative_losses = task_losses.detach().clamp_min(1e-8) / self.gradnorm_initial_losses.to(task_losses.device)
+            inverse_train_rate = relative_losses / relative_losses.mean().clamp_min(1e-8)
+            target = grad_norm_tensor.detach().mean() * torch.pow(inverse_train_rate, self.gradnorm_alpha)
+        gradnorm_loss = torch.nn.functional.l1_loss(grad_norm_tensor, target, reduction="sum")
+        unstable = bool(
+            (not torch.isfinite(total.detach()))
+            or (not torch.isfinite(gradnorm_loss.detach()))
+            or (not torch.isfinite(grad_norm_tensor.detach()).all())
+            or (not torch.isfinite(weights.detach()).all())
+        )
+        stats["gradnorm_loss"] = float(gradnorm_loss.detach().cpu())
+        stats["gradnorm_unstable"] = unstable
+        for idx, name in enumerate(TASK_NAMES):
+            stats[f"grad_norm_{name}"] = float(grad_norm_tensor[idx].detach().cpu())
+        self.last_gradnorm_stats = {
+            "gradnorm_loss": float(stats["gradnorm_loss"]),
+            "grad_norm_main": float(stats["grad_norm_main"]),
+            "grad_norm_turn": float(stats["grad_norm_turn"]),
+            "grad_norm_theta": float(stats["grad_norm_theta"]),
+        }
+        return total, stats, gradnorm_loss
+
+
+def _normalize_loss_mode(mode: object) -> str:
+    text = str(mode or "fixed").strip().lower()
+    if text == "baseline":
+        return "fixed"
+    if text not in {"fixed", "uncertainty_weighting", "gradnorm"}:
+        raise ValueError(f"未知 loss_mode: {mode}")
+    return text
+
+
+def _gradnorm_shared_parameters(model: torch.nn.Module) -> List[torch.nn.Parameter]:
+    if hasattr(model, "stem"):
+        params = [p for p in model.stem.parameters() if p.requires_grad]
+        if params:
+            return params
+    for param in model.parameters():
+        if param.requires_grad:
+            return [param]
+    raise RuntimeError("GradNorm requires at least one trainable model parameter")
+
+
+def _grad_norm_from_tensors(grads: Tuple[Optional[torch.Tensor], ...], reference: torch.Tensor) -> torch.Tensor:
+    pieces = [g.reshape(-1) for g in grads if g is not None]
+    if not pieces:
+        return reference.new_zeros(())
+    return torch.norm(torch.cat(pieces), p=2)
+
+
+def _should_update_gradnorm(loss_controller: DynamicLossController, epoch: int, batch_idx: int, interval: int) -> bool:
+    if loss_controller.mode != "gradnorm":
+        return False
+    if interval <= 0:
+        return batch_idx == 1
+    step_idx = (epoch - 1) * 1_000_000 + batch_idx
+    return step_idx % interval == 1
+
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ModernTCN-small / ModernTCNFull 第一阶段训练脚本")
     p.add_argument("--seed", type=int, default=42)
@@ -61,12 +225,24 @@ def parse_args() -> argparse.Namespace:
         dest="model_family",
         type=str,
         default="small",
-        choices=["small", "full", "small_gffn", "small_dualkernel"],
+        choices=["small", "full", "small_gffn", "small_dualkernel", "small_physics_group_gate", "small_mode_theta"],
     )
     p.add_argument("--dataset-file", "--dataset_file", dest="dataset_file", type=str, default="")
     p.add_argument("--output-root", "--output_root", dest="output_root", type=str, default="")
     p.add_argument("--run-tag", "--run_tag", dest="run_tag", type=str, default="")
     p.add_argument("--no-overwrite", "--no_overwrite", dest="no_overwrite", action="store_true")
+    p.add_argument(
+        "--loss-mode",
+        "--loss_mode",
+        dest="loss_mode",
+        type=str,
+        default="fixed",
+        choices=["fixed", "baseline", "uncertainty_weighting", "gradnorm"],
+        help="E1 loss-only mode. fixed/baseline exactly preserves the existing loss formula.",
+    )
+    p.add_argument("--gradnorm-alpha", "--gradnorm_alpha", dest="gradnorm_alpha", type=float, default=1.5)
+    p.add_argument("--gradnorm-update-interval", "--gradnorm_update_interval", dest="gradnorm_update_interval", type=int, default=0)
+    p.add_argument("--loss-weight-lr", "--loss_weight_lr", dest="loss_weight_lr", type=float, default=1e-3)
     p.add_argument("--epochs", type=int, default=120)
     p.add_argument("--batch-size", "--batch_size", dest="batch_size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
@@ -106,6 +282,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dropout", type=float, default=0.15)
     p.add_argument("--ffn-ratio", "--ffn_ratio", dest="ffn_ratio", type=int, default=None)
     p.add_argument("--layer-scale-init", "--layer_scale_init", dest="layer_scale_init", type=float, default=None)
+    p.add_argument("--branch-channels", "--branch_channels", dest="branch_channels", type=int, default=None)
+    p.add_argument("--branch-kernel", "--branch_kernel", dest="branch_kernel", type=int, default=None)
+    p.add_argument("--alpha-init", "--alpha_init", dest="alpha_init", type=float, default=None)
+    p.add_argument("--gate-hidden", "--gate_hidden", dest="gate_hidden", type=int, default=None)
+    p.add_argument("--physics-group-spec", "--physics_group_spec", dest="physics_group_spec", type=str, default=None)
+    p.add_argument("--physics-group-names", "--physics_group_names", dest="physics_group_names", type=str, default=None)
+    p.add_argument("--physics-group-indices", "--physics_group_indices", dest="physics_group_indices", type=str, default=None)
+    p.add_argument("--theta-gate-detach", "--theta_gate_detach", dest="theta_gate_detach", action="store_true", default=None)
+    p.add_argument("--no-theta-gate-detach", "--no_theta_gate_detach", dest="theta_gate_detach", action="store_false")
+    p.add_argument("--flat-theta-reg-lambda", "--flat_theta_reg_lambda", dest="flat_theta_reg_lambda", type=float, default=None)
+    p.add_argument("--theta-expert-hidden", "--theta_expert_hidden", dest="theta_expert_hidden", type=int, default=None)
     p.add_argument("--command-dropout-prob", "--command_dropout_prob", dest="command_dropout_prob", type=float, default=0.0)
     p.add_argument("--command-dropout-start-index", "--command_dropout_start_index", dest="command_dropout_start_index", type=int, default=-1)
     p.add_argument("--command-dropout-feature-count", "--command_dropout_feature_count", dest="command_dropout_feature_count", type=int, default=0)
@@ -140,6 +327,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--lambda-theta-small-neg-excess", type=float, default=0.0)
     p.add_argument("--lambda-turn-release", type=float, default=0.0)
     p.add_argument("--lambda-false-turn-straight", type=float, default=0.0)
+    p.add_argument("--lambda-transition-focal", "--lambda_transition_focal", dest="lambda_transition_focal", type=float, default=0.0)
+    p.add_argument("--lambda-stall-focal", "--lambda_stall_focal", dest="lambda_stall_focal", type=float, default=0.0)
+    p.add_argument("--lambda-theta-smooth", "--lambda_theta_smooth", dest="lambda_theta_smooth", type=float, default=0.0)
+    p.add_argument("--focal-gamma", "--focal_gamma", dest="focal_gamma", type=float, default=2.0)
+    p.add_argument(
+        "--theta-smooth-mode",
+        "--theta_smooth_mode",
+        dest="theta_smooth_mode",
+        type=str,
+        default="off",
+        choices=["off", "none", "disabled"],
+        help="E2 theta smoothness is disabled unless a future dataset exposes reliable adjacent window order.",
+    )
     p.add_argument("--theta-excess-target-deg", type=float, default=1.0)
     p.add_argument("--theta-flat-excess-target-deg", type=float, default=0.5)
     p.add_argument("--theta-small-neg-min-deg", type=float, default=-4.0)
@@ -225,6 +425,8 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
 
     cfg = _build_config(args, contract, model_family)
     model = build_model_from_config(cfg, model_family).to(device)
+    loss_mode = _normalize_loss_mode(getattr(args, "loss_mode", "fixed"))
+    loss_controller = DynamicLossController(loss_mode, getattr(args, "gradnorm_alpha", 1.5)).to(device)
 
     # smoke test 只验证数据契约和模型维度，不写任何模型文件。
     if getattr(args, "dry_run", False):
@@ -275,6 +477,11 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     ).to(device)
 
     opt = torch.optim.AdamW(model.parameters(), lr=getattr(args, "lr", 1e-3), weight_decay=getattr(args, "weight_decay", 1e-4))
+    loss_opt = (
+        torch.optim.AdamW(loss_controller.parameters(), lr=getattr(args, "loss_weight_lr", 1e-3), weight_decay=0.0)
+        if loss_controller.has_parameters()
+        else None
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(getattr(args, "epochs", 120), 1))
 
     print(f"[ModernTCN {model_family}] 第一阶段训练开始")
@@ -282,6 +489,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     print(f"  dataset={contract.dataset_file}")
     print(f"  train/val/test={len(train_split.X)}/{len(val_split.X)}/{len(test_split.X)}")
     print(f"  model_family={model_family}")
+    print(f"  loss_mode={loss_controller.mode}")
     if model_family == "full":
         print(
             f"  full patch={cfg.patch_size}/{cfg.patch_stride}, dims={cfg.dims}, "
@@ -297,6 +505,12 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
             f"  dual-kernel channels={cfg.channels}, blocks={cfg.blocks}, large={cfg.large_kernel}, "
             f"small={cfg.small_kernel}, branch_scale={cfg.dual_branch_scale:g}, "
             f"small_branch_init={cfg.small_branch_init}, layer_scale_init={cfg.layer_scale_init:g}"
+        )
+    elif model_family == "small_mode_theta":
+        print(
+            f"  mode-theta channels={cfg.channels}, blocks={cfg.blocks}, kernel={cfg.kernel_size}, "
+            f"theta_gate_detach={cfg.theta_gate_detach}, flat_theta_reg_lambda={cfg.flat_theta_reg_lambda:g}, "
+            f"theta_expert_hidden={cfg.theta_expert_hidden}"
         )
     else:
         print(
@@ -319,14 +533,40 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     t0 = time.time()
 
     for epoch in range(1, getattr(args, "epochs", 120) + 1):
-        train_loss = _train_epoch(model, train_loader, opt, device, class_w_main, class_w_turn, cfg)
+        train_stats = _train_epoch(
+            model,
+            train_loader,
+            opt,
+            loss_opt,
+            loss_controller,
+            epoch,
+            device,
+            class_w_main,
+            class_w_turn,
+            cfg,
+            getattr(args, "gradnorm_update_interval", 0),
+        )
+        if bool(train_stats.get("gradnorm_unstable", False)):
+            raise FloatingPointError(f"GradNorm unstable at epoch {epoch}: {train_stats}")
         scheduler.step()
-        val_loss, val_logits_main, val_logits_turn, val_theta = _predict_full(
-            model, val_loader, val_split, device, class_w_main, class_w_turn, cfg
+        val_loss, val_logits_main, val_logits_turn, val_theta, val_parts = _predict_full(
+            model, val_loader, val_split, device, class_w_main, class_w_turn, cfg, loss_controller
         )
         val_metrics = compute_metrics(val_logits_main, val_logits_turn, val_theta, val_split, val_loss)
+        val_metrics.update(val_parts)
         score = selection_score(val_metrics, cfg)
-        history_rows.append(_history_row(epoch, opt.param_groups[0]["lr"], train_loss, val_metrics, score))
+        model_state = _model_extra_state(model)
+        history_rows.append(
+            _history_row(
+                epoch,
+                opt.param_groups[0]["lr"],
+                train_stats,
+                val_metrics,
+                score,
+                loss_controller.extra_state(),
+                model_state,
+            )
+        )
 
         if score < best_score:
             best_score = score
@@ -339,7 +579,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
 
         if epoch == 1 or epoch % 5 == 0 or epoch == getattr(args, "epochs", 120):
             print(
-                f"  epoch {epoch:03d} | train={train_loss:.4f} val={val_metrics['loss_total']:.4f} "
+                f"  epoch {epoch:03d} | train={train_stats['loss_optimized']:.4f} val={val_metrics['loss_total']:.4f} "
                 f"main={val_metrics['acc_main']:.4f} turn={val_metrics['acc_turn']:.4f} "
                 f"turnL={val_metrics['turn_left_recall']:.4f} turnT={val_metrics['acc_turn_transition']:.4f} "
                 f"theta={val_metrics['theta_mae_deg']:.4f} score={score:.4f}"
@@ -353,16 +593,29 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         raise RuntimeError("训练未产生有效 checkpoint。")
 
     model.load_state_dict(best_state)
-    test_loss, logits_main, logits_turn, theta_hat = _predict_full(
-        model, test_loader, test_split, device, class_w_main, class_w_turn, cfg
+    test_loss, logits_main, logits_turn, theta_hat, test_parts = _predict_full(
+        model, test_loader, test_split, device, class_w_main, class_w_turn, cfg, loss_controller
     )
     test_metrics = compute_metrics(logits_main, logits_turn, theta_hat, test_split, test_loss)
+    test_metrics.update(test_parts)
+    e3_val_gate_stats = _collect_gate_statistics(model, val_loader, val_split, device, prefix="val")
+    e3_test_gate_stats = _collect_gate_statistics(model, test_loader, test_split, device, prefix="test")
+    if e3_val_gate_stats:
+        best_val_metrics.update(e3_val_gate_stats)
+    if e3_test_gate_stats:
+        test_metrics.update(e3_test_gate_stats)
     train_seconds = time.time() - t0
 
+    dynamic_loss_state = loss_controller.extra_state()
+    model_extra_state = _model_extra_state(model)
     torch.save(
         {
             "model_family": model_family,
+            "loss_mode": loss_controller.mode,
             "model_state": best_state,
+            "loss_controller_state": loss_controller.state_dict(),
+            "dynamic_loss_state": dynamic_loss_state,
+            "model_extra_state": model_extra_state,
             "model_config": cfg.to_dict(),
             "seed": args.seed,
             "best_epoch": best_epoch,
@@ -380,10 +633,12 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     paths = {"checkpoint_file": str(checkpoint_file), "report_file": str(report_file)}
     row = metric_row(args.seed, best_epoch, test_metrics, paths)
     row["model"] = _model_label(model_family)
+    _augment_row_with_model_state(row, model_extra_state, test_metrics)
     _write_csv(summary_csv, [row])
     _write_csv(history_csv, history_rows)
     val_row = metric_row(args.seed, best_epoch, best_val_metrics, paths)
     val_row["model"] = _model_label(model_family)
+    _augment_row_with_model_state(val_row, model_extra_state, best_val_metrics)
     _write_csv(metrics_val_csv, [val_row])
     _write_csv(metrics_test_csv, [row])
     _write_run_metadata(
@@ -395,6 +650,8 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         feat_names=data["feat_names"],
         model_family=model_family,
         run_tag=run_tag,
+        loss_state=dynamic_loss_state,
+        model_state=model_extra_state,
         files={
             "config_json": config_json,
             "config_md": config_md,
@@ -404,7 +661,19 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
             "train_log_file": train_log_file,
         },
     )
-    _write_report(report_file, args, cfg, contract.__dict__, row, test_metrics, best_val_metrics, train_seconds, model_family)
+    _write_gate_statistics(out_dir, model_extra_state, best_val_metrics, test_metrics)
+    _write_report(
+        report_file,
+        args,
+        cfg,
+        contract.__dict__,
+        row,
+        test_metrics,
+        best_val_metrics,
+        train_seconds,
+        model_family,
+        model_extra_state,
+    )
 
     print(f"[ModernTCN {model_family}] 训练完成")
     print(f"  checkpoint: {checkpoint_file}")
@@ -428,12 +697,18 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         "report_file": str(report_file),
         "test_metrics": test_metrics,
         "best_epoch": best_epoch,
+        "loss_mode": loss_controller.mode,
+        "model_extra_state": model_extra_state,
     }
 
 
 def _default_run_tag(model_family: str, seed: int) -> str:
     if model_family == "full":
         return f"modern_tcn_full_v4b_seed{seed}"
+    if model_family == "small_physics_group_gate":
+        return f"pg_alpha0_seed{seed}"
+    if model_family == "small_mode_theta":
+        return f"mode_theta_detach_flatreg000_seed{seed}"
     if model_family == "small_dualkernel":
         return f"dual_k31_s5_seed{seed}"
     if model_family == "small_gffn":
@@ -448,6 +723,10 @@ def _result_dir_name(model_family: str) -> str:
         return "modern_tcn_ablation/exp2_dual_kernel"
     if model_family == "small_gffn":
         return "modern_tcn_ablation/exp1_grouped_ffn"
+    if model_family == "small_physics_group_gate":
+        return "modern_tcn_sci_innovation/03_physics_group_gate"
+    if model_family == "small_mode_theta":
+        return "modern_tcn_sci_innovation/04_mode_conditioned_theta"
     return "modern_tcn"
 
 
@@ -458,6 +737,10 @@ def _file_prefix(model_family: str, seed: int) -> str:
         return f"modern_tcn_dualkernel_seed{seed}"
     if model_family == "small_gffn":
         return f"modern_tcn_gffn_seed{seed}"
+    if model_family == "small_physics_group_gate":
+        return f"modern_tcn_pg_seed{seed}"
+    if model_family == "small_mode_theta":
+        return f"modern_tcn_mode_theta_seed{seed}"
     return f"modern_tcn_seed{seed}"
 
 
@@ -468,6 +751,10 @@ def _report_file_name(model_family: str) -> str:
         return "ModernTCNDualKernel_train_report.md"
     if model_family == "small_gffn":
         return "ModernTCNGrouped_train_report.md"
+    if model_family == "small_physics_group_gate":
+        return "ModernTCNPhysicsGroupGate_train_report.md"
+    if model_family == "small_mode_theta":
+        return "ModernTCNModeTheta_train_report.md"
     return "ModernTCN_train_report.md"
 
 
@@ -476,6 +763,10 @@ def _model_label(model_family: str) -> str:
         return "ModernTCN-small-gffn"
     if model_family == "small_dualkernel":
         return "ModernTCN-small-dualkernel"
+    if model_family == "small_physics_group_gate":
+        return "PG-ModernTCN-small"
+    if model_family == "small_mode_theta":
+        return "ModernTCN-small-mode-theta"
     if model_family == "full":
         return "ModernTCNFull"
     return "ModernTCN-small"
@@ -493,6 +784,10 @@ def _resolve_dataset_file(root: Path, dataset_arg: str, model_family: str) -> Op
         path = Path(dataset_arg)
         return path if path.is_absolute() else root / path
     if model_family == "small_dualkernel":
+        return root / PLANTFIX_22D_DATASET
+    if model_family == "small_physics_group_gate":
+        return root / PLANTFIX_22D_DATASET
+    if model_family == "small_mode_theta":
         return root / PLANTFIX_22D_DATASET
     if model_family == "full":
         return root / FULL_DEFAULT_DATASET
@@ -516,6 +811,35 @@ def _tuple_arg(args: argparse.Namespace, name: str, default: Tuple[int, ...]) ->
     return tuple(int(item) for item in parts)
 
 
+def _str_tuple_arg(args: argparse.Namespace, name: str, default: Tuple[str, ...]) -> Tuple[str, ...]:
+    value = getattr(args, name, None)
+    if value is None:
+        return tuple(default)
+    if isinstance(value, (tuple, list)):
+        return tuple(str(x) for x in value)
+    parts = [item.strip() for item in str(value).split(",") if item.strip()]
+    if not parts:
+        raise ValueError(f"{name} must contain at least one value.")
+    return tuple(parts)
+
+
+def _nested_int_tuple_arg(args: argparse.Namespace, name: str, default: Tuple[Tuple[int, ...], ...]) -> Tuple[Tuple[int, ...], ...]:
+    value = getattr(args, name, None)
+    if value is None:
+        return tuple(tuple(int(i) for i in group) for group in default)
+    if isinstance(value, (tuple, list)):
+        return tuple(tuple(int(i) for i in group) for group in value)
+    groups = []
+    for group_text in str(value).split(";"):
+        group_text = group_text.strip()
+        if not group_text:
+            continue
+        groups.append(tuple(int(item.strip()) for item in group_text.split(",") if item.strip()))
+    if not groups:
+        raise ValueError(f"{name} must contain at least one index group.")
+    return tuple(groups)
+
+
 def _build_config(args: argparse.Namespace, contract, model_family: str) -> ModernTCNConfig:
     if model_family == "full":
         base = ModernTCNFullConfig()
@@ -523,6 +847,10 @@ def _build_config(args: argparse.Namespace, contract, model_family: str) -> Mode
         base = ModernTCNDualKernelConfig()
     elif model_family == "small_gffn":
         base = ModernTCNGroupedConfig()
+    elif model_family == "small_physics_group_gate":
+        base = ModernTCNPhysicsGroupGateConfig()
+    elif model_family == "small_mode_theta":
+        base = ModernTCNModeThetaConfig()
     else:
         base = ModernTCNConfig()
     common = {
@@ -560,6 +888,11 @@ def _build_config(args: argparse.Namespace, contract, model_family: str) -> Mode
         "lambda_theta_small_neg_excess": _arg(args, "lambda_theta_small_neg_excess", base.lambda_theta_small_neg_excess),
         "lambda_turn_release": _arg(args, "lambda_turn_release", base.lambda_turn_release),
         "lambda_false_turn_straight": _arg(args, "lambda_false_turn_straight", base.lambda_false_turn_straight),
+        "lambda_transition_focal": _arg(args, "lambda_transition_focal", base.lambda_transition_focal),
+        "lambda_stall_focal": _arg(args, "lambda_stall_focal", base.lambda_stall_focal),
+        "lambda_theta_smooth": _arg(args, "lambda_theta_smooth", base.lambda_theta_smooth),
+        "focal_gamma": _arg(args, "focal_gamma", base.focal_gamma),
+        "theta_smooth_mode": _arg(args, "theta_smooth_mode", base.theta_smooth_mode),
         "theta_excess_target_deg": _arg(args, "theta_excess_target_deg", base.theta_excess_target_deg),
         "theta_flat_excess_target_deg": _arg(args, "theta_flat_excess_target_deg", base.theta_flat_excess_target_deg),
         "theta_true_zero_tol_deg": _arg(args, "theta_true_zero_tol_deg", base.theta_true_zero_tol_deg),
@@ -679,26 +1012,81 @@ def _build_config(args: argparse.Namespace, contract, model_family: str) -> Mode
             }
         )
         return ModernTCNGroupedConfig(**common)
+    if model_family == "small_physics_group_gate":
+        common.update(
+            {
+                "branch_channels": _arg(args, "branch_channels", base.branch_channels),
+                "branch_kernel": _arg(args, "branch_kernel", base.branch_kernel),
+                "alpha_init": _arg(args, "alpha_init", base.alpha_init),
+                "gate_hidden": _arg(args, "gate_hidden", base.gate_hidden),
+                "physics_group_spec": _arg(args, "physics_group_spec", base.physics_group_spec),
+                "physics_group_names": _str_tuple_arg(args, "physics_group_names", base.physics_group_names),
+                "physics_group_indices": _nested_int_tuple_arg(
+                    args, "physics_group_indices", base.physics_group_indices
+                ),
+            }
+        )
+        return ModernTCNPhysicsGroupGateConfig(**common)
+    if model_family == "small_mode_theta":
+        common.update(
+            {
+                "theta_gate_detach": bool(_arg(args, "theta_gate_detach", base.theta_gate_detach)),
+                "flat_theta_reg_lambda": _arg(args, "flat_theta_reg_lambda", base.flat_theta_reg_lambda),
+                "theta_expert_hidden": _arg(args, "theta_expert_hidden", base.theta_expert_hidden),
+            }
+        )
+        return ModernTCNModeThetaConfig(**common)
     return ModernTCNConfig(**common)
 
 
-def _train_epoch(model, loader, opt, device, class_w_main, class_w_turn, cfg) -> float:
+def _train_epoch(
+    model,
+    loader,
+    opt,
+    loss_opt,
+    loss_controller,
+    epoch: int,
+    device,
+    class_w_main,
+    class_w_turn,
+    cfg,
+    gradnorm_update_interval: int = 0,
+) -> Dict[str, float]:
     model.train()
-    total_loss = 0.0
+    loss_controller.train()
+    sums: Dict[str, float] = {}
     total_n = 0
-    for batch in loader:
+    for batch_idx, batch in enumerate(loader, start=1):
         batch = _to_device(batch, device)
         batch = _apply_command_feature_dropout(batch, cfg)
         opt.zero_grad(set_to_none=True)
-        logits_main, logits_turn, theta_hat = model(batch["X"])
-        loss, _ = multitask_loss(logits_main, logits_turn, theta_hat, batch, class_w_main, class_w_turn, cfg)
-        loss.backward()
+        if loss_opt is not None:
+            loss_opt.zero_grad(set_to_none=True)
+        logits_main, logits_turn, theta_hat, extra_outputs = _forward_with_optional_experts(model, batch["X"])
+        fixed_loss, components = multitask_loss_components(
+            logits_main, logits_turn, theta_hat, batch, class_w_main, class_w_turn, cfg, extra_outputs=extra_outputs
+        )
+        compute_gradnorm_aux = _should_update_gradnorm(loss_controller, epoch, batch_idx, gradnorm_update_interval)
+        loss, dynamic_stats, aux_loss = loss_controller.compute_loss(
+            components, model, compute_gradnorm_aux=compute_gradnorm_aux
+        )
+        loss.backward(retain_graph=aux_loss is not None)
+        if aux_loss is not None and loss_opt is not None:
+            torch.autograd.backward(aux_loss, inputs=list(loss_controller.parameters()))
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         opt.step()
+        if loss_opt is not None:
+            loss_opt.step()
         n = int(batch["X"].shape[0])
-        total_loss += float(loss.detach().cpu()) * n
         total_n += n
-    return total_loss / max(total_n, 1)
+        _accumulate(sums, "loss_optimized", loss, n)
+        _accumulate(sums, "loss_total", fixed_loss, n)
+        for key, value in components.items():
+            _accumulate(sums, key, value, n)
+        for key, value in dynamic_stats.items():
+            if isinstance(value, (int, float, bool)):
+                _accumulate_float(sums, key, float(value), n)
+    return {key: value / max(total_n, 1) for key, value in sums.items()}
 
 
 def _apply_command_feature_dropout(batch: Dict[str, torch.Tensor], cfg: ModernTCNConfig) -> Dict[str, torch.Tensor]:
@@ -735,21 +1123,45 @@ def _apply_command_feature_dropout(batch: Dict[str, torch.Tensor], cfg: ModernTC
     return out
 
 
+def _forward_with_optional_experts(model, x: torch.Tensor):
+    if hasattr(model, "forward_experts"):
+        details = model.forward_experts(x)
+        return details["logits_main"], details["logits_turn"], details["theta_hat"], details
+    logits_main, logits_turn, theta_hat = model(x)
+    return logits_main, logits_turn, theta_hat, None
+
+
 @torch.no_grad()
-def _predict_full(model, loader, split, device, class_w_main, class_w_turn, cfg) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray]:
+def _predict_full(
+    model,
+    loader,
+    split,
+    device,
+    class_w_main,
+    class_w_turn,
+    cfg,
+    loss_controller=None,
+) -> Tuple[float, np.ndarray, np.ndarray, np.ndarray, Dict[str, float]]:
     model.eval()
+    if loss_controller is not None:
+        loss_controller.eval()
     logits_main_all = []
     logits_turn_all = []
     theta_all = []
     loss_sum = 0.0
     n_sum = 0
+    part_sums: Dict[str, float] = {}
     for batch in loader:
         batch = _to_device(batch, device)
-        logits_main, logits_turn, theta_hat = model(batch["X"])
-        loss, _ = multitask_loss(logits_main, logits_turn, theta_hat, batch, class_w_main, class_w_turn, cfg)
+        logits_main, logits_turn, theta_hat, extra_outputs = _forward_with_optional_experts(model, batch["X"])
+        loss, parts = multitask_loss_components(
+            logits_main, logits_turn, theta_hat, batch, class_w_main, class_w_turn, cfg, extra_outputs=extra_outputs
+        )
         n = int(batch["X"].shape[0])
         loss_sum += float(loss.detach().cpu()) * n
         n_sum += n
+        for key, value in parts.items():
+            _accumulate(part_sums, key, value, n)
         logits_main_all.append(logits_main.detach().cpu().numpy())
         logits_turn_all.append(logits_turn.detach().cpu().numpy())
         theta_all.append(theta_hat.detach().cpu().numpy())
@@ -758,7 +1170,172 @@ def _predict_full(model, loader, split, device, class_w_main, class_w_turn, cfg)
         np.concatenate(logits_main_all, axis=0),
         np.concatenate(logits_turn_all, axis=0),
         np.concatenate(theta_all, axis=0).reshape(-1),
+        {key: value / max(n_sum, 1) for key, value in part_sums.items()},
     )
+
+
+@torch.no_grad()
+def _collect_gate_statistics(model, loader, split, device, prefix: str) -> Dict[str, object]:
+    if not hasattr(model, "collect_gate_weights") or not hasattr(model, "e3_state"):
+        return {}
+    group_names = [str(x) for x in model.e3_state().get("physics_group_names", [])]
+    if not group_names:
+        return {}
+    gates = []
+    for batch in loader:
+        batch = _to_device(batch, device)
+        gate = model.collect_gate_weights(batch["X"])
+        gates.append(gate.detach().cpu().numpy())
+    if not gates:
+        return {}
+    arr = np.concatenate(gates, axis=0)
+    y_main = np.asarray(split.y_main).reshape(-1)
+    transition = np.asarray(split.turn_transition).reshape(-1).astype(bool)
+    finite = bool(np.isfinite(arr).all())
+    eps = 1e-12
+    entropy = -np.sum(arr * np.log(np.clip(arr, eps, 1.0)), axis=1)
+    max_mean = float(np.max(arr.mean(axis=0))) if arr.size else float("nan")
+    single_collapse = bool(finite and (max_mean >= 0.98 or float(np.mean(entropy)) < 0.05))
+
+    detail: Dict[str, object] = {
+        "prefix": prefix,
+        "stat_label_policy": "true label for main class; dataset turn_transition mask for transition",
+        "group_names": group_names,
+        "all_finite": finite,
+        "single_collapse": single_collapse,
+        "mean_entropy": float(np.mean(entropy)) if entropy.size else float("nan"),
+        "overall": _gate_group_summary(arr, group_names),
+        "by_main_true": {
+            "flat": _gate_group_summary(arr[y_main == 0], group_names),
+            "stall": _gate_group_summary(arr[y_main == 1], group_names),
+            "slope": _gate_group_summary(arr[y_main == 2], group_names),
+        },
+        "turn_transition": _gate_group_summary(arr[transition], group_names),
+    }
+    flat = detail["by_main_true"]["flat"]
+    stall = detail["by_main_true"]["stall"]
+    slope = detail["by_main_true"]["slope"]
+    transition_summary = detail["turn_transition"]
+    idx = {name: i for i, name in enumerate(group_names)}
+    overall_mean = arr.mean(axis=0)
+
+    def group_mean(summary: Dict[str, object], name: str) -> float:
+        value = summary.get(name, {}).get("mean", float("nan")) if isinstance(summary.get(name, {}), dict) else float("nan")
+        try:
+            return float(value)
+        except Exception:
+            return float("nan")
+
+    yaw_delta = (
+        group_mean(transition_summary, "yaw_steering") - float(overall_mean[idx["yaw_steering"]])
+        if "yaw_steering" in idx
+        else float("nan")
+    )
+    drive_delta = (
+        group_mean(stall, "drive_current_load") - float(overall_mean[idx["drive_current_load"]])
+        if "drive_current_load" in idx
+        else float("nan")
+    )
+    vel_delta = (
+        abs(group_mean(slope, "velocity_acceleration") - group_mean(flat, "velocity_acceleration"))
+        if "velocity_acceleration" in idx
+        else float("nan")
+    )
+    interpretability_score = int((yaw_delta > 0.0) if np.isfinite(yaw_delta) else False)
+    interpretability_score += int((drive_delta > 0.0) if np.isfinite(drive_delta) else False)
+    interpretability_score += int((vel_delta > 0.01) if np.isfinite(vel_delta) else False)
+    detail["interpretability"] = {
+        "yaw_transition_minus_overall": yaw_delta,
+        "drive_stall_minus_overall": drive_delta,
+        "velocity_slope_flat_abs_delta": vel_delta,
+        "score_0_to_3": interpretability_score,
+    }
+
+    out: Dict[str, object] = {
+        f"{prefix}_gate_all_finite": finite,
+        f"{prefix}_gate_single_collapse": single_collapse,
+        f"{prefix}_gate_mean_entropy": detail["mean_entropy"],
+        f"{prefix}_gate_interpretability_score": interpretability_score,
+        f"{prefix}_gate_yaw_transition_minus_overall": yaw_delta,
+        f"{prefix}_gate_drive_stall_minus_overall": drive_delta,
+        f"{prefix}_gate_velocity_slope_flat_abs_delta": vel_delta,
+        f"{prefix}_gate_detail": detail,
+    }
+    for group_idx, name in enumerate(group_names):
+        out[f"{prefix}_gate_{name}_mean"] = float(arr[:, group_idx].mean())
+        out[f"{prefix}_gate_{name}_std"] = float(arr[:, group_idx].std())
+    return out
+
+
+def _gate_group_summary(arr: np.ndarray, group_names: List[str]) -> Dict[str, object]:
+    if arr.size == 0:
+        return {name: {"n": 0, "mean": float("nan"), "std": float("nan")} for name in group_names}
+    return {
+        name: {
+            "n": int(arr.shape[0]),
+            "mean": float(arr[:, idx].mean()),
+            "std": float(arr[:, idx].std()),
+        }
+        for idx, name in enumerate(group_names)
+    }
+
+
+def _model_extra_state(model) -> Dict[str, object]:
+    if hasattr(model, "e3_state"):
+        try:
+            return dict(model.e3_state())
+        except Exception:
+            return {}
+    if hasattr(model, "e4_state"):
+        try:
+            return dict(model.e4_state())
+        except Exception:
+            return {}
+    return {}
+
+
+def _augment_row_with_model_state(row: Dict[str, object], model_state: Dict[str, object], metrics: Dict[str, object]) -> None:
+    if not model_state:
+        return
+    row["alpha_final"] = model_state.get("alpha", float("nan"))
+    row["physics_group_names"] = json.dumps(model_state.get("physics_group_names", []), ensure_ascii=False)
+    row["physics_group_indices"] = json.dumps(model_state.get("physics_group_indices", []), ensure_ascii=False)
+    if "theta_gate_detach" in model_state:
+        row["theta_gate_detach"] = model_state.get("theta_gate_detach")
+        row["flat_theta_reg_lambda"] = model_state.get("flat_theta_reg_lambda", float("nan"))
+        row["theta_expert_hidden"] = model_state.get("theta_expert_hidden", 0)
+    for key, value in metrics.items():
+        if key.endswith("_gate_detail"):
+            row[f"{key}_json"] = json.dumps(value, ensure_ascii=False)
+        elif "_gate_" in key and isinstance(value, (int, float, bool, np.floating)):
+            row[key] = value
+
+
+def _write_gate_statistics(
+    out_dir: Path,
+    model_state: Dict[str, object],
+    val_metrics: Dict[str, object],
+    test_metrics: Dict[str, object],
+) -> None:
+    if not model_state:
+        return
+    payload = {
+        "model_extra_state": model_state,
+        "val": val_metrics.get("val_gate_detail", {}),
+        "test": test_metrics.get("test_gate_detail", {}),
+    }
+    (out_dir / "physics_gate_statistics.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _accumulate(sums: Dict[str, float], key: str, value: torch.Tensor, n: int) -> None:
+    sums[key] = sums.get(key, 0.0) + float(value.detach().cpu()) * n
+
+
+def _accumulate_float(sums: Dict[str, float], key: str, value: float, n: int) -> None:
+    sums[key] = sums.get(key, 0.0) + value * n
 
 
 def _to_device(batch: Dict[str, torch.Tensor], device: torch.device) -> Dict[str, torch.Tensor]:
@@ -782,12 +1359,58 @@ def _select_device(mode: str) -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def _history_row(epoch: int, lr: float, train_loss: float, val_metrics: Dict[str, object], score: float) -> Dict[str, object]:
-    return {
+def _history_row(
+    epoch: int,
+    lr: float,
+    train_stats: Dict[str, float],
+    val_metrics: Dict[str, object],
+    score: float,
+    loss_state: Dict[str, object],
+    model_state: Dict[str, object],
+) -> Dict[str, object]:
+    row = {
         "epoch": epoch,
         "lr": lr,
-        "train_loss": train_loss,
+        "loss_mode": loss_state.get("loss_mode", "fixed"),
+        "train_loss": train_stats.get("loss_optimized", float("nan")),
+        "train_loss_fixed_total": train_stats.get("loss_total", float("nan")),
+        "train_loss_main": train_stats.get("loss_main_bundle", train_stats.get("loss_main", float("nan"))),
+        "train_loss_turn": train_stats.get("loss_turn_bundle", train_stats.get("loss_turn", float("nan"))),
+        "train_loss_theta": train_stats.get("loss_theta_bundle", train_stats.get("loss_theta", float("nan"))),
+        "train_loss_main_base": train_stats.get("loss_main_bundle_base", train_stats.get("loss_main", float("nan"))),
+        "train_loss_turn_base": train_stats.get("loss_turn_bundle_base", train_stats.get("loss_turn", float("nan"))),
+        "train_loss_theta_base": train_stats.get("loss_theta_bundle_base", train_stats.get("loss_theta", float("nan"))),
+        "train_loss_main_raw": train_stats.get("loss_main", float("nan")),
+        "train_loss_turn_raw": train_stats.get("loss_turn", float("nan")),
+        "train_loss_theta_raw": train_stats.get("loss_theta", float("nan")),
+        "train_loss_transition_focal_raw": train_stats.get("loss_transition_focal_raw", float("nan")),
+        "train_loss_transition_focal_weighted": train_stats.get("loss_transition_focal_weighted", float("nan")),
+        "train_loss_stall_focal_raw": train_stats.get("loss_stall_focal_raw", float("nan")),
+        "train_loss_stall_focal_weighted": train_stats.get("loss_stall_focal_weighted", float("nan")),
+        "train_loss_theta_smooth": train_stats.get("loss_theta_smooth", float("nan")),
+        "train_loss_flat_theta_expert_reg": train_stats.get("loss_flat_theta_expert_reg", float("nan")),
+        "train_loss_flat_theta_expert_reg_weighted": train_stats.get(
+            "loss_flat_theta_expert_reg_weighted", float("nan")
+        ),
         "val_loss": val_metrics["loss_total"],
+        "val_loss_main": val_metrics.get("loss_main_bundle", val_metrics.get("loss_main", float("nan"))),
+        "val_loss_turn": val_metrics.get("loss_turn_bundle", val_metrics.get("loss_turn", float("nan"))),
+        "val_loss_theta": val_metrics.get("loss_theta_bundle", val_metrics.get("loss_theta", float("nan"))),
+        "val_loss_main_base": val_metrics.get("loss_main_bundle_base", val_metrics.get("loss_main", float("nan"))),
+        "val_loss_turn_base": val_metrics.get("loss_turn_bundle_base", val_metrics.get("loss_turn", float("nan"))),
+        "val_loss_theta_base": val_metrics.get("loss_theta_bundle_base", val_metrics.get("loss_theta", float("nan"))),
+        "val_loss_main_raw": val_metrics.get("loss_main", float("nan")),
+        "val_loss_turn_raw": val_metrics.get("loss_turn", float("nan")),
+        "val_loss_theta_raw": val_metrics.get("loss_theta", float("nan")),
+        "val_loss_transition_focal_raw": val_metrics.get("loss_transition_focal_raw", float("nan")),
+        "val_loss_transition_focal_weighted": val_metrics.get("loss_transition_focal_weighted", float("nan")),
+        "val_loss_stall_focal_raw": val_metrics.get("loss_stall_focal_raw", float("nan")),
+        "val_loss_stall_focal_weighted": val_metrics.get("loss_stall_focal_weighted", float("nan")),
+        "val_loss_theta_smooth": val_metrics.get("loss_theta_smooth", float("nan")),
+        "val_loss_flat_theta_expert_reg": val_metrics.get("loss_flat_theta_expert_reg", float("nan")),
+        "val_loss_flat_theta_expert_reg_weighted": val_metrics.get(
+            "loss_flat_theta_expert_reg_weighted", float("nan")
+        ),
         "val_score": score,
         "val_acc_main": val_metrics["acc_main"],
         "val_acc_turn": val_metrics["acc_turn"],
@@ -814,7 +1437,31 @@ def _history_row(epoch: int, lr: float, train_loss: float, val_metrics: Dict[str
         "val_flat_recall": val_metrics["flat_recall"],
         "val_stall_recall": val_metrics["stall_recall"],
         "val_slope_recall": val_metrics["slope_recall"],
+        "val_flat_as_stall_ratio": val_metrics.get("flat_as_stall_ratio", float("nan")),
+        "val_stall_as_flat_ratio": val_metrics.get("stall_as_flat_ratio", float("nan")),
+        "val_cm_main": val_metrics.get("cm_main", "[]"),
+        "val_cm_turn": val_metrics.get("cm_turn", "[]"),
     }
+    if model_state:
+        row["alpha"] = model_state.get("alpha", float("nan"))
+    for key in [
+        "s_main",
+        "s_turn",
+        "s_theta",
+        "weight_main",
+        "weight_turn",
+        "weight_theta",
+        "task_weight_main",
+        "task_weight_turn",
+        "task_weight_theta",
+        "initial_loss_main",
+        "initial_loss_turn",
+        "initial_loss_theta",
+    ]:
+        row[key] = loss_state.get(key, train_stats.get(key, float("nan")))
+    for key in ["grad_norm_main", "grad_norm_turn", "grad_norm_theta", "gradnorm_loss", "gradnorm_unstable"]:
+        row[key] = train_stats.get(key, float("nan"))
+    return row
 
 
 def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
@@ -848,11 +1495,17 @@ def _write_run_metadata(
     feat_names,
     model_family: str,
     run_tag: str,
+    loss_state: Dict[str, object],
+    model_state: Dict[str, object],
     files: Dict[str, Path],
 ) -> None:
     git_hash = _git_hash(root)
     config = {
         "model_family": model_family,
+        "loss_mode": loss_state.get("loss_mode", _normalize_loss_mode(getattr(args, "loss_mode", "fixed"))),
+        "dynamic_loss_state": loss_state,
+        "model_extra_state": model_state,
+        "theta_smooth_status": "disabled_contract_limited",
         "run_tag": run_tag,
         "output_dir": str(out_dir),
         "cli_args": vars(args),
@@ -870,6 +1523,7 @@ def _write_run_metadata(
     with files["config_md"].open("w", encoding="utf-8") as f:
         f.write(f"# ModernTCN run config\n\n")
         f.write(f"- model_family: `{model_family}`\n")
+        f.write(f"- loss_mode: `{loss_state.get('loss_mode', _normalize_loss_mode(getattr(args, 'loss_mode', 'fixed')) )}`\n")
         f.write(f"- run_tag: `{run_tag}`\n")
         f.write(f"- output_dir: `{out_dir}`\n")
         f.write(f"- git_hash: `{git_hash}`\n")
@@ -878,6 +1532,13 @@ def _write_run_metadata(
         f.write("## Model Config\n\n```json\n")
         f.write(json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False))
         f.write("\n```\n")
+        f.write("\n## Dynamic Loss State\n\n```json\n")
+        f.write(json.dumps(loss_state, indent=2, ensure_ascii=False))
+        f.write("\n```\n")
+        if model_state:
+            f.write("\n## Model Extra State\n\n```json\n")
+            f.write(json.dumps(model_state, indent=2, ensure_ascii=False))
+            f.write("\n```\n")
     with files["train_log_file"].open("w", encoding="utf-8") as f:
         f.write("Training log placeholder. Console logs are not captured by train_one_seed API.\n")
         f.write(f"summary_csv: `{out_dir / (_file_prefix(model_family, args.seed) + '_summary.csv')}`\n")
@@ -894,6 +1555,7 @@ def _write_report(
     val_metrics: Dict[str, object],
     train_seconds: float,
     model_family: str,
+    model_state: Dict[str, object],
 ) -> None:
     passed, failures = seed42_gate(test_metrics) if args.seed == 42 else (False, [])
     with path.open("w", encoding="utf-8") as f:
@@ -903,11 +1565,16 @@ def _write_report(
             title = "ModernTCN dual-kernel small 第一阶段训练报告"
         elif model_family == "small_gffn":
             title = "ModernTCN grouped-FFN small 第一阶段训练报告"
+        elif model_family == "small_physics_group_gate":
+            title = "PG-ModernTCN-small physics-group residual gate 训练报告"
+        elif model_family == "small_mode_theta":
+            title = "ModernTCN-small mode-conditioned theta experts 训练报告"
         else:
             title = "ModernTCN-small 第一阶段训练报告"
         f.write(f"# {title}\n\n")
         f.write("## 固定约束\n\n")
         f.write(f"- model_family: `{model_family}`\n")
+        f.write(f"- loss_mode: `{_normalize_loss_mode(getattr(args, 'loss_mode', 'fixed'))}`\n")
         f.write(f"- dataset: `{contract['dataset_file']}`\n")
         f.write(f"- vehicle: `{contract.get('vehicle_type', '')}`; active=`{contract.get('active_drive_steer_wheels', '')}`; passive=`{contract.get('passive_support_wheels', '')}`\n")
         f.write(f"- feature_policy: `{contract.get('feature_policy', '')}`\n")
@@ -917,6 +1584,27 @@ def _write_report(
         f.write(f"- confidence_policy: `{contract.get('confidence_policy', '')}`\n")
         f.write(f"- input: `[batch, time={contract['seq_len']}, feature={contract['input_dim']}]`\n")
         f.write("- output: `logits_main`, `logits_turn`, `theta_hat`\n\n")
+        if model_family == "small_physics_group_gate":
+            f.write("## E3 Physics-Group Residual Gate\n\n")
+            f.write("- residual insertion: trunk-level `[B, channels, T]`, before original small readout and heads.\n")
+            f.write("- gate statistics policy: true main labels and dataset `turn_transition` mask.\n")
+            f.write("- alpha0 note: alpha_init=0.0 can warm up slowly because the branch is initially gated by alpha.\n")
+            f.write(f"- alpha_final: `{float(model_state.get('alpha', float('nan'))):.8f}`\n")
+            f.write(f"- physics_group_names: `{model_state.get('physics_group_names', [])}`\n\n")
+        if model_family == "small_mode_theta":
+            f.write("## E4 Mode-Conditioned Theta Experts\n\n")
+            f.write("- theta fusion: `sum(softmax(main_logits) * theta_experts)`.\n")
+            f.write(f"- theta_gate_detach: `{bool(model_state.get('theta_gate_detach', True))}`\n")
+            f.write(f"- flat_theta_reg_lambda: `{float(model_state.get('flat_theta_reg_lambda', float('nan'))):.6f}`\n")
+            f.write(f"- theta_expert_hidden: `{int(model_state.get('theta_expert_hidden', 0))}`\n\n")
+        f.write("## E2 hard-sample focal settings\n\n")
+        theta_smooth_status = "disabled_contract_limited"
+        f.write(f"- lambda_transition_focal: `{float(getattr(args, 'lambda_transition_focal', 0.0))}`\n")
+        f.write(f"- lambda_stall_focal: `{float(getattr(args, 'lambda_stall_focal', 0.0))}`\n")
+        f.write(f"- lambda_theta_smooth: `{float(getattr(args, 'lambda_theta_smooth', 0.0))}`\n")
+        f.write(f"- focal_gamma: `{float(getattr(args, 'focal_gamma', 2.0))}`\n")
+        f.write(f"- theta_smooth_mode: `{getattr(args, 'theta_smooth_mode', 'off')}`\n")
+        f.write(f"- theta_smooth_status: `{theta_smooth_status}`\n\n")
         f.write("## 配置\n\n")
         f.write("```json\n")
         f.write(json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False))
@@ -955,12 +1643,58 @@ def _write_report(
             "flat_recall",
             "stall_recall",
             "slope_recall",
+            "flat_as_stall_ratio",
+            "stall_as_flat_ratio",
             "uphill_recall",
             "downhill_recall",
         ]:
             f.write(f"| {key} | {float(row[key]):.4f} |\n")
+        f.write("\n## 混淆矩阵\n\n")
+        f.write("### main: rows truth flat/stall/slope, columns pred flat/stall/slope\n\n")
+        f.write("```json\n")
+        f.write(json.dumps(test_metrics.get("cm_main", []), indent=2, ensure_ascii=False))
+        f.write("\n```\n\n")
+        f.write("### turn: rows truth right/straight/left, columns pred right/straight/left\n\n")
+        f.write("```json\n")
+        f.write(json.dumps(test_metrics.get("cm_turn", []), indent=2, ensure_ascii=False))
+        f.write("\n```\n\n")
+        f.write("## Loss scale\n\n")
+        f.write("| component | value |\n|---|---:|\n")
+        for key in [
+            "loss_main_bundle_base",
+            "loss_turn_bundle_base",
+            "loss_theta_bundle_base",
+            "loss_transition_focal_raw",
+            "loss_transition_focal_weighted",
+            "loss_stall_focal_raw",
+            "loss_stall_focal_weighted",
+            "loss_theta_smooth",
+            "loss_flat_theta_expert_reg",
+            "loss_flat_theta_expert_reg_weighted",
+        ]:
+            f.write(f"| test_{key} | {float(test_metrics.get(key, float('nan'))):.6f} |\n")
         f.write(f"\n- best_epoch: {row['best_epoch']}\n")
         f.write(f"- train_seconds: {train_seconds:.1f}\n\n")
+        if model_state:
+            f.write("## E3 Gate Statistics\n\n")
+            f.write("| metric | value |\n|---|---:|\n")
+            for key in [
+                "test_gate_all_finite",
+                "test_gate_single_collapse",
+                "test_gate_mean_entropy",
+                "test_gate_interpretability_score",
+                "test_gate_yaw_transition_minus_overall",
+                "test_gate_drive_stall_minus_overall",
+                "test_gate_velocity_slope_flat_abs_delta",
+            ]:
+                value = test_metrics.get(key, float("nan"))
+                if isinstance(value, bool):
+                    f.write(f"| {key} | {value} |\n")
+                else:
+                    f.write(f"| {key} | {float(value):.6f} |\n")
+            f.write("\n```json\n")
+            f.write(json.dumps(test_metrics.get("test_gate_detail", {}), indent=2, ensure_ascii=False))
+            f.write("\n```\n\n")
         f.write("## 置信度分桶\n\n")
         _write_confidence_bins(f, "main", test_metrics)
         _write_confidence_bins(f, "turn", test_metrics)
