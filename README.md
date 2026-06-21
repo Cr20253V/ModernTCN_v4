@@ -1,0 +1,1 @@
+6.21新增内容：做了三个方向的实验目的时尽可能的还原官方ModernTCN算法。路径在results\modern_tcn_ablation，但是结果均未成功。
