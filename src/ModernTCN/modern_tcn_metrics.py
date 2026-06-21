@@ -219,6 +219,7 @@ def compute_metrics(
         "acc_turn": float(np.mean(pred_turn_raw == y_turn_raw)),
         "acc_turn_pure": _masked_acc(pred_turn_raw, y_turn_raw, pure_mask),
         "acc_turn_transition": _masked_acc(pred_turn_raw, y_turn_raw, transition_mask),
+        "false_turn_straight": _false_turn_straight_ratio(pred_turn_raw, y_turn_raw),
         "flat_recall": float(recall_main[0]),
         "stall_recall": float(recall_main[1]),
         "slope_recall": float(recall_main[2]),
@@ -278,6 +279,8 @@ def selection_score(metrics: Dict[str, object], cfg=None) -> float:
     select_turn_left_target = float(getattr(cfg, "select_turn_left_target", 0.80))
     select_turn_lr_weight = float(getattr(cfg, "select_turn_lr_weight", 0.00))
     select_turn_lr_target = float(getattr(cfg, "select_turn_lr_target", 0.80))
+    select_stall_weight = float(getattr(cfg, "select_stall_weight", 0.00))
+    select_stall_target = float(getattr(cfg, "select_stall_target", 0.70))
     turn_t_penalty = 0.0 if np.isnan(turn_t) else max(0.0, select_turn_t_target - turn_t)
     turn_right = float(metrics.get("turn_right_recall", float("nan")))
     turn_left = float(metrics.get("turn_left_recall", float("nan")))
@@ -286,6 +289,8 @@ def selection_score(metrics: Dict[str, object], cfg=None) -> float:
         turn_lr_penalty = 0.0
     else:
         turn_lr_penalty = max(0.0, select_turn_lr_target - min(turn_right, turn_left))
+    stall_recall = float(metrics.get("stall_recall", float("nan")))
+    stall_penalty = 0.0 if np.isnan(stall_recall) else max(0.0, select_stall_target - stall_recall)
     flat_p95 = float(metrics.get("theta_flat_abs_p95_deg", float("nan")))
     flat_p95_target = float(getattr(cfg, "select_theta_flat_p95_target_deg", 1.0))
     flat_p95_penalty = 0.0 if np.isnan(flat_p95) else max(0.0, flat_p95 - flat_p95_target) / 5.0
@@ -371,6 +376,7 @@ def selection_score(metrics: Dict[str, object], cfg=None) -> float:
         + select_turn_t_weight * turn_t_penalty
         + select_turn_left_weight * turn_left_penalty
         + select_turn_lr_weight * turn_lr_penalty
+        + select_stall_weight * stall_penalty
         + float(getattr(cfg, "select_theta_p95_weight", 0.0)) * theta_p95_penalty
         + float(getattr(cfg, "select_theta_flat_p95_weight", 0.0)) * flat_p95_penalty
         + float(getattr(cfg, "select_theta_near_flat_p95_weight", 0.0)) * near_flat_p95_penalty
@@ -485,6 +491,12 @@ def metric_row(seed: int, best_epoch: int, metrics: Dict[str, object], paths: Di
         "theta_true_zero_bias_deg": metrics.get("theta_true_zero_bias_deg", float("nan")),
         "theta_flat_turn_abs_p95_deg": metrics.get("theta_flat_turn_abs_p95_deg", float("nan")),
         "theta_flat_turn_abs_max_deg": metrics.get("theta_flat_turn_abs_max_deg", float("nan")),
+        "theta_edge_p95_abs_err": max(
+            float(metrics.get("theta_neg_10_8_p95_abs_err_deg", float("nan"))),
+            float(metrics.get("theta_pos_8_10_p95_abs_err_deg", float("nan"))),
+        ),
+        "false_turn_straight": metrics.get("false_turn_straight", float("nan")),
+        "flat_peak_theta_error": metrics.get("theta_flat_abs_max_deg", float("nan")),
         "flat_recall": metrics["flat_recall"],
         "stall_recall": metrics["stall_recall"],
         "slope_recall": metrics["slope_recall"],
@@ -610,6 +622,14 @@ def _slope_sub_recall(pred_main: np.ndarray, idx: Iterable[int]) -> float:
     if idx.size == 0:
         return float("nan")
     return float(np.mean(pred_main[idx] == 2))
+
+
+def _false_turn_straight_ratio(pred_turn_raw: np.ndarray, y_turn_raw: np.ndarray) -> float:
+    straight = np.asarray(y_turn_raw).reshape(-1) == 0
+    if not np.any(straight):
+        return float("nan")
+    pred_non_straight = np.asarray(pred_turn_raw).reshape(-1) != 0
+    return float(np.mean(pred_non_straight[straight]))
 
 
 def _theta_control_metrics(

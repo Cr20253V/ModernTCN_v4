@@ -1,0 +1,137 @@
+{
+  "timestamp": "2026-06-21T02:15:11",
+  "scope": "exp3_patch_full_densepatch_continuation_seed21_only",
+  "decision": "stop_no_seed_expansion_no_promote_no_onnx_no_closed_loop",
+  "baseline_source": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101_summary.csv",
+  "thresholds": {
+    "acc_main": {
+      "direction": ">=",
+      "threshold": 0.9639627984453082,
+      "baseline": 0.9669627984453082
+    },
+    "acc_turn": {
+      "direction": ">=",
+      "threshold": 0.5738450860632982,
+      "baseline": 0.5788450860632982
+    },
+    "acc_turn_transition": {
+      "direction": ">=",
+      "threshold": 0.4977645305514158,
+      "baseline": 0.4977645305514158
+    },
+    "theta_mae_deg": {
+      "direction": "<=",
+      "threshold": 0.6893947815895081,
+      "baseline": 0.6793947815895081
+    },
+    "flat_recall": {
+      "direction": ">=",
+      "threshold": 0.9595767195767195,
+      "baseline": 0.9695767195767195
+    },
+    "stall_recall": {
+      "direction": ">=",
+      "threshold": 0.66875,
+      "baseline": 0.71875
+    },
+    "slope_recall": {
+      "direction": ">=",
+      "threshold": 0.9699090909090909,
+      "baseline": 0.974909090909091
+    },
+    "theta_edge_p95_abs_err": {
+      "direction": "<=",
+      "threshold": 2.755056858062744,
+      "baseline": 2.755056858062744
+    }
+  },
+  "runs": [
+    {
+      "run_tag": "densepatch_select_stall_seed21",
+      "summary_file": "results\\modern_tcn_ablation\\exp3_patch_full_densepatch_continuation\\densepatch_select_stall_seed21\\modern_tcn_full_seed21_summary.csv",
+      "formal_gate_pass": false,
+      "acc_main": 0.9514158800666297,
+      "acc_main_delta_vs_baseline_good_positive": -0.015546918378678498,
+      "acc_turn": 0.6029983342587452,
+      "acc_turn_delta_vs_baseline_good_positive": 0.024153248195446952,
+      "acc_turn_transition": 0.5171385991058122,
+      "acc_turn_transition_delta_vs_baseline_good_positive": 0.019374068554396384,
+      "theta_mae_deg": 0.5706025958061218,
+      "theta_mae_deg_delta_vs_baseline_good_positive": 0.10879218578338623,
+      "flat_recall": 0.9656084656084656,
+      "flat_recall_delta_vs_baseline_good_positive": -0.003968253968253954,
+      "stall_recall": 0.6145833333333334,
+      "stall_recall_delta_vs_baseline_good_positive": -0.10416666666666663,
+      "slope_recall": 0.9592727272727273,
+      "slope_recall_delta_vs_baseline_good_positive": -0.01563636363636367,
+      "theta_edge_p95_abs_err": 2.4979312419891357,
+      "theta_edge_p95_abs_err_delta_vs_baseline_good_positive": 0.2571256160736084
+    },
+    {
+      "run_tag": "densepatch_mainweight_seed21",
+      "summary_file": "results\\modern_tcn_ablation\\exp3_patch_full_densepatch_continuation\\densepatch_mainweight_seed21\\modern_tcn_full_seed21_summary.csv",
+      "formal_gate_pass": false,
+      "acc_main": 0.9494725152692949,
+      "acc_main_delta_vs_baseline_good_positive": -0.01749028317601331,
+      "acc_turn": 0.5902276513048307,
+      "acc_turn_delta_vs_baseline_good_positive": 0.011382565241532472,
+      "acc_turn_transition": 0.5216095380029806,
+      "acc_turn_transition_delta_vs_baseline_good_positive": 0.023845007451564815,
+      "theta_mae_deg": 0.6235453486442566,
+      "theta_mae_deg_delta_vs_baseline_good_positive": 0.055849432945251465,
+      "flat_recall": 0.9695767195767195,
+      "flat_recall_delta_vs_baseline_good_positive": 0.0,
+      "stall_recall": 0.6145833333333334,
+      "stall_recall_delta_vs_baseline_good_positive": -0.10416666666666663,
+      "slope_recall": 0.9556363636363636,
+      "slope_recall_delta_vs_baseline_good_positive": -0.01927272727272733,
+      "theta_edge_p95_abs_err": 2.902961015701294,
+      "theta_edge_p95_abs_err_delta_vs_baseline_good_positive": -0.1479041576385498
+    },
+    {
+      "run_tag": "densepatch_wide24_seed21",
+      "summary_file": "results\\modern_tcn_ablation\\exp3_patch_full_densepatch_continuation\\densepatch_wide24_seed21\\modern_tcn_full_seed21_summary.csv",
+      "formal_gate_pass": false,
+      "acc_main": 0.9511382565241533,
+      "acc_main_delta_vs_baseline_good_positive": -0.0158245419211549,
+      "acc_turn": 0.5846751804553026,
+      "acc_turn_delta_vs_baseline_good_positive": 0.005830094392004437,
+      "acc_turn_transition": 0.5171385991058122,
+      "acc_turn_transition_delta_vs_baseline_good_positive": 0.019374068554396384,
+      "theta_mae_deg": 0.5422297716140747,
+      "theta_mae_deg_delta_vs_baseline_good_positive": 0.13716500997543335,
+      "flat_recall": 0.966931216931217,
+      "flat_recall_delta_vs_baseline_good_positive": -0.002645502645502562,
+      "stall_recall": 0.6770833333333334,
+      "stall_recall_delta_vs_baseline_good_positive": -0.04166666666666663,
+      "slope_recall": 0.9563636363636364,
+      "slope_recall_delta_vs_baseline_good_positive": -0.01854545454545453,
+      "theta_edge_p95_abs_err": 2.413189649581909,
+      "theta_edge_p95_abs_err_delta_vs_baseline_good_positive": 0.34186720848083496
+    }
+  ],
+  "failed_by_run": {
+    "densepatch_select_stall_seed21": [
+      "acc_main",
+      "stall_recall",
+      "slope_recall"
+    ],
+    "densepatch_mainweight_seed21": [
+      "acc_main",
+      "stall_recall",
+      "slope_recall",
+      "theta_edge_p95_abs_err"
+    ],
+    "densepatch_wide24_seed21": [
+      "acc_main",
+      "slope_recall"
+    ]
+  },
+  "best_theta_candidate": "densepatch_wide24_seed21",
+  "best_transition_candidate": "densepatch_mainweight_seed21",
+  "best_stall_candidate": "densepatch_wide24_seed21",
+  "best_gate_count_candidate": "densepatch_wide24_seed21",
+  "reason": "No seed21 continuation run passed the full offline gate. C3 improves theta/transition/edge/stall, but still fails acc_main and slope_recall, so seed expansion and deployment stages remain blocked.",
+  "seed_expansion": "not_executed_by_gate",
+  "onnx_matlab_closed_loop": "not_executed_by_gate"
+}

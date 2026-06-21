@@ -8,7 +8,7 @@ function result = ModernTCN_check_matlab_onnx(onnx_file, sample_file)
 %
 % 说明：
 %   该脚本只做离线 test window 推理检查，不接入 Simulink。输入固定为
-%   [batch, time=128, feature=19]，输出固定为 logits_main、logits_turn、
+%   [batch, time=128, feature=input_dim]，输出固定为 logits_main、logits_turn、
 %   theta_hat。通过该检查后，才建议继续写 MATLAB 在线封装。
 
 if nargin < 1 || isempty(onnx_file)
@@ -82,10 +82,32 @@ net = importNetworkFromONNX(onnx_file, Namespace=local_onnx_namespace(onnx_file)
 end
 
 function namespace = local_onnx_namespace(onnx_file)
-if contains(lower(char(onnx_file)), 'causal')
+model_family = local_onnx_model_family(onnx_file);
+if strcmpi(model_family, 'small_gffn') || contains(lower(char(onnx_file)), 'gffn')
+    namespace = "modern_tcn_gffn_onnx_layers";
+elseif strcmpi(model_family, 'small_dualkernel') || contains(lower(char(onnx_file)), 'dualkernel') || contains(lower(char(onnx_file)), 'dual_kernel')
+    namespace = "modern_tcn_dualkernel_onnx_layers";
+elseif contains(lower(char(onnx_file)), 'causal')
     namespace = "modern_tcn_causal_onnx_layers";
 else
     namespace = "modern_tcn_onnx_layers";
+end
+end
+
+function model_family = local_onnx_model_family(onnx_file)
+model_family = "";
+[folder, name, ~] = fileparts(char(onnx_file));
+meta_file = fullfile(folder, [name '_onnx_export.json']);
+if exist(meta_file, 'file') ~= 2
+    return;
+end
+try
+    meta = jsondecode(fileread(meta_file));
+    if isfield(meta, 'model_family')
+        model_family = string(meta.model_family);
+    end
+catch
+    model_family = "";
 end
 end
 

@@ -73,10 +73,34 @@ end
 end
 
 function namespace = local_onnx_namespace(onnx_file)
-if contains(lower(char(onnx_file)), 'causal')
+model_family = local_onnx_model_family(onnx_file);
+if strcmpi(model_family, 'small_gffn') || contains(lower(char(onnx_file)), 'gffn')
+    namespace = "modern_tcn_gffn_onnx_layers";
+elseif strcmpi(model_family, 'small_dualkernel') || contains(lower(char(onnx_file)), 'dualkernel') || contains(lower(char(onnx_file)), 'dual_kernel')
+    namespace = "modern_tcn_dualkernel_onnx_layers";
+elseif strcmpi(model_family, 'full') || contains(lower(char(onnx_file)), 'full128') || contains(lower(char(onnx_file)), 'patch_full') || contains(lower(char(onnx_file)), 'modern_tcn_full')
+    namespace = "modern_tcn_full_onnx_layers";
+elseif contains(lower(char(onnx_file)), 'causal')
     namespace = "modern_tcn_causal_onnx_layers";
 else
     namespace = "modern_tcn_onnx_layers";
+end
+end
+
+function model_family = local_onnx_model_family(onnx_file)
+model_family = "";
+[folder, name, ~] = fileparts(char(onnx_file));
+meta_file = fullfile(folder, [name '_onnx_export.json']);
+if exist(meta_file, 'file') ~= 2
+    return;
+end
+try
+    meta = jsondecode(fileread(meta_file));
+    if isfield(meta, 'model_family')
+        model_family = string(meta.model_family);
+    end
+catch
+    model_family = "";
 end
 end
 

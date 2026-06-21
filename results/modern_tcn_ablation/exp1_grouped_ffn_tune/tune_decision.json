@@ -1,0 +1,13 @@
+{
+  "decision": "NO_PROMOTION",
+  "stop_node": "tuning_seed21_screen",
+  "runs": 9,
+  "multi_seed_validation_executed": false,
+  "onnx_executed": false,
+  "matlab_executed": false,
+  "closed_loop_executed": false,
+  "best_tuned_run": "tune_r2_lrslow_seed21",
+  "best_tuned_checkpoint": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\exp1_grouped_ffn_tune\\tune_r2_lrslow_seed21\\modern_tcn_gffn_seed21.pt",
+  "best_overall_grouped_ffn_run_remains": "gffn_d4_k51_seed21",
+  "reason": "No tuned seed21 run improved the original grouped_ffn best tradeoff or passed the offline gate."
+}

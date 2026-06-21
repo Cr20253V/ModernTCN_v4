@@ -1,0 +1,41 @@
+{
+  "experiment": "exp2_dual_kernel_tune",
+  "decision": "NO_PROMOTION_TUNING",
+  "stop_reason": "STOP_NO_MULTISEED",
+  "fixed_baseline": {
+    "dataset": "data/tcn/ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+    "input_dim": 22,
+    "seq_len": 128
+  },
+  "screening": {
+    "seed": 21,
+    "candidate_count": 10,
+    "passed_offline_gate": 0,
+    "multi_seed_started": false
+  },
+  "best_candidate": {
+    "run_tag": "tune_r1_scale035_s7_seed21",
+    "gate_status": "FAIL",
+    "acc_main": 0.9658523042754026,
+    "acc_turn": 0.579400333148251,
+    "acc_turn_transition": 0.4947839046199702,
+    "theta_mae_deg": 0.6653428673744202,
+    "flat_recall": 0.955026455026455,
+    "stall_recall": 0.6458333333333334,
+    "slope_recall": 0.98,
+    "theta_edge_p95_abs_err": 3.556905508041382,
+    "false_turn_straight": 0.4138644593895499,
+    "flat_peak_theta_error": 7.179437637329102
+  },
+  "side_effects": {
+    "onnx_exported": false,
+    "matlab_or_simulink_started": false,
+    "closed_loop_started": false
+  },
+  "evidence": {
+    "summary_csv": "results/modern_tcn_ablation/exp2_dual_kernel_tune/tuning_all_summary.csv",
+    "summary_md": "results/modern_tcn_ablation/exp2_dual_kernel_tune/tuning_all_summary.md",
+    "final_report": "results/modern_tcn_ablation/exp2_dual_kernel_tune/dual_kernel_tuning_final_report.md",
+    "stop_report": "results/modern_tcn_ablation/exp2_dual_kernel_tune/STOP_NO_MULTISEED.md"
+  }
+}

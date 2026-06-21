@@ -1,0 +1,11 @@
+{
+  "decision": "NO_PROMOTION",
+  "stop_node": "D6_single_seed_gate",
+  "runs": 1,
+  "best_run": "full128_light_seed21",
+  "best_offline_gate_failures": "theta_mae_deg 2.19818 <= 1.2 failed",
+  "onnx_executed": false,
+  "matlab_executed": false,
+  "closed_loop_executed": false,
+  "seq256_plan_allowed": false
+}

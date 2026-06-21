@@ -1,0 +1,12 @@
+{
+  "decision": "NO_PROMOTION",
+  "stop_node": "node8_offline_gate",
+  "passing_offline_gate": 0,
+  "runs": 12,
+  "best_run": "gffn_d4_k51_seed21",
+  "best_checkpoint": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\exp1_grouped_ffn\\gffn_d4_k51_seed21\\modern_tcn_gffn_seed21.pt",
+  "best_offline_gate_failures": "acc_main 0.963631 >= 0.963963 failed; acc_turn 0.568573 >= 0.573845 failed; stall_recall 0.635417 >= 0.66875 failed",
+  "onnx_executed": false,
+  "matlab_executed": false,
+  "closed_loop_executed": false
+}

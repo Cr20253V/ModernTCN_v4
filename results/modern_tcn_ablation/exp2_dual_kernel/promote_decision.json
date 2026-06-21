@@ -1,0 +1,10 @@
+{
+  "decision": "NO_PROMOTION",
+  "stop_node": "D8_offline_gate",
+  "runs": 9,
+  "best_run": "dual_k31_s7_seed42",
+  "best_offline_gate_failures": "acc_main 0.959745 >= 0.963963 failed; theta_mae_deg 0.941459 <= 0.689395 failed; flat_recall 0.948413 >= 0.959577 failed; stall_recall 0.625 >= 0.66875 failed; theta_edge_p95_abs_err 3.26115 <= 2.80506 failed; flat_peak_theta_error 7.06555 <= 5.58574 failed",
+  "onnx_executed": false,
+  "matlab_executed": false,
+  "closed_loop_executed": false
+}

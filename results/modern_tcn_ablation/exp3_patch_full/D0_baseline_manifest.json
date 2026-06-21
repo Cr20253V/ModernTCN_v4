@@ -1,0 +1,17 @@
+{
+  "git_hash_now": "b0217f9149e8616a4a276cab48820373acaed963",
+  "snapshot_git_hash": "b0217f9149e8616a4a276cab48820373acaed963",
+  "plant_revision": "agv_physics_v2_plantfix",
+  "feature_contract": "passive17_plus_all5",
+  "dataset": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "dataset_contract": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5_contract.json",
+  "baseline_checkpoint": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.pt",
+  "baseline_onnx": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.onnx",
+  "input_dim": 22,
+  "seq_len": 128,
+  "train_windows": 16529,
+  "val_windows": 3695,
+  "test_windows": 3602,
+  "legacy_exclusion_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\exp3_patch_full\\excluded_legacy_full_artifacts.json",
+  "pass": true
+}

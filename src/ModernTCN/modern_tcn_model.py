@@ -74,6 +74,8 @@ class ModernTCNConfig:
     select_turn_left_target: float = 0.80
     select_turn_lr_weight: float = 0.00
     select_turn_lr_target: float = 0.80
+    select_stall_weight: float = 0.00
+    select_stall_target: float = 0.70
     select_theta_weight: float = 0.15
     select_theta_ref_deg: float = 5.0
     select_theta_p95_weight: float = 0.0
@@ -112,6 +114,26 @@ class ModernTCNFullConfig(ModernTCNConfig):
     large_kernels: Tuple[int, ...] = (15, 9)
     small_kernels: Tuple[int, ...] = (5, 3)
     ffn_ratio: int = 2
+    layer_scale_init: float = 1e-2
+
+
+@dataclass
+class ModernTCNGroupedConfig(ModernTCNConfig):
+    """Grouped pointwise ConvFFN small variant for 22D ablation."""
+
+    dmodel: int = 4
+    ffn_ratio: int = 2
+    layer_scale_init: float = 1e-2
+
+
+@dataclass
+class ModernTCNDualKernelConfig(ModernTCNConfig):
+    """Dual temporal-kernel small variant for the 22D plantfix ablation."""
+
+    large_kernel: int = 31
+    small_kernel: int = 5
+    dual_branch_scale: float = 0.5
+    small_branch_init: str = "default"
     layer_scale_init: float = 1e-2
 
 
@@ -175,6 +197,74 @@ class ModernTCNBlock(nn.Module):
         residual = x
         y = self.depthwise(x)
         y = self.bn1(y)
+        y = self.act(y)
+        y = self.pw1(y)
+        y = self.act(y)
+        y = self.drop(y)
+        y = self.pw2(y)
+        y = self.bn2(y)
+        y = self.drop(y)
+        return residual + y * self.layer_scale
+
+
+class ModernTCNDualKernelBlock(nn.Module):
+    """Small-model temporal block with parallel large/small depthwise kernels."""
+
+    def __init__(
+        self,
+        channels: int,
+        large_kernel: int,
+        small_kernel: int,
+        dropout: float,
+        expansion: int,
+        dual_branch_scale: float,
+        small_branch_init: str,
+        layer_scale_init: float,
+    ) -> None:
+        super().__init__()
+        if large_kernel < 1 or large_kernel % 2 != 1:
+            raise ValueError("large_kernel 必须为正奇数。")
+        if small_kernel < 1 or small_kernel % 2 != 1:
+            raise ValueError("small_kernel 必须为正奇数。")
+        if channels < 1:
+            raise ValueError("channels 必须 >= 1。")
+        small_branch_init = str(small_branch_init or "default").lower()
+        if small_branch_init not in {"default", "zero"}:
+            raise ValueError(f"未知 small_branch_init: {small_branch_init}")
+
+        hidden = int(channels * expansion)
+        self.large_branch = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size=large_kernel,
+            padding=large_kernel // 2,
+            groups=channels,
+        )
+        self.small_branch = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size=small_kernel,
+            padding=small_kernel // 2,
+            groups=channels,
+        )
+        if small_branch_init == "zero":
+            nn.init.zeros_(self.small_branch.weight)
+            if self.small_branch.bias is not None:
+                nn.init.zeros_(self.small_branch.bias)
+
+        self.dual_branch_scale = float(dual_branch_scale)
+        self.temporal_bn = nn.BatchNorm1d(channels)
+        self.pw1 = nn.Conv1d(channels, hidden, kernel_size=1)
+        self.pw2 = nn.Conv1d(hidden, channels, kernel_size=1)
+        self.bn2 = nn.BatchNorm1d(channels)
+        self.act = nn.ReLU(inplace=False)
+        self.drop = nn.Dropout(dropout)
+        self.layer_scale = nn.Parameter(torch.ones(1, channels, 1) * float(layer_scale_init))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        y = (self.large_branch(x) + self.small_branch(x)) * self.dual_branch_scale
+        y = self.temporal_bn(y)
         y = self.act(y)
         y = self.pw1(y)
         y = self.act(y)
@@ -297,6 +387,30 @@ class ModernTCNSmall(nn.Module):
         return torch.tensor(idx, dtype=torch.long)
 
 
+class ModernTCNDualKernelSmall(ModernTCNSmall):
+    """Dual-kernel temporal branch with the same I/O contract as ModernTCNSmall."""
+
+    def __init__(self, cfg: ModernTCNDualKernelConfig) -> None:
+        if str(cfg.temporal_padding).lower() != "same":
+            raise ValueError("small_dualkernel 第一阶段只支持 same padding。")
+        super().__init__(cfg)
+        self.blocks = nn.ModuleList(
+            [
+                ModernTCNDualKernelBlock(
+                    cfg.channels,
+                    cfg.large_kernel,
+                    cfg.small_kernel,
+                    cfg.dropout,
+                    cfg.expansion,
+                    cfg.dual_branch_scale,
+                    cfg.small_branch_init,
+                    cfg.layer_scale_init,
+                )
+                for _ in range(cfg.blocks)
+            ]
+        )
+
+
 class ModernTCNFullProjection(nn.Module):
     """对每个变量独立做 stage 之间的通道投影。"""
 
@@ -316,6 +430,189 @@ class ModernTCNFullProjection(nn.Module):
         y = self.bn(y)
         y = self.act(y)
         return y.reshape(bsz, self.nvars, self.dim_out, tokens).reshape(bsz, self.nvars * self.dim_out, tokens)
+
+
+class ModernTCNGroupedBlock(nn.Module):
+    """Temporal depthwise conv + variable FFN + channel FFN with sub-residuals."""
+
+    def __init__(
+        self,
+        nvars: int,
+        dmodel: int,
+        kernel_size: int,
+        ffn_ratio: int,
+        dropout: float,
+        layer_scale_init: float,
+    ) -> None:
+        super().__init__()
+        if kernel_size < 1 or kernel_size % 2 != 1:
+            raise ValueError("kernel_size 必须为正奇数。")
+        if nvars < 1 or dmodel < 1:
+            raise ValueError("nvars 和 dmodel 必须 >= 1。")
+        if ffn_ratio < 1:
+            raise ValueError("ffn_ratio 必须 >= 1。")
+        self.nvars = int(nvars)
+        self.dmodel = int(dmodel)
+        channels = self.nvars * self.dmodel
+        hidden = channels * int(ffn_ratio)
+
+        self.temporal = nn.Conv1d(
+            channels,
+            channels,
+            kernel_size=kernel_size,
+            padding=kernel_size // 2,
+            groups=channels,
+        )
+        self.temporal_bn = nn.BatchNorm1d(channels)
+
+        self.var_ffn_1 = nn.Conv1d(channels, hidden, kernel_size=1, groups=self.nvars)
+        self.var_ffn_2 = nn.Conv1d(hidden, channels, kernel_size=1, groups=self.nvars)
+        self.var_bn = nn.BatchNorm1d(channels)
+
+        self.channel_ffn_1 = nn.Conv1d(channels, hidden, kernel_size=1, groups=self.dmodel)
+        self.channel_ffn_2 = nn.Conv1d(hidden, channels, kernel_size=1, groups=self.dmodel)
+        self.channel_bn = nn.BatchNorm1d(channels)
+
+        self.act = nn.ReLU(inplace=False)
+        self.drop = nn.Dropout(dropout)
+        self.temporal_scale = nn.Parameter(torch.ones(1, channels, 1) * float(layer_scale_init))
+        self.var_scale = nn.Parameter(torch.ones(1, channels, 1) * float(layer_scale_init))
+        self.channel_scale = nn.Parameter(torch.ones(1, channels, 1) * float(layer_scale_init))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.temporal(x)
+        y = self.temporal_bn(y)
+        y = self.act(y)
+        y = self.drop(y)
+        x = x + y * self.temporal_scale
+
+        y = self.var_ffn_1(x)
+        y = self.act(y)
+        y = self.drop(y)
+        y = self.var_ffn_2(y)
+        y = self.var_bn(y)
+        y = self.drop(y)
+        x = x + y * self.var_scale
+
+        y = self._var_major_to_channel_major(x)
+        y = self.channel_ffn_1(y)
+        y = self.act(y)
+        y = self.drop(y)
+        y = self.channel_ffn_2(y)
+        y = self._channel_major_to_var_major(y)
+        y = self.channel_bn(y)
+        y = self.drop(y)
+        return x + y * self.channel_scale
+
+    def _var_major_to_channel_major(self, x: torch.Tensor) -> torch.Tensor:
+        bsz, _, tokens = x.shape
+        return (
+            x.reshape(bsz, self.nvars, self.dmodel, tokens)
+            .permute(0, 2, 1, 3)
+            .contiguous()
+            .reshape(bsz, self.dmodel * self.nvars, tokens)
+        )
+
+    def _channel_major_to_var_major(self, x: torch.Tensor) -> torch.Tensor:
+        bsz, _, tokens = x.shape
+        return (
+            x.reshape(bsz, self.dmodel, self.nvars, tokens)
+            .permute(0, 2, 1, 3)
+            .contiguous()
+            .reshape(bsz, self.nvars * self.dmodel, tokens)
+        )
+
+
+class ModernTCNGroupedSmall(nn.Module):
+    """Grouped ConvFFN small model with the same I/O contract as ModernTCNSmall."""
+
+    def __init__(self, cfg: ModernTCNGroupedConfig) -> None:
+        super().__init__()
+        self.cfg = cfg
+        self.nvars = int(cfg.input_dim)
+        self.dmodel = int(cfg.dmodel)
+        channels = self.nvars * self.dmodel
+        self.var_embed = nn.Sequential(
+            nn.Conv1d(1, self.dmodel, kernel_size=1),
+            nn.BatchNorm1d(self.dmodel),
+            nn.ReLU(inplace=False),
+        )
+        self.blocks = nn.ModuleList(
+            [
+                ModernTCNGroupedBlock(
+                    self.nvars,
+                    self.dmodel,
+                    cfg.kernel_size,
+                    cfg.ffn_ratio,
+                    cfg.dropout,
+                    cfg.layer_scale_init,
+                )
+                for _ in range(cfg.blocks)
+            ]
+        )
+
+        feature_dim = channels * 3
+        if cfg.readout_input_stats:
+            feature_dim += cfg.input_dim * 5
+        input_stats_dim = cfg.input_dim * 5
+        turn_source = cfg.turn_head_source.lower()
+        if turn_source == "full":
+            turn_dim = feature_dim
+        elif turn_source == "inputstats":
+            turn_dim = input_stats_dim
+        elif turn_source == "kinematic_stats":
+            turn_indices = ModernTCNSmall._make_turn_stats_indices(cfg.input_dim, cfg.turn_feature_indices)
+            self.register_buffer("turn_stats_indices", turn_indices, persistent=False)
+            turn_dim = int(turn_indices.numel())
+        else:
+            raise ValueError(f"未知 turn_head_source: {cfg.turn_head_source}")
+        self.turn_head_source = turn_source
+
+        self.main_head = nn.Linear(feature_dim, 3)
+        self.turn_head = nn.Sequential(
+            nn.Linear(turn_dim, 64),
+            nn.ReLU(inplace=False),
+            nn.Linear(64, 3),
+        )
+        self.theta_head = nn.Linear(feature_dim, 1)
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        if not torch.jit.is_tracing() and x.ndim != 3:
+            raise ValueError(f"ModernTCNGroupedSmall 期望输入 [B,T,F]，实际 ndim={x.ndim}")
+        bsz, seq_len, nvars = x.shape
+        if not torch.jit.is_tracing() and (seq_len != self.cfg.seq_len or nvars != self.cfg.input_dim):
+            raise ValueError(
+                f"ModernTCNGroupedSmall 输入 shape 不匹配，期望 [B,{self.cfg.seq_len},{self.cfg.input_dim}]，"
+                f"实际 {tuple(x.shape)}"
+            )
+
+        x_ct = x.transpose(1, 2)
+        z = self.var_embed(x_ct.reshape(bsz * self.nvars, 1, self.cfg.seq_len))
+        z = z.reshape(bsz, self.nvars, self.dmodel, self.cfg.seq_len).reshape(
+            bsz, self.nvars * self.dmodel, self.cfg.seq_len
+        )
+        for block in self.blocks:
+            z = block(z)
+
+        h_last = z[:, :, -1]
+        h_mean = z.mean(dim=2)
+        h_max = z.amax(dim=2)
+        pieces = [h_last, h_mean, h_max]
+        input_stats = ModernTCNSmall._input_stats(x_ct)
+        if self.cfg.readout_input_stats:
+            pieces.append(input_stats)
+        h = torch.cat(pieces, dim=1)
+        logits_main = self.main_head(h)
+        if self.turn_head_source == "full":
+            h_turn = h
+        elif self.turn_head_source == "inputstats":
+            h_turn = input_stats
+        else:
+            h_turn = input_stats.index_select(1, self.turn_stats_indices)
+        logits_turn = self.turn_head(h_turn)
+        theta_hat = self.theta_head(h)
+        theta_hat = ModernTCNSmall._apply_theta_gate(self, theta_hat, logits_main)
+        return logits_main, logits_turn, theta_hat
 
 
 class ModernTCNFullBlock(nn.Module):
@@ -554,9 +851,18 @@ def normalize_model_family(model_family: object) -> str:
         "moderntcnsmall": "small",
         "modern_tcn_full": "full",
         "moderntcnfull": "full",
+        "modern_tcn_grouped": "small_gffn",
+        "moderntcngrouped": "small_gffn",
+        "modern_tcn_gffn": "small_gffn",
+        "gffn": "small_gffn",
+        "modern_tcn_dualkernel": "small_dualkernel",
+        "modern_tcn_dual_kernel": "small_dualkernel",
+        "moderntcndualkernel": "small_dualkernel",
+        "dualkernel": "small_dualkernel",
+        "dual_kernel": "small_dualkernel",
     }
     family = aliases.get(family, family)
-    if family not in {"small", "full"}:
+    if family not in {"small", "full", "small_gffn", "small_dualkernel"}:
         raise ValueError(f"未知 model_family: {model_family}")
     return family
 
@@ -574,6 +880,18 @@ def build_model_from_config(cfg: ModernTCNConfig, model_family: object = "small"
     """根据模型族和配置实例化模型。"""
 
     family = normalize_model_family(model_family)
+    if family == "small_dualkernel":
+        if isinstance(cfg, ModernTCNDualKernelConfig):
+            dual_cfg = cfg
+        else:
+            dual_cfg = _config_from_dict(ModernTCNDualKernelConfig, cfg.to_dict())
+        return ModernTCNDualKernelSmall(dual_cfg)
+    if family == "small_gffn":
+        if isinstance(cfg, ModernTCNGroupedConfig):
+            grouped_cfg = cfg
+        else:
+            grouped_cfg = _config_from_dict(ModernTCNGroupedConfig, cfg.to_dict())
+        return ModernTCNGroupedSmall(grouped_cfg)
     if family == "full":
         if isinstance(cfg, ModernTCNFullConfig):
             full_cfg = cfg
@@ -591,7 +909,15 @@ def build_model_from_checkpoint_dict(ckpt: Dict[str, object]) -> nn.Module:
     """按 checkpoint 中的模型族和配置恢复模型结构。"""
 
     family = normalize_model_family(ckpt.get("model_family", "small"))
-    cfg_cls = ModernTCNFullConfig if family == "full" else ModernTCNConfig
+    cfg_cls = (
+        ModernTCNFullConfig
+        if family == "full"
+        else ModernTCNDualKernelConfig
+        if family == "small_dualkernel"
+        else ModernTCNGroupedConfig
+        if family == "small_gffn"
+        else ModernTCNConfig
+    )
     cfg = _config_from_dict(cfg_cls, dict(ckpt["model_config"]))
     model = build_model_from_config(cfg, family)
     model.load_state_dict(ckpt["model_state"])

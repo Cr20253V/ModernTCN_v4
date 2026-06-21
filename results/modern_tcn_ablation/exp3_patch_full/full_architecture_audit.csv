@@ -1,0 +1,4 @@
+config,patch_size,patch_stride,tokens,dims,stage_blocks,large_kernels,small_kernels,ffn_ratio,layer_scale_init,param_count,readout_input_stats,outputs
+full128_light,16,4,29,"8,16","1,1","15,9","5,3",2,0.01,171223,1,"logits_main, logits_turn, theta_hat"
+full128_mid,16,4,29,"16,32","1,1","15,9","5,3",2,0.01,391279,1,"logits_main, logits_turn, theta_hat"
+full128_densepatch,8,2,61,"16,32","1,1","15,9","5,3",2,0.01,391151,1,"logits_main, logits_turn, theta_hat"

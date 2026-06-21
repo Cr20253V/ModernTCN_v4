@@ -16,6 +16,9 @@ import csv
 import json
 import math
 import random
+import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
@@ -28,7 +31,9 @@ from modern_tcn_data import AGVWindowDataset, class_weights, find_project_root, 
 from modern_tcn_metrics import compute_metrics, metric_row, multitask_loss, seed42_gate, selection_score
 from modern_tcn_model import (
     ModernTCNConfig,
+    ModernTCNDualKernelConfig,
     ModernTCNFullConfig,
+    ModernTCNGroupedConfig,
     build_model_from_config,
     normalize_model_family,
 )
@@ -40,41 +45,80 @@ FULL_DEFAULT_DATASET = (
     / "ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v4b_weakcombo_rebalanced_passive17_plus_all5.mat"
 )
 
+PLANTFIX_22D_DATASET = (
+    Path("data")
+    / "tcn"
+    / "ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat"
+)
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="ModernTCN-small / ModernTCNFull 第一阶段训练脚本")
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--model-family", type=str, default="small", choices=["small", "full"])
-    p.add_argument("--dataset-file", type=str, default="")
-    p.add_argument("--run-tag", type=str, default="")
+    p.add_argument(
+        "--model-family",
+        "--model_family",
+        dest="model_family",
+        type=str,
+        default="small",
+        choices=["small", "full", "small_gffn", "small_dualkernel"],
+    )
+    p.add_argument("--dataset-file", "--dataset_file", dest="dataset_file", type=str, default="")
+    p.add_argument("--output-root", "--output_root", dest="output_root", type=str, default="")
+    p.add_argument("--run-tag", "--run_tag", dest="run_tag", type=str, default="")
+    p.add_argument("--no-overwrite", "--no_overwrite", dest="no_overwrite", action="store_true")
     p.add_argument("--epochs", type=int, default=120)
-    p.add_argument("--batch-size", type=int, default=256)
+    p.add_argument("--batch-size", "--batch_size", dest="batch_size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--weight-decay", type=float, default=1e-4)
+    p.add_argument("--weight-decay", "--weight_decay", dest="weight_decay", type=float, default=1e-4)
     p.add_argument("--patience", type=int, default=25)
     p.add_argument("--min-epochs", type=int, default=30)
     p.add_argument("--channels", type=int, default=64)
+    p.add_argument("--dmodel", type=int, default=None)
     p.add_argument("--blocks", type=int, default=5)
-    p.add_argument("--kernel-size", type=int, default=31)
+    p.add_argument("--kernel-size", "--kernel_size", dest="kernel_size", type=int, default=31)
+    p.add_argument("--patch-size", "--patch_size", dest="patch_size", type=int, default=None)
+    p.add_argument("--patch-stride", "--patch_stride", dest="patch_stride", type=int, default=None)
+    p.add_argument("--dims", type=str, default=None)
+    p.add_argument("--stage-blocks", "--stage_blocks", dest="stage_blocks", type=str, default=None)
+    p.add_argument("--large-kernels", "--large_kernels", dest="large_kernels", type=str, default=None)
+    p.add_argument("--small-kernels", "--small_kernels", dest="small_kernels", type=str, default=None)
+    p.add_argument("--large-kernel", "--large_kernel", dest="large_kernel", type=int, default=None)
+    p.add_argument("--small-kernel", "--small_kernel", dest="small_kernel", type=int, default=None)
+    p.add_argument("--dual-branch-scale", "--dual_branch_scale", dest="dual_branch_scale", type=float, default=None)
+    p.add_argument(
+        "--small-branch-init",
+        "--small_branch_init",
+        dest="small_branch_init",
+        type=str,
+        default=None,
+        choices=["default", "zero"],
+    )
     p.add_argument(
         "--temporal-padding",
+        "--temporal_padding",
+        dest="temporal_padding",
         type=str,
         default="same",
         choices=["same", "causal"],
         help="Temporal convolution padding mode. 默认 same，causal 仅用于因果消融实验。",
     )
     p.add_argument("--dropout", type=float, default=0.15)
-    p.add_argument("--command-dropout-prob", type=float, default=0.0)
-    p.add_argument("--command-dropout-start-index", type=int, default=-1)
-    p.add_argument("--command-dropout-feature-count", type=int, default=0)
+    p.add_argument("--ffn-ratio", "--ffn_ratio", dest="ffn_ratio", type=int, default=None)
+    p.add_argument("--layer-scale-init", "--layer_scale_init", dest="layer_scale_init", type=float, default=None)
+    p.add_argument("--command-dropout-prob", "--command_dropout_prob", dest="command_dropout_prob", type=float, default=0.0)
+    p.add_argument("--command-dropout-start-index", "--command_dropout_start_index", dest="command_dropout_start_index", type=int, default=-1)
+    p.add_argument("--command-dropout-feature-count", "--command_dropout_feature_count", dest="command_dropout_feature_count", type=int, default=0)
     p.add_argument(
         "--command-dropout-mode",
+        "--command_dropout_mode",
+        dest="command_dropout_mode",
         type=str,
         default="window_block",
         choices=["window_block", "time_block", "channel_block"],
         help="训练期命令特征 dropout。只作用于 train batch，验证/测试/导出不启用。",
     )
-    p.add_argument("--turn-head-source", type=str, default="full", choices=["full", "inputstats", "kinematic_stats"])
+    p.add_argument("--turn-head-source", "--turn_head_source", dest="turn_head_source", type=str, default="full", choices=["full", "inputstats", "kinematic_stats"])
     p.add_argument("--lambda-turn", type=float, default=0.05)
     p.add_argument("--lambda-theta", type=float, default=0.35)
     p.add_argument("--lambda-theta-flat", type=float, default=0.20)
@@ -105,6 +149,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--theta-gate-floor", type=float, default=0.0)
     p.add_argument("--theta-neg-weight", type=float, default=1.0)
     p.add_argument("--theta-pos-weight", type=float, default=1.0)
+    p.add_argument("--main-class-multipliers", "--main_class_multipliers", dest="main_class_multipliers", type=float, nargs=3, default=None)
+    p.add_argument("--turn-class-weight-method", "--turn_class_weight_method", dest="turn_class_weight_method", type=str, default=None, choices=["none", "inverse", "sqrt_inverse"])
+    p.add_argument("--main-class-weight-method", "--main_class_weight_method", dest="main_class_weight_method", type=str, default=None, choices=["none", "inverse", "sqrt_inverse"])
+    p.add_argument("--main-neg-slope-weight", "--main_neg_slope_weight", dest="main_neg_slope_weight", type=float, default=None)
+    p.add_argument("--main-pos-slope-weight", "--main_pos_slope_weight", dest="main_pos_slope_weight", type=float, default=None)
     p.add_argument("--turn-transition-weight", type=float, default=1.0)
     p.add_argument("--turn-class-multipliers", type=float, nargs=3, default=[1.00, 1.10, 1.00])
     p.add_argument("--select-turn-weight", type=float, default=0.30)
@@ -114,12 +163,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--select-turn-left-target", type=float, default=0.80)
     p.add_argument("--select-turn-lr-weight", type=float, default=0.00)
     p.add_argument("--select-turn-lr-target", type=float, default=0.80)
+    p.add_argument("--select-stall-weight", "--select_stall_weight", dest="select_stall_weight", type=float, default=0.0)
+    p.add_argument("--select-stall-target", "--select_stall_target", dest="select_stall_target", type=float, default=0.70)
     p.add_argument("--select-theta-weight", type=float, default=0.15)
     p.add_argument("--select-theta-ref-deg", type=float, default=5.0)
     p.add_argument("--select-theta-p95-weight", type=float, default=0.0)
     p.add_argument("--select-theta-p95-target-deg", type=float, default=1.0)
     p.add_argument("--select-theta-flat-p95-weight", type=float, default=0.0)
     p.add_argument("--select-theta-flat-p95-target-deg", type=float, default=1.0)
+    p.add_argument("--select-theta-flat-peak-weight", type=float, default=0.0)
+    p.add_argument("--select-theta-flat-peak-target-deg", type=float, default=3.0)
     p.add_argument("--select-theta-near-flat-p95-weight", type=float, default=0.0)
     p.add_argument("--select-theta-near-flat-p95-target-deg", type=float, default=1.0)
     p.add_argument("--select-theta-true-zero-p95-weight", type=float, default=0.0)
@@ -133,11 +186,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--select-theta-flat-bias-weight", type=float, default=0.0)
     p.add_argument("--select-theta-flat-bias-target-deg", type=float, default=0.2)
     p.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
-    p.add_argument("--num-workers", type=int, default=0)
-    p.add_argument("--limit-train", type=int, default=0, help="仅用于 smoke test，正式实验必须为 0。")
-    p.add_argument("--limit-val", type=int, default=0, help="仅用于 smoke test，正式实验必须为 0。")
-    p.add_argument("--limit-test", type=int, default=0, help="仅用于 smoke test，正式实验必须为 0。")
-    p.add_argument("--dry-run", action="store_true", help="只读取数据并跑一次前向，不保存训练结果。")
+    p.add_argument("--num-workers", "--num_workers", dest="num_workers", type=int, default=0)
+    p.add_argument("--limit-train", "--limit_train", dest="limit_train", type=int, default=0, help="仅用于 smoke test，正式实验必须为 0。")
+    p.add_argument("--limit-val", "--limit_val", dest="limit_val", type=int, default=0, help="仅用于 smoke test，正式实验必须为 0。")
+    p.add_argument("--limit-test", "--limit_test", dest="limit_test", type=int, default=0, help="仅用于 smoke test，正式实验必须为 0。")
+    p.add_argument("--dry-run", "--dry_run", dest="dry_run", action="store_true", help="只读取数据并跑一次前向，不保存训练结果。")
     return p.parse_args()
 
 
@@ -150,8 +203,12 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     root = find_project_root()
     model_family = normalize_model_family(getattr(args, "model_family", "small"))
     run_tag = getattr(args, "run_tag", "") or _default_run_tag(model_family, args.seed)
-    out_dir = root / "results" / _result_dir_name(model_family) / run_tag
+    output_root = _resolve_output_root(root, getattr(args, "output_root", ""), model_family)
+    out_dir = output_root / run_tag
     dataset_file = _resolve_dataset_file(root, getattr(args, "dataset_file", ""), model_family)
+
+    if getattr(args, "no_overwrite", False) and out_dir.exists() and any(out_dir.iterdir()):
+        raise FileExistsError(f"--no-overwrite enabled and output directory already exists: {out_dir}")
 
     _set_seed(args.seed)
     device = _select_device(getattr(args, "device", "auto"))
@@ -185,6 +242,14 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     summary_csv = out_dir / f"{file_prefix}_summary.csv"
     history_csv = out_dir / f"{file_prefix}_history.csv"
     report_file = out_dir / _report_file_name(model_family)
+    config_json = out_dir / "config.json"
+    config_md = out_dir / "config.md"
+    git_hash_file = out_dir / "git_hash.txt"
+    contract_copy_file = out_dir / "dataset_contract_copy.json"
+    feature_names_file = out_dir / "feature_names.txt"
+    train_log_file = out_dir / "train_log.txt"
+    metrics_val_csv = out_dir / "metrics_val.csv"
+    metrics_test_csv = out_dir / "metrics_test.csv"
 
     train_loader = DataLoader(
         AGVWindowDataset(train_split),
@@ -221,6 +286,17 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         print(
             f"  full patch={cfg.patch_size}/{cfg.patch_stride}, dims={cfg.dims}, "
             f"stage_blocks={cfg.stage_blocks}, large_kernels={cfg.large_kernels}"
+        )
+    elif model_family == "small_gffn":
+        print(
+            f"  grouped dmodel={cfg.dmodel}, blocks={cfg.blocks}, kernel={cfg.kernel_size}, "
+            f"ffn_ratio={cfg.ffn_ratio}, layer_scale_init={cfg.layer_scale_init:g}"
+        )
+    elif model_family == "small_dualkernel":
+        print(
+            f"  dual-kernel channels={cfg.channels}, blocks={cfg.blocks}, large={cfg.large_kernel}, "
+            f"small={cfg.small_kernel}, branch_scale={cfg.dual_branch_scale:g}, "
+            f"small_branch_init={cfg.small_branch_init}, layer_scale_init={cfg.layer_scale_init:g}"
         )
     else:
         print(
@@ -303,8 +379,31 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
 
     paths = {"checkpoint_file": str(checkpoint_file), "report_file": str(report_file)}
     row = metric_row(args.seed, best_epoch, test_metrics, paths)
+    row["model"] = _model_label(model_family)
     _write_csv(summary_csv, [row])
     _write_csv(history_csv, history_rows)
+    val_row = metric_row(args.seed, best_epoch, best_val_metrics, paths)
+    val_row["model"] = _model_label(model_family)
+    _write_csv(metrics_val_csv, [val_row])
+    _write_csv(metrics_test_csv, [row])
+    _write_run_metadata(
+        root=root,
+        out_dir=out_dir,
+        args=args,
+        cfg=cfg,
+        contract=contract.__dict__,
+        feat_names=data["feat_names"],
+        model_family=model_family,
+        run_tag=run_tag,
+        files={
+            "config_json": config_json,
+            "config_md": config_md,
+            "git_hash_file": git_hash_file,
+            "contract_copy_file": contract_copy_file,
+            "feature_names_file": feature_names_file,
+            "train_log_file": train_log_file,
+        },
+    )
     _write_report(report_file, args, cfg, contract.__dict__, row, test_metrics, best_val_metrics, train_seconds, model_family)
 
     print(f"[ModernTCN {model_family}] 训练完成")
@@ -335,25 +434,66 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
 def _default_run_tag(model_family: str, seed: int) -> str:
     if model_family == "full":
         return f"modern_tcn_full_v4b_seed{seed}"
+    if model_family == "small_dualkernel":
+        return f"dual_k31_s5_seed{seed}"
+    if model_family == "small_gffn":
+        return f"gffn_d4_k31_seed{seed}"
     return f"modern_tcn_v4_industrial_seed{seed}"
 
 
 def _result_dir_name(model_family: str) -> str:
-    return "modern_tcn_full" if model_family == "full" else "modern_tcn"
+    if model_family == "full":
+        return "modern_tcn_full"
+    if model_family == "small_dualkernel":
+        return "modern_tcn_ablation/exp2_dual_kernel"
+    if model_family == "small_gffn":
+        return "modern_tcn_ablation/exp1_grouped_ffn"
+    return "modern_tcn"
 
 
 def _file_prefix(model_family: str, seed: int) -> str:
-    return f"modern_tcn_full_seed{seed}" if model_family == "full" else f"modern_tcn_seed{seed}"
+    if model_family == "full":
+        return f"modern_tcn_full_seed{seed}"
+    if model_family == "small_dualkernel":
+        return f"modern_tcn_dualkernel_seed{seed}"
+    if model_family == "small_gffn":
+        return f"modern_tcn_gffn_seed{seed}"
+    return f"modern_tcn_seed{seed}"
 
 
 def _report_file_name(model_family: str) -> str:
-    return "ModernTCNFull_train_report.md" if model_family == "full" else "ModernTCN_train_report.md"
+    if model_family == "full":
+        return "ModernTCNFull_train_report.md"
+    if model_family == "small_dualkernel":
+        return "ModernTCNDualKernel_train_report.md"
+    if model_family == "small_gffn":
+        return "ModernTCNGrouped_train_report.md"
+    return "ModernTCN_train_report.md"
+
+
+def _model_label(model_family: str) -> str:
+    if model_family == "small_gffn":
+        return "ModernTCN-small-gffn"
+    if model_family == "small_dualkernel":
+        return "ModernTCN-small-dualkernel"
+    if model_family == "full":
+        return "ModernTCNFull"
+    return "ModernTCN-small"
+
+
+def _resolve_output_root(root: Path, output_root_arg: str, model_family: str) -> Path:
+    if output_root_arg:
+        path = Path(output_root_arg)
+        return path if path.is_absolute() else root / path
+    return root / "results" / _result_dir_name(model_family)
 
 
 def _resolve_dataset_file(root: Path, dataset_arg: str, model_family: str) -> Optional[Path]:
     if dataset_arg:
         path = Path(dataset_arg)
         return path if path.is_absolute() else root / path
+    if model_family == "small_dualkernel":
+        return root / PLANTFIX_22D_DATASET
     if model_family == "full":
         return root / FULL_DEFAULT_DATASET
     return None
@@ -364,8 +504,27 @@ def _arg(args: argparse.Namespace, name: str, default):
     return default if value is None else value
 
 
+def _tuple_arg(args: argparse.Namespace, name: str, default: Tuple[int, ...]) -> Tuple[int, ...]:
+    value = getattr(args, name, None)
+    if value is None:
+        return tuple(default)
+    if isinstance(value, (tuple, list)):
+        return tuple(int(x) for x in value)
+    parts = [item.strip() for item in str(value).split(",") if item.strip()]
+    if not parts:
+        raise ValueError(f"{name} must contain at least one integer.")
+    return tuple(int(item) for item in parts)
+
+
 def _build_config(args: argparse.Namespace, contract, model_family: str) -> ModernTCNConfig:
-    base = ModernTCNFullConfig() if model_family == "full" else ModernTCNConfig()
+    if model_family == "full":
+        base = ModernTCNFullConfig()
+    elif model_family == "small_dualkernel":
+        base = ModernTCNDualKernelConfig()
+    elif model_family == "small_gffn":
+        base = ModernTCNGroupedConfig()
+    else:
+        base = ModernTCNConfig()
     common = {
         "input_dim": contract.input_dim,
         "seq_len": contract.seq_len,
@@ -429,6 +588,8 @@ def _build_config(args: argparse.Namespace, contract, model_family: str) -> Mode
         "select_turn_left_target": _arg(args, "select_turn_left_target", base.select_turn_left_target),
         "select_turn_lr_weight": _arg(args, "select_turn_lr_weight", base.select_turn_lr_weight),
         "select_turn_lr_target": _arg(args, "select_turn_lr_target", base.select_turn_lr_target),
+        "select_stall_weight": _arg(args, "select_stall_weight", base.select_stall_weight),
+        "select_stall_target": _arg(args, "select_stall_target", base.select_stall_target),
         "select_theta_weight": _arg(args, "select_theta_weight", base.select_theta_weight),
         "select_theta_ref_deg": _arg(args, "select_theta_ref_deg", base.select_theta_ref_deg),
         "select_theta_p95_weight": _arg(args, "select_theta_p95_weight", base.select_theta_p95_weight),
@@ -485,7 +646,39 @@ def _build_config(args: argparse.Namespace, contract, model_family: str) -> Mode
         ),
     }
     if model_family == "full":
+        common.update(
+            {
+                "patch_size": _arg(args, "patch_size", base.patch_size),
+                "patch_stride": _arg(args, "patch_stride", base.patch_stride),
+                "dims": _tuple_arg(args, "dims", base.dims),
+                "stage_blocks": _tuple_arg(args, "stage_blocks", base.stage_blocks),
+                "large_kernels": _tuple_arg(args, "large_kernels", base.large_kernels),
+                "small_kernels": _tuple_arg(args, "small_kernels", base.small_kernels),
+                "ffn_ratio": _arg(args, "ffn_ratio", base.ffn_ratio),
+                "layer_scale_init": _arg(args, "layer_scale_init", base.layer_scale_init),
+            }
+        )
         return ModernTCNFullConfig(**common)
+    if model_family == "small_dualkernel":
+        common.update(
+            {
+                "large_kernel": _arg(args, "large_kernel", base.large_kernel),
+                "small_kernel": _arg(args, "small_kernel", base.small_kernel),
+                "dual_branch_scale": _arg(args, "dual_branch_scale", base.dual_branch_scale),
+                "small_branch_init": _arg(args, "small_branch_init", base.small_branch_init),
+                "layer_scale_init": _arg(args, "layer_scale_init", base.layer_scale_init),
+            }
+        )
+        return ModernTCNDualKernelConfig(**common)
+    if model_family == "small_gffn":
+        common.update(
+            {
+                "dmodel": _arg(args, "dmodel", base.dmodel),
+                "ffn_ratio": _arg(args, "ffn_ratio", base.ffn_ratio),
+                "layer_scale_init": _arg(args, "layer_scale_init", base.layer_scale_init),
+            }
+        )
+        return ModernTCNGroupedConfig(**common)
     return ModernTCNConfig(**common)
 
 
@@ -634,6 +827,63 @@ def _write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
+def _git_hash(root: Path) -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(root),
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
+def _write_run_metadata(
+    root: Path,
+    out_dir: Path,
+    args: argparse.Namespace,
+    cfg: ModernTCNConfig,
+    contract: Dict[str, object],
+    feat_names,
+    model_family: str,
+    run_tag: str,
+    files: Dict[str, Path],
+) -> None:
+    git_hash = _git_hash(root)
+    config = {
+        "model_family": model_family,
+        "run_tag": run_tag,
+        "output_dir": str(out_dir),
+        "cli_args": vars(args),
+        "model_config": cfg.to_dict(),
+        "dataset_contract": contract,
+        "feature_names": list(feat_names),
+        "git_hash": git_hash,
+        "python": sys.version,
+        "torch_version": torch.__version__,
+    }
+    files["config_json"].write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+    files["contract_copy_file"].write_text(json.dumps(contract, indent=2, ensure_ascii=False), encoding="utf-8")
+    files["feature_names_file"].write_text("\n".join(str(x) for x in feat_names) + "\n", encoding="utf-8")
+    files["git_hash_file"].write_text(git_hash + "\n", encoding="utf-8")
+    with files["config_md"].open("w", encoding="utf-8") as f:
+        f.write(f"# ModernTCN run config\n\n")
+        f.write(f"- model_family: `{model_family}`\n")
+        f.write(f"- run_tag: `{run_tag}`\n")
+        f.write(f"- output_dir: `{out_dir}`\n")
+        f.write(f"- git_hash: `{git_hash}`\n")
+        f.write(f"- dataset: `{contract.get('dataset_file', '')}`\n")
+        f.write(f"- input: `[batch,{contract.get('seq_len')},{contract.get('input_dim')}]`\n\n")
+        f.write("## Model Config\n\n```json\n")
+        f.write(json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False))
+        f.write("\n```\n")
+    with files["train_log_file"].open("w", encoding="utf-8") as f:
+        f.write("Training log placeholder. Console logs are not captured by train_one_seed API.\n")
+        f.write(f"summary_csv: `{out_dir / (_file_prefix(model_family, args.seed) + '_summary.csv')}`\n")
+        f.write(f"history_csv: `{out_dir / (_file_prefix(model_family, args.seed) + '_history.csv')}`\n")
+
+
 def _write_report(
     path: Path,
     args: argparse.Namespace,
@@ -647,7 +897,14 @@ def _write_report(
 ) -> None:
     passed, failures = seed42_gate(test_metrics) if args.seed == 42 else (False, [])
     with path.open("w", encoding="utf-8") as f:
-        title = "ModernTCNFull v0 第一阶段训练报告" if model_family == "full" else "ModernTCN-small 第一阶段训练报告"
+        if model_family == "full":
+            title = "ModernTCNFull v0 第一阶段训练报告"
+        elif model_family == "small_dualkernel":
+            title = "ModernTCN dual-kernel small 第一阶段训练报告"
+        elif model_family == "small_gffn":
+            title = "ModernTCN grouped-FFN small 第一阶段训练报告"
+        else:
+            title = "ModernTCN-small 第一阶段训练报告"
         f.write(f"# {title}\n\n")
         f.write("## 固定约束\n\n")
         f.write(f"- model_family: `{model_family}`\n")

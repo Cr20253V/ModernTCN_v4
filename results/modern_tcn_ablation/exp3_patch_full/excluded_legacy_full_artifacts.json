@@ -1,0 +1,854 @@
+{
+  "created_by": "exp3_tools.py d0",
+  "rule": "Do not read these paths for exp3 summary, best-run selection, or promote decisions.",
+  "patterns": [
+    "modern_tcn_full",
+    "ModernTCNFull",
+    "full128",
+    "patch_full",
+    "weakcombo",
+    "stage2"
+  ],
+  "artifacts": [
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\gru\\train_logs_weakcombo_v1_fastbs512",
+      "relative_path": "results/gru/train_logs_weakcombo_v1_fastbs512",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\gru\\train_logs_weakcombo_v1_passive17_plus_all5",
+      "relative_path": "results/gru/train_logs_weakcombo_v1_passive17_plus_all5",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_ablation\\_schemas\\patch_full_metrics_schema.md",
+      "relative_path": "results/modern_tcn_ablation/_schemas/patch_full_metrics_schema.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_full",
+      "relative_path": "results/modern_tcn_full",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_full\\modern_tcn_full_v4b_smoke_seed21",
+      "relative_path": "results/modern_tcn_full/modern_tcn_full_v4b_smoke_seed21",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\logs\\manual_modern_tcn_full.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/logs/manual_modern_tcn_full.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stderr.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stderr.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stdout.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stdout.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stderr.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stderr.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stdout.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/export_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stdout.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stderr.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stderr.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stdout.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101.stdout.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stderr.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stderr.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stdout.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/ort_modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303.stdout.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\stage2_all.stderr.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/stage2_all.stderr.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\logs\\stage2_all.stdout.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/logs/stage2_all.stdout.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101\\modern_tcn_seed101.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101/modern_tcn_seed101.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101\\modern_tcn_seed101_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101/modern_tcn_seed101_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101\\modern_tcn_seed101_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed101/modern_tcn_seed101_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303\\modern_tcn_seed303.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303/modern_tcn_seed303.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303\\modern_tcn_seed303_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303/modern_tcn_seed303_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303\\modern_tcn_seed303_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l018_tt22_bal_seed303/modern_tcn_seed303_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101\\modern_tcn_seed101.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101/modern_tcn_seed101.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101\\modern_tcn_seed101_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101/modern_tcn_seed101_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101\\modern_tcn_seed101_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed101/modern_tcn_seed101_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303\\modern_tcn_seed303.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303/modern_tcn_seed303.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303\\modern_tcn_seed303_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303/modern_tcn_seed303_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303\\modern_tcn_seed303_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt25_bal_seed303/modern_tcn_seed303_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101.onnx",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101.onnx",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101_onnx_export.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101_onnx_export.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101_onnxruntime_consistency.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101_onnxruntime_consistency.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101_onnxruntime_consistency.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101_onnxruntime_consistency.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101_pytorch_reference.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101_pytorch_reference.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101\\modern_tcn_seed101_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed101/modern_tcn_seed101_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303.onnx",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303.onnx",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303_onnx_export.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303_onnx_export.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303_onnxruntime_consistency.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303_onnxruntime_consistency.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303_onnxruntime_consistency.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303_onnxruntime_consistency.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303_pytorch_reference.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303_pytorch_reference.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303\\modern_tcn_seed303_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l020_tt30_lr_seed303/modern_tcn_seed303_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101\\modern_tcn_seed101.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101/modern_tcn_seed101.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101\\modern_tcn_seed101_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101/modern_tcn_seed101_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101\\modern_tcn_seed101_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed101/modern_tcn_seed101_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303\\ModernTCN_train_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303/ModernTCN_train_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303\\modern_tcn_seed303.pt",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303/modern_tcn_seed303.pt",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303\\modern_tcn_seed303_history.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303/modern_tcn_seed303_history.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303\\modern_tcn_seed303_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/modern_tcn_v5_plantfix_stage2_l022_tt28_turn_seed303/modern_tcn_seed303_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\stage2_closed_loop_manifest.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/stage2_closed_loop_manifest.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\stage2_modern_tcn_candidates.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/stage2_modern_tcn_candidates.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\stage2_modern_tcn_selected.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/stage2_modern_tcn_selected.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\stage2_modern_tcn_targeted_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/stage2_modern_tcn_targeted_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn_stage2_targeted\\stage2_preflight.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/modern_tcn_stage2_targeted/stage2_preflight.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\run_stage2_modern_tcn_targeted_search.py",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/08_models/run_stage2_modern_tcn_targeted_search.py",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\logs",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/logs",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\logs\\stage2_full.stderr.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/logs/stage2_full.stderr.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\logs\\stage2_full.stdout.log",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/logs/stage2_full.stdout.log",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\modern_multiseed_aggregate.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/modern_multiseed_aggregate.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\modern_multiseed_closed_loop_result.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/modern_multiseed_closed_loop_result.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\modern_multiseed_path_runs.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/modern_multiseed_path_runs.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\modern_multiseed_path_runs_partial.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/modern_multiseed_path_runs_partial.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\modern_multiseed_preflight.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/modern_multiseed_preflight.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\modern_multiseed_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/modern_multiseed_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\modern_multiseed_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/modern_multiseed_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed101_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed101_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed101_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed101_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed303_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed303_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed303_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed303_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\ModernTCN_turn_seed101_champion_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/ModernTCN_turn_seed101_champion_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\ModernTCN_turn_seed101_champion_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/ModernTCN_turn_seed101_champion_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\modern_stage2_targeted_closed_loop_compare.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/modern_stage2_targeted_closed_loop_compare.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\modern_stage2_targeted_closed_loop_rank.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/modern_stage2_targeted_closed_loop_rank.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\modern_stage2_targeted_closed_loop_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/modern_stage2_targeted_closed_loop_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\modern_stage2_targeted_closed_loop_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/modern_stage2_targeted_closed_loop_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_long_updown_theta10_v1\\modern_stage2_targeted_closed_loop_zones.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_long_updown_theta10_v1/modern_stage2_targeted_closed_loop_zones.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed101_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed101_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed101_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed101_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed303_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed303_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\ModernTCN_stage2_l020_tt30_lr_seed303_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/ModernTCN_stage2_l020_tt30_lr_seed303_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\ModernTCN_turn_seed101_champion_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/ModernTCN_turn_seed101_champion_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\ModernTCN_turn_seed101_champion_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/ModernTCN_turn_seed101_champion_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\modern_stage2_targeted_closed_loop_compare.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/modern_stage2_targeted_closed_loop_compare.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\modern_stage2_targeted_closed_loop_rank.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/modern_stage2_targeted_closed_loop_rank.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\modern_stage2_targeted_closed_loop_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/modern_stage2_targeted_closed_loop_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\modern_stage2_targeted_closed_loop_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/modern_stage2_targeted_closed_loop_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_closed_loop_sharp_turn_transition_theta10_v1\\modern_stage2_targeted_closed_loop_zones.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_closed_loop_sharp_turn_transition_theta10_v1/modern_stage2_targeted_closed_loop_zones.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\ModernTCN_stage2_l020_tt30_lr_seed101_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/ModernTCN_stage2_l020_tt30_lr_seed101_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\ModernTCN_stage2_l020_tt30_lr_seed101_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/ModernTCN_stage2_l020_tt30_lr_seed101_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\ModernTCN_stage2_l020_tt30_lr_seed303_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/ModernTCN_stage2_l020_tt30_lr_seed303_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\ModernTCN_stage2_l020_tt30_lr_seed303_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/ModernTCN_stage2_l020_tt30_lr_seed303_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\ModernTCN_turn_seed101_champion_model_audit.json",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/ModernTCN_turn_seed101_champion_model_audit.json",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\ModernTCN_turn_seed101_champion_out.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/ModernTCN_turn_seed101_champion_out.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\modern_stage2_targeted_closed_loop_compare.mat",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/modern_stage2_targeted_closed_loop_compare.mat",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\modern_stage2_targeted_closed_loop_rank.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/modern_stage2_targeted_closed_loop_rank.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\modern_stage2_targeted_closed_loop_report.md",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/modern_stage2_targeted_closed_loop_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\modern_stage2_targeted_closed_loop_summary.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/modern_stage2_targeted_closed_loop_summary.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\09_closed_loop\\modern_stage2_targeted_full\\path_factory_logistics_showcase_theta10_v3\\modern_stage2_targeted_closed_loop_zones.csv",
+      "relative_path": "results/paper/agv_model_parameter_correction_workflow/09_closed_loop/modern_stage2_targeted_full/path_factory_logistics_showcase_theta10_v3/modern_stage2_targeted_closed_loop_zones.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select\\modern_tcn_theta_binned_metrics.csv",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select/modern_tcn_theta_binned_metrics.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select\\modern_tcn_theta_metrics.csv",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select/modern_tcn_theta_metrics.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select\\modern_tcn_theta_residual.pdf",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select/modern_tcn_theta_residual.pdf",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select\\modern_tcn_theta_residual.png",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select/modern_tcn_theta_residual.png",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select\\modern_tcn_theta_scatter.pdf",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select/modern_tcn_theta_scatter.pdf",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select\\modern_tcn_theta_scatter.png",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select/modern_tcn_theta_scatter.png",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select\\modern_tcn_theta_scatter_report.md",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select/modern_tcn_theta_scatter_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02\\modern_tcn_theta_binned_metrics.csv",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02/modern_tcn_theta_binned_metrics.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02\\modern_tcn_theta_metrics.csv",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02/modern_tcn_theta_metrics.csv",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02\\modern_tcn_theta_residual.pdf",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02/modern_tcn_theta_residual.pdf",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02\\modern_tcn_theta_residual.png",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02/modern_tcn_theta_residual.png",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02\\modern_tcn_theta_scatter.pdf",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02/modern_tcn_theta_scatter.pdf",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02\\modern_tcn_theta_scatter.png",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02/modern_tcn_theta_scatter.png",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_scatter\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02\\modern_tcn_theta_scatter_report.md",
+      "relative_path": "results/paper/modern_tcn_theta_scatter/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02/modern_tcn_theta_scatter_report.md",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\modern_tcn_theta_sweep_plot\\modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02",
+      "relative_path": "results/paper/modern_tcn_theta_sweep_plot/modern_tcn_v6_theta_p95_s42_gate_p1p5_f0p20_stage2_t080_p95select_scale1p02",
+      "kind": "dir",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\src\\ModernTCN\\__pycache__\\test_modern_tcn_full.cpython-310.pyc",
+      "relative_path": "src/ModernTCN/__pycache__/test_modern_tcn_full.cpython-310.pyc",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    },
+    {
+      "path": "E:\\Matlab\\Simulink\\S-Function_16\\src\\ModernTCN\\test_modern_tcn_full.py",
+      "relative_path": "src/ModernTCN/test_modern_tcn_full.py",
+      "kind": "file",
+      "reason": "legacy full/patch/stage2/weakcombo engineering context only"
+    }
+  ]
+}
