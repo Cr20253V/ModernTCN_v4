@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-06-22 18:54:21",
+  "candidate": "mode_theta_detach_flatreg001_seed21_rerun_20260622",
+  "source_run_retrained_from_parameters": "mode_theta_detach_flatreg001_seed21",
+  "original_source_run_overwritten": false,
+  "status": "CLOSED_LOOP_SANDBOX_PASS",
+  "formal_validation": false,
+  "training": {
+    "checkpoint": "results/modern_tcn_sci_innovation/04_mode_conditioned_theta/mode_theta_detach_flatreg001_seed21_rerun_20260622/modern_tcn_mode_theta_seed21.pt",
+    "model_family": "small_mode_theta",
+    "loss_mode": "fixed",
+    "seed": 21,
+    "best_epoch": 72,
+    "theta_gate_detach": true,
+    "flat_theta_reg_lambda": 0.01,
+    "test_acc_main": 0.9697390338700722,
+    "test_acc_turn_transition": 0.4828614008941878,
+    "test_theta_mae_deg": 0.6164333820343018,
+    "test_flat_recall": 0.966931216931217,
+    "test_slope_recall": 0.9810909090909091
+  },
+  "onnx": {
+    "onnx_file": "results/modern_tcn_sci_innovation/04_mode_conditioned_theta/mode_theta_detach_flatreg001_seed21_rerun_20260622/onnx_sandbox/mode_theta_detach_flatreg001_seed21_rerun_20260622.onnx",
+    "onnxruntime_pass": true,
+    "max_abs_error": {
+      "logits_main": 0.00000858306884765625,
+      "logits_turn": 0.00000476837158203125,
+      "theta_hat": 0.00000020675361156463623
+    },
+    "mean_abs_error": {
+      "logits_main": 0.000002042545702352072,
+      "logits_turn": 0.00000107536709492706,
+      "theta_hat": 0.00000003387685865163803
+    }
+  },
+  "closed_loop": {
+    "scope": "sandbox_only",
+    "path_file": "data/paths/path_closed_loop_sharp_turn_transition_theta10_v1.mat",
+    "out_root": "results/modern_tcn_sci_innovation/04_mode_conditioned_theta/e4_cl_001r_20260622",
+    "summary_file": "results/modern_tcn_sci_innovation/04_mode_conditioned_theta/e4_cl_001r_20260622/e4_001r_summary.csv",
+    "rank_file": "results/modern_tcn_sci_innovation/04_mode_conditioned_theta/e4_cl_001r_20260622/e4_001r_rank.csv",
+    "report_file": "results/modern_tcn_sci_innovation/04_mode_conditioned_theta/e4_cl_001r_20260622/e4_001r_report.md",
+    "baseline": {
+      "controller": "baseline_lock_seed101",
+      "overall_rank": 2,
+      "ey_rmse": 0.0405837714490269,
+      "ey_peak": 0.12690287779986,
+      "epsi_rmse": 0.0415952419404275,
+      "ev_rmse": 0.0355769981358947,
+      "eomega_rmse": 0.0219126603467524,
+      "xy_rmse": 0.513652824986013,
+      "j_du": 5.32370259076876,
+      "viol_rate": 0,
+      "theta_mae_deg": 0.600177618700356,
+      "main_acc_pct": 94.1370607649,
+      "turn_acc_pct": 48.8448844884488
+    },
+    "candidate": {
+      "controller": "mode_theta_detach_flatreg001_seed21_rerun_20260622",
+      "overall_rank": 1,
+      "ey_rmse": 0.0280525776575799,
+      "ey_peak": 0.0572740911271541,
+      "epsi_rmse": 0.0224362070726686,
+      "ev_rmse": 0.0334776650719439,
+      "eomega_rmse": 0.0123919082853684,
+      "xy_rmse": 0.312006544025554,
+      "j_du": 2.44119532752218,
+      "viol_rate": 0,
+      "theta_mae_deg": 0.563556995732409,
+      "main_acc_pct": 96.039603960396,
+      "turn_acc_pct": 70.0834789361289
+    }
+  },
+  "notes": [
+    "First long-path closed-loop attempt completed both simulations but compare failed while loading the long candidate MAT path; those diagnostic files are not decision evidence.",
+    "Accepted evidence uses the short E4 sandbox path e4_cl_001r_20260622.",
+    "This sandbox pass does not retroactively change the original E4 offline-gate conclusion."
+  ]
+}

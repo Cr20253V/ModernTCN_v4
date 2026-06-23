@@ -1,0 +1,13 @@
+run_id,seed,run_tag,status,run_dir,returncode
+u04_lwlr0030,21,u04_lwlr0030_seed21,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u04_lwlr0030_seed21,0
+u04_lwlr0030,42,u04_lwlr0030_seed42,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u04_lwlr0030_seed42,0
+u17_ltheta050,21,u17_ltheta050_seed21,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u17_ltheta050_seed21,0
+u17_ltheta050,42,u17_ltheta050_seed42,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u17_ltheta050_seed42,0
+u18_ltheta065,21,u18_ltheta065_seed21,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u18_ltheta065_seed21,0
+u18_ltheta065,42,u18_ltheta065_seed42,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u18_ltheta065_seed42,0
+u06_lr0013,21,u06_lr0013_seed21,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u06_lr0013_seed21,0
+u06_lr0013,42,u06_lr0013_seed42,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u06_lr0013_seed42,0
+u23_turn_protect_mix,21,u23_turn_protect_mix_seed21,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u23_turn_protect_mix_seed21,0
+u23_turn_protect_mix,42,u23_turn_protect_mix_seed42,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u23_turn_protect_mix_seed42,0
+u08_lturn024,21,u08_lturn024_seed21,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u08_lturn024_seed21,0
+u08_lturn024,42,u08_lturn024_seed42,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\03_multiseed\u08_lturn024_seed42,0

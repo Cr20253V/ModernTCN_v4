@@ -1,0 +1,7 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+baseline_lock,12,5,9,26,1
+u06_lr0013_seed101,19,5,12,36,2
+u23_turn_protect_mix_seed101,12,10,16,38,3
+u18_ltheta065_seed101,17,14,20,51,4
+u04_lwlr0030_seed101,31,12,11,54,5
+u17_ltheta050_seed101,35,17,16,68,6

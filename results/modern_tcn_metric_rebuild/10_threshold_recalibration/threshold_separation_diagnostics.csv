@@ -1,0 +1,8 @@
+profile,metric,current_limit,pass_anchor_max,reject_anchor_min,separable_by_threshold,proposed_limit,passes_all_pass_anchors,rejects_tcn_anchor,rationale
+closed_loop_v2,closed_loop_main_acc_drop,0.01,0.02006228638078099,0.18867914403037403,True,0.03,True,True,Guard band above the worst accepted closed-loop anchor; still far below TCN degradation.
+closed_loop_v2,omega_cmd_rms_ratio,1.1,4.826688606797885,3.678131319109624,False,5.0,True,False,Not separable because TCN has lower omega ratio than GRU; keep only as a broad instability ceiling.
+closed_loop_v2,delta_u_proxy_ratio,1.1,38.832879644941556,63.99779041208464,True,45.0,True,True,"Separable between accepted GRU and rejected TCN, but ratio is inflated by the very smooth baseline."
+full_v2,stall_recall_drop,0.05,0.08333333333333304,0.1875,True,0.1,True,True,Relaxed to pass GRU while rejecting TCN; requires more seeds before formal freeze.
+full_v2,slope_recall_drop,0.01,0.0,0.14436363636363592,True,0.03,True,True,"Relaxed modestly; GRU already passes, TCN remains clearly failed."
+full_v2,theta_edge_p95_ratio,1.05,1.0,1.4808440764051056,True,1.05,True,True,Kept strict because GRU is below baseline and TCN is clearly above threshold.
+full_v2,flat_peak_theta_error_ratio,1.05,1.1374069268796805,1.2228118255986997,True,1.15,True,True,Relaxed to match the accepted GRU/mode-theta range while keeping TCN rejected.

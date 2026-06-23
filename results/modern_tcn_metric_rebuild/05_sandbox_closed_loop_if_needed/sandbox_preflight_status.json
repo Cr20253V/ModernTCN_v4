@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-06-22T20:58:57",
+  "scope": "Window 2 rerun sandbox preflight",
+  "selected_candidates": [
+    "uncertainty_seed101_rerun_20260622",
+    "mode_theta_detach_flatreg001_seed21_rerun_20260622"
+  ],
+  "all_selected_ready": true,
+  "baseline": {
+    "candidate_id": "baseline_lock",
+    "run_tag": "baseline_lock",
+    "seed": 101,
+    "dataset_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.onnx",
+    "source_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\00_baseline_lock\\baseline_offline_metrics.csv"
+  },
+  "manifest_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\sandbox_candidate_manifest.csv",
+  "sandbox_output_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed",
+  "rules": {
+    "sandbox_only": true,
+    "formal_compare_write": false,
+    "no_historical_result_overwrite": true,
+    "rerun_candidates_are_new_ids": true,
+    "do_not_relabel_as_historical": true
+  }
+}

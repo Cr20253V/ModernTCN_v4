@@ -1,0 +1,26 @@
+{
+  "onnx_file": "results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\00_exported_onnx\\uncertainty_seed101_rerun_20260622\\uncertainty_seed101_rerun_20260622.onnx",
+  "sample_file": "results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\00_exported_onnx\\uncertainty_seed101_rerun_20260622\\uncertainty_seed101_rerun_20260622_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 6.67572021484375e-06,
+      "mean_abs_error": 1.8825134020516998e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 4.082918167114258e-06,
+      "mean_abs_error": 1.052084030561673e-06,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 8.940696716308594e-08,
+      "mean_abs_error": 2.584420144557953e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

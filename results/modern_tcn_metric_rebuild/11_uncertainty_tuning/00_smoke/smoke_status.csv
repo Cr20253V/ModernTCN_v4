@@ -1,0 +1,2 @@
+run_id,seed,run_tag,status,run_dir,returncode
+u01_lwlr0003,101,u01_lwlr0003_seed101,ok,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_uncertainty_tuning\00_smoke\u01_lwlr0003_seed101,0

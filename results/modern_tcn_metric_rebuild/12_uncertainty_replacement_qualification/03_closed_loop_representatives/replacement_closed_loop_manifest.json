@@ -1,0 +1,28 @@
+[
+  {
+    "seed": 21,
+    "source_run_tag": "uncertainty_anchor_same_recipe_seed21",
+    "candidate_id": "ua_seed21",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\01_same_recipe_multiseed\\uncertainty_anchor_same_recipe_seed21\\modern_tcn_seed21.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\03_closed_loop_representatives\\00_exported_onnx\\ua_seed21\\ua_seed21.onnx",
+    "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\03_closed_loop_representatives\\00_exported_onnx\\ua_seed21\\ua_seed21_pytorch_reference.mat",
+    "export_status": "ok",
+    "consistency_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\03_closed_loop_representatives\\00_exported_onnx\\ua_seed21\\ua_seed21_onnxruntime_consistency.json",
+    "consistency_status": "ok",
+    "consistency_pass": true,
+    "selected_for_closed_loop": true
+  },
+  {
+    "seed": 42,
+    "source_run_tag": "uncertainty_anchor_same_recipe_seed42",
+    "candidate_id": "ua_seed42",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\01_same_recipe_multiseed\\uncertainty_anchor_same_recipe_seed42\\modern_tcn_seed42.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\03_closed_loop_representatives\\00_exported_onnx\\ua_seed42\\ua_seed42.onnx",
+    "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\03_closed_loop_representatives\\00_exported_onnx\\ua_seed42\\ua_seed42_pytorch_reference.mat",
+    "export_status": "ok",
+    "consistency_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification\\03_closed_loop_representatives\\00_exported_onnx\\ua_seed42\\ua_seed42_onnxruntime_consistency.json",
+    "consistency_status": "ok",
+    "consistency_pass": true,
+    "selected_for_closed_loop": true
+  }
+]

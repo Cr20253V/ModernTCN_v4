@@ -1,0 +1,4 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+baseline_lock,10,5,7,22,1
+uncertainty_seed101_rerun_20260622,12,8,8,28,2
+mode_theta_detach_flatreg001_seed21_rerun_20260622,14,5,9,28,3

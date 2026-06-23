@@ -1,0 +1,18 @@
+{
+  "checkpoint": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\01_seed101_search\\u04_lwlr0030_seed101\\modern_tcn_seed101.pt",
+  "model_family": "small",
+  "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u04_lwlr0030_seed101\\u04_lwlr0030_seed101.onnx",
+  "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u04_lwlr0030_seed101\\u04_lwlr0030_seed101_pytorch_reference.mat",
+  "opset": 17,
+  "input_shape": [
+    1,
+    128,
+    22
+  ],
+  "output_names": [
+    "logits_main",
+    "logits_turn",
+    "theta_hat"
+  ],
+  "note": "导出前已调用 model.eval()；dropout 在 ONNX 推理中关闭；第一版固定 batch=1，离线批量检查脚本会逐窗口推理；当前默认使用 legacy TorchScript ONNX exporter 以获得更稳定的 PyTorch/ONNXRuntime 数值一致性。"
+}

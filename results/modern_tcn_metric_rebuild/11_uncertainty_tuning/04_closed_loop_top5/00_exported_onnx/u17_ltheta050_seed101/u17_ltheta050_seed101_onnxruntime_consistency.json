@@ -1,0 +1,26 @@
+{
+  "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u17_ltheta050_seed101\\u17_ltheta050_seed101.onnx",
+  "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u17_ltheta050_seed101\\u17_ltheta050_seed101_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 8.58306884765625e-06,
+      "mean_abs_error": 1.9880633317370666e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 7.62939453125e-06,
+      "mean_abs_error": 1.169585971183551e-06,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 5.960464477539063e-08,
+      "mean_abs_error": 2.0881998352706432e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

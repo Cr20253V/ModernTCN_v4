@@ -1,0 +1,28 @@
+{
+  "version": "vFinal_control_oriented_candidate",
+  "status": "candidate_for_freeze",
+  "objective": "control_oriented_rerank_sensitivity",
+  "weights": {
+    "acc_main": 0.17733990147783252,
+    "acc_turn": 0.12315270935960591,
+    "acc_turn_transition": 0.10344827586206896,
+    "theta_mae_deg": 0.13793103448275865,
+    "theta_edge_p95_abs_err": 0.13300492610837442,
+    "flat_peak_theta_error": 0.12807881773399016,
+    "flat_recall": 0.06403940886699508,
+    "stall_recall": 0.06650246305418721,
+    "slope_recall": 0.06650246305418721
+  },
+  "component_order": [
+    "acc_main",
+    "acc_turn",
+    "acc_turn_transition",
+    "theta_mae_deg",
+    "theta_edge_p95_abs_err",
+    "flat_peak_theta_error",
+    "flat_recall",
+    "stall_recall",
+    "slope_recall"
+  ],
+  "note": "normalized average of v0-v3 after sensitivity review"
+}

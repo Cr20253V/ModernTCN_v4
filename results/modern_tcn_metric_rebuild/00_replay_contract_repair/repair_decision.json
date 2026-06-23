@@ -1,0 +1,9 @@
+{
+  "repair_status": "PASS_CONTRACT_LIMITED",
+  "manifest_available": false,
+  "reason": "current dataset does not expose auditable test replay continuity metadata",
+  "test_metadata_level": "level0_invalid",
+  "metric_rebuild_can_continue": true,
+  "e5_replay_fixed_status": "not_run_contract_limited",
+  "e2_smooth_fixed_status": "not_run_contract_limited"
+}

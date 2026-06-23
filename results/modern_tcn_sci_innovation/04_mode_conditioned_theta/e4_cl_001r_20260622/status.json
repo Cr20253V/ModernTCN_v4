@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-06-22 18:54:21",
+  "scope": "E4 sandbox-only rerun closed-loop",
+  "rerun_candidate": "mode_theta_detach_flatreg001_seed21_rerun_20260622",
+  "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_closed_loop_sharp_turn_transition_theta10_v1.mat",
+  "dataset_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "run_dir": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\mode_theta_detach_flatreg001_seed21_rerun_20260622",
+  "out_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\e4_cl_001r_20260622",
+  "baseline_onnx": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101\\modern_tcn_seed101.onnx",
+  "candidate_onnx": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\mode_theta_detach_flatreg001_seed21_rerun_20260622\\onnx_sandbox\\mode_theta_detach_flatreg001_seed21_rerun_20260622.onnx",
+  "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\e4_cl_001r_20260622\\base_out.mat",
+  "candidate_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\e4_cl_001r_20260622\\cand_out.mat",
+  "summary_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\e4_cl_001r_20260622\\e4_001r_summary.csv",
+  "zone_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\e4_cl_001r_20260622\\e4_001r_zones.csv",
+  "rank_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\e4_cl_001r_20260622\\e4_001r_rank.csv",
+  "report_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\e4_cl_001r_20260622\\e4_001r_report.md",
+  "formal_validation": false,
+  "formal_compare_write": false,
+  "original_flatreg001_overwritten": false
+}

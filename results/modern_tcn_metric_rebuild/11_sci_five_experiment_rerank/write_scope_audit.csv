@@ -1,0 +1,11 @@
+path,under_output_root,size_bytes,modified_time
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\advisory_only_e5_registry.csv,true,1467,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\candidate_evidence_inventory.csv,true,16968,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\five_experiment_decision_table.csv,true,5216,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\five_experiment_rerank_report.md,true,2532,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\offline_proxy_all_scored_candidates.csv,true,6440,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\offline_proxy_ranking.csv,true,1210,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\source_artifact_hash_manifest.csv,true,27285,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\strict_closed_loop_ranking.csv,true,1190,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\strict_metric_rerank_decision.json,true,1326,2026-06-23T12:05:55
+E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\11_sci_five_experiment_rerank\strict_repair_queue.csv,true,336,2026-06-23T12:05:55

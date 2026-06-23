@@ -1,0 +1,7 @@
+{
+  "pass_count": 1,
+  "n_seeds": 3,
+  "stability_label": "reject_seed_fragile",
+  "median_offline_score_vs_baseline": 1.0790189658139935,
+  "best_non101_seed": 42
+}

@@ -1,0 +1,12 @@
+{
+  "phase": "E5_replay_fixed",
+  "repair_status": "PASS_CONTRACT_LIMITED",
+  "e5_replay_fixed_status": "not_run_contract_limited",
+  "reason": "current dataset does not expose auditable test replay continuity metadata",
+  "scheduled_metrics_from_original_e5": "advisory_only",
+  "formal_claim_allowed": false,
+  "no_training": true,
+  "no_onnx_export": true,
+  "no_matlab_simulink": true,
+  "no_formal_compare_write": true
+}

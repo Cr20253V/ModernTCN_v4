@@ -1,0 +1,6 @@
+algorithm_id,original_full_status,closed_loop_v2_status,closed_loop_v2_failures,full_v2_status,full_v2_failures,J_control,J_control_better_than_baseline,v2_hard_pass_and_J_better_than_baseline
+baseline_lock,pass,pass,none,pass,none,1.0,False,False
+uncertainty_seed101_rerun_20260622,fail,pass,none,pass,none,0.94411711953914,True,True
+mode_theta_detach_flatreg001_seed21_rerun_20260622,fail,pass,none,pass,none,1.10611148729323,False,False
+GRU_seed101,fail,pass,none,pass,none,14.2610395101703,False,False
+TCN_seed101,fail,fail,closed_loop_main_acc_drop=0.188679>0.03; delta_u_proxy_ratio=63.9978>45,fail,closed_loop_main_acc_drop=0.188679>0.03; delta_u_proxy_ratio=63.9978>45; offline_acc_main_drop=0.222932>0.03; stall_recall_drop=0.1875>0.1; slope_recall_drop=0.144364>0.03; theta_edge_p95_ratio=1.48084>1.05; flat_peak_theta_error_ratio=1.22281>1.15,18.2504093965701,False,False

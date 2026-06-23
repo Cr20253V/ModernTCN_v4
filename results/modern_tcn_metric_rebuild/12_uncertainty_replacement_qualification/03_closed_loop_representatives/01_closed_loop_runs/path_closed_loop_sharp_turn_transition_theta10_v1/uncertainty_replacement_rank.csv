@@ -1,0 +1,4 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+baseline_lock,11,6,8,25,1
+ua_seed21,11,7,8,26,2
+ua_seed42,14,5,8,27,3

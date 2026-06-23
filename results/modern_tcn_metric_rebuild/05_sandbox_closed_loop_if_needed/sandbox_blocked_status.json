@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-06-22T20:58:57",
+  "status": "SUPERSEDED_BY_RERUN_CANDIDATES",
+  "previous_blocker": "exact historical checkpoints missing",
+  "new_boundary": "rerun candidates registered with new IDs for sandbox only",
+  "selected_candidates": [
+    "uncertainty_seed101_rerun_20260622",
+    "mode_theta_detach_flatreg001_seed21_rerun_20260622"
+  ],
+  "formal_validation": false
+}

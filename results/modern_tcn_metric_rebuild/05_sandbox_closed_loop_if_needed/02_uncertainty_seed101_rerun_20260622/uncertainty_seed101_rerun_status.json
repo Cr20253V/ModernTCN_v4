@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-06-22 18:11:57",
+  "scope": "sandbox-only rerun closed-loop",
+  "rerun_candidate": "uncertainty_seed101_rerun_20260622",
+  "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_closed_loop_sharp_turn_transition_theta10_v1.mat",
+  "out_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\02_uncertainty_seed101_rerun_20260622",
+  "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\02_uncertainty_seed101_rerun_20260622\\baseline_lock_out.mat",
+  "candidate_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\02_uncertainty_seed101_rerun_20260622\\uncertainty_seed101_rerun_20260622_out.mat",
+  "summary_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\02_uncertainty_seed101_rerun_20260622\\uncertainty_seed101_rerun_summary.csv",
+  "rank_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\02_uncertainty_seed101_rerun_20260622\\uncertainty_seed101_rerun_rank.csv",
+  "report_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\02_uncertainty_seed101_rerun_20260622\\uncertainty_seed101_rerun_report.md",
+  "formal_validation": false,
+  "formal_compare_write": false
+}

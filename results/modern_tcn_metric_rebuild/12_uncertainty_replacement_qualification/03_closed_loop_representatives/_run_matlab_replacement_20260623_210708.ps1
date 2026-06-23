@@ -1,0 +1,2 @@
+Set-Location -LiteralPath 'E:\Matlab\Simulink\S-Function_16'
+matlab -batch "cd('E:\Matlab\Simulink\S-Function_16'); addpath(fullfile(pwd,'results','modern_tcn_metric_rebuild','12_uncertainty_replacement_qualification')); result = run_uncertainty_replacement_closed_loop(struct('reuse_existing', true));" *> 'E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\12_uncertainty_replacement_qualification\03_closed_loop_representatives\matlab_replacement_closed_loop_20260623_210708.log'

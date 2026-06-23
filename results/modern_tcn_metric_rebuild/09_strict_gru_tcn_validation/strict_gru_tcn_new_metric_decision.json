@@ -1,0 +1,12 @@
+{
+  "output_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\09_strict_gru_tcn_validation",
+  "strict_class_c_candidates": [],
+  "retained_reference": "baseline_lock",
+  "algorithm_ids": [
+    "baseline_lock",
+    "uncertainty_seed101_rerun_20260622",
+    "mode_theta_detach_flatreg001_seed21_rerun_20260622",
+    "GRU_seed101",
+    "TCN_seed101"
+  ]
+}

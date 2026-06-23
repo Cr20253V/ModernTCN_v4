@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-06-23T12:05:55",
+  "output_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_sci_five_experiment_rerank",
+  "metric_version": "vFinal_control_oriented_frozen",
+  "threshold_source": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\02_metric_freeze\\hard_constraint_thresholds.json",
+  "thresholds": {
+    "closed_loop_unstable_must_be_false": true,
+    "constraint_penalty_max_ratio": 1.0,
+    "viol_rate_max_abs_increase": 0.001,
+    "acc_main_min_drop": 0.01,
+    "stall_recall_min_drop": 0.05,
+    "slope_recall_min_drop": 0.01,
+    "theta_edge_p95_max_ratio": 1.05,
+    "flat_peak_theta_error_max_ratio": 1.05,
+    "omega_cmd_rms_max_ratio": 1.1,
+    "delta_u_proxy_max_ratio": 1.1
+  },
+  "new_training_triggered": false,
+  "new_onnx_export_triggered": false,
+  "new_matlab_simulink_triggered": false,
+  "strict_class_c_candidates": [],
+  "remaining_offline_class_b_candidates": [],
+  "strict_repair_queue_candidates": [
+    "mode_theta_detach_flatreg003_seed21"
+  ],
+  "source_hash_unchanged": true,
+  "write_scope_under_output_root": true,
+  "e2_rule": "hard_sample_focal_only; theta_smoothness_claim_invalid_not_run",
+  "e5_rule": "advisory_only unless new E5_replay_fixed replay-capable evidence exists"
+}

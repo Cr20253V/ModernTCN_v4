@@ -6,6 +6,8 @@ if nargin < 1 || isempty(modern_file)
 end
 if nargin < 2 || isempty(gru_file)
     gru_file = fullfile(local_project_root(), 'GRU_out.mat');
+elseif local_is_skip_gru_token(gru_file)
+    gru_file = '';
 end
 if nargin < 3 || isempty(tcn_file)
     tcn_file = fullfile(local_project_root(), 'TCN_out.mat');
@@ -103,7 +105,9 @@ end
 function specs = local_build_run_specs(modern_label, modern_file, gru_file, tcn_file, extra_runs)
 specs = struct('label', {}, 'file', {});
 specs(end+1) = struct('label', string(modern_label), 'file', char(modern_file));
-specs(end+1) = struct('label', "GRU", 'file', char(gru_file));
+if ~isempty(gru_file) && ~local_is_skip_gru_token(gru_file)
+    specs(end+1) = struct('label', "GRU", 'file', char(gru_file));
+end
 if ~isempty(tcn_file) && ~local_is_skip_tcn_token(tcn_file)
     specs(end+1) = struct('label', "TCN", 'file', char(tcn_file));
 end
@@ -151,6 +155,10 @@ end
 
 function tf = local_is_skip_tcn_token(tcn_file)
 tf = strcmpi(char(string(tcn_file)), '__skip_tcn__');
+end
+
+function tf = local_is_skip_gru_token(gru_file)
+tf = strcmpi(char(string(gru_file)), '__skip_gru__');
 end
 
 function run = local_analyze_one(controller, mat_file, zones, ref)

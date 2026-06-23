@@ -1,0 +1,19 @@
+{
+  "version": "vFinal_control_oriented_frozen",
+  "status": "frozen",
+  "objective": "control_oriented_rerank_sensitivity",
+  "weights": {
+    "acc_main": 0.17733990147783252,
+    "acc_turn": 0.12315270935960591,
+    "acc_turn_transition": 0.10344827586206896,
+    "theta_mae_deg": 0.13793103448275865,
+    "theta_edge_p95_abs_err": 0.13300492610837442,
+    "flat_peak_theta_error": 0.12807881773399016,
+    "flat_recall": 0.06403940886699508,
+    "stall_recall": 0.06650246305418721,
+    "slope_recall": 0.06650246305418721
+  },
+  "source_file": "results/modern_tcn_metric_rebuild/01_metric_design/metric_vFinal_control_oriented_candidate.json",
+  "freeze_rule": "frozen_after_dictionary_and_thresholds_lock",
+  "note": "post-freeze weights are immutable"
+}

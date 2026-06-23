@@ -1,0 +1,25 @@
+{
+  "version": "vFinal_control_oriented_candidate",
+  "status": "candidate_for_freeze",
+  "objective": "control_oriented_rerank_sensitivity",
+  "weights": {
+    "acc_main": 0.17733990147783252,
+    "acc_turn": 0.12315270935960591,
+    "acc_turn_transition": 0.10344827586206896,
+    "theta_mae_deg": 0.13793103448275865,
+    "theta_edge_p95_abs_err": 0.13300492610837442,
+    "flat_peak_theta_error": 0.12807881773399016,
+    "flat_recall": 0.06403940886699508,
+    "stall_recall": 0.06650246305418721,
+    "slope_recall": 0.06650246305418721
+  },
+  "source_versions": [
+    "v0",
+    "v1",
+    "v2",
+    "v3"
+  ],
+  "selection_rule": "normalized_average_of_v0_v3_after_sensitivity_review",
+  "rank_use": "official_after_freeze",
+  "note": "candidate frozen only after metric_dictionary.csv and hard_constraint_thresholds.json are locked"
+}

@@ -1,0 +1,67 @@
+[
+  {
+    "run_id": "u06_lr0013",
+    "candidate_id": "u06_lr0013_seed101",
+    "seed": 101,
+    "stability_label": "usable_seed_sensitive",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\01_seed101_search\\u06_lr0013_seed101\\modern_tcn_seed101.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u06_lr0013_seed101\\u06_lr0013_seed101.onnx",
+    "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u06_lr0013_seed101\\u06_lr0013_seed101_pytorch_reference.mat",
+    "export_status": "ok",
+    "consistency_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u06_lr0013_seed101\\u06_lr0013_seed101_onnxruntime_consistency.json",
+    "consistency_pass": true,
+    "selected_for_closed_loop": true
+  },
+  {
+    "run_id": "u04_lwlr0030",
+    "candidate_id": "u04_lwlr0030_seed101",
+    "seed": 101,
+    "stability_label": "reject_seed_fragile",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\01_seed101_search\\u04_lwlr0030_seed101\\modern_tcn_seed101.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u04_lwlr0030_seed101\\u04_lwlr0030_seed101.onnx",
+    "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u04_lwlr0030_seed101\\u04_lwlr0030_seed101_pytorch_reference.mat",
+    "export_status": "ok",
+    "consistency_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u04_lwlr0030_seed101\\u04_lwlr0030_seed101_onnxruntime_consistency.json",
+    "consistency_pass": true,
+    "selected_for_closed_loop": true
+  },
+  {
+    "run_id": "u17_ltheta050",
+    "candidate_id": "u17_ltheta050_seed101",
+    "seed": 101,
+    "stability_label": "reject_seed_fragile",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\01_seed101_search\\u17_ltheta050_seed101\\modern_tcn_seed101.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u17_ltheta050_seed101\\u17_ltheta050_seed101.onnx",
+    "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u17_ltheta050_seed101\\u17_ltheta050_seed101_pytorch_reference.mat",
+    "export_status": "ok",
+    "consistency_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u17_ltheta050_seed101\\u17_ltheta050_seed101_onnxruntime_consistency.json",
+    "consistency_pass": true,
+    "selected_for_closed_loop": true
+  },
+  {
+    "run_id": "u23_turn_protect_mix",
+    "candidate_id": "u23_turn_protect_mix_seed101",
+    "seed": 101,
+    "stability_label": "reject_seed_fragile",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\01_seed101_search\\u23_turn_protect_mix_seed101\\modern_tcn_seed101.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u23_turn_protect_mix_seed101\\u23_turn_protect_mix_seed101.onnx",
+    "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u23_turn_protect_mix_seed101\\u23_turn_protect_mix_seed101_pytorch_reference.mat",
+    "export_status": "ok",
+    "consistency_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u23_turn_protect_mix_seed101\\u23_turn_protect_mix_seed101_onnxruntime_consistency.json",
+    "consistency_pass": true,
+    "selected_for_closed_loop": true
+  },
+  {
+    "run_id": "u18_ltheta065",
+    "candidate_id": "u18_ltheta065_seed101",
+    "seed": 101,
+    "stability_label": "reject_seed_fragile",
+    "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\01_seed101_search\\u18_ltheta065_seed101\\modern_tcn_seed101.pt",
+    "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u18_ltheta065_seed101\\u18_ltheta065_seed101.onnx",
+    "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u18_ltheta065_seed101\\u18_ltheta065_seed101_pytorch_reference.mat",
+    "export_status": "ok",
+    "consistency_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning\\04_closed_loop_top5\\00_exported_onnx\\u18_ltheta065_seed101\\u18_ltheta065_seed101_onnxruntime_consistency.json",
+    "consistency_pass": true,
+    "selected_for_closed_loop": true
+  }
+]

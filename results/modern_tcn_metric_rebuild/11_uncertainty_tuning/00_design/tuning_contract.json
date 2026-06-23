@@ -1,0 +1,20 @@
+{
+  "node_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\11_uncertainty_tuning",
+  "dataset": "data/tcn/ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "model_family": "small",
+  "loss_mode": "uncertainty_weighting",
+  "anchor_id": "uncertainty_seed101_rerun_20260622",
+  "anchor_j_control": 0.94411711953914,
+  "baseline_id": "baseline_lock",
+  "v2_full_thresholds": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\10_threshold_recalibration\\hard_constraint_thresholds_v2_full_proposed.json",
+  "v2_closed_loop_thresholds": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\10_threshold_recalibration\\hard_constraint_thresholds_v2_closed_loop_proposed.json",
+  "n_seed101_designs": 24,
+  "sentinel_target": 6,
+  "top5_closed_loop_target": 5,
+  "disabled_unreliable_terms": {
+    "lambda_transition_focal": 0.0,
+    "lambda_stall_focal": 0.0,
+    "lambda_theta_smooth": 0.0,
+    "theta_smooth_mode": "off"
+  }
+}

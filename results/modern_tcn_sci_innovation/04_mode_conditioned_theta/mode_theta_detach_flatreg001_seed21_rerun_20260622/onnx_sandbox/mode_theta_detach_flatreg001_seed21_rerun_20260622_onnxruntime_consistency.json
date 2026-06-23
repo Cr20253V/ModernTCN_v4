@@ -1,0 +1,26 @@
+{
+  "onnx_file": "results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\mode_theta_detach_flatreg001_seed21_rerun_20260622\\onnx_sandbox\\mode_theta_detach_flatreg001_seed21_rerun_20260622.onnx",
+  "sample_file": "results\\modern_tcn_sci_innovation\\04_mode_conditioned_theta\\mode_theta_detach_flatreg001_seed21_rerun_20260622\\onnx_sandbox\\mode_theta_detach_flatreg001_seed21_rerun_20260622_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 8.58306884765625e-06,
+      "mean_abs_error": 2.042545702352072e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 4.76837158203125e-06,
+      "mean_abs_error": 1.07536709492706e-06,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 2.0675361156463623e-07,
+      "mean_abs_error": 3.387685865163803e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

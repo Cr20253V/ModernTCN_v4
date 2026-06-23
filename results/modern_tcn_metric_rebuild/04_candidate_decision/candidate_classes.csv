@@ -1,0 +1,22 @@
+candidate_id,source_phase,run_tag,class_label,class_reason,proxy_rank,rank_spread_v0_v3,metric_missing_ratio,closed_loop_available,required_offline_metrics_available,hard_protection_metrics_not_unavailable,hard_constraint_status,eligible_for_class_b,eligible_for_class_c,eligible_for_sandbox,eligible_for_local_optimization,advisory_only,is_reference_baseline,sensitivity_dependent
+baseline_lock,E0_baseline_lock,baseline_lock,Reference,reference_baseline,NaN,NaN,0,true,true,true,pass,false,false,false,false,false,true,false
+uncertainty_seed21,E1_loss_optimization,uncertainty_seed21,Class D,local_gain_but_hard_constraints_fail_or_offline_only,10,1,0,false,true,true,offline_only,false,false,false,true,false,false,false
+uncertainty_seed42,E1_loss_optimization,uncertainty_seed42,Class A,no_proxy_advantage_and_no_local_gain,9,1,0,false,true,true,offline_only,false,false,false,false,false,false,false
+uncertainty_seed101,E1_loss_optimization,uncertainty_seed101,Class B,stable_top3_proxy_without_closed_loop,1,0,0,false,true,true,offline_only,true,false,true,false,false,false,false
+gradnorm_seed21,E1_loss_optimization,gradnorm_seed21,Class A,no_proxy_advantage_and_no_local_gain,14,1,0,false,true,true,offline_only,false,false,false,false,false,false,false
+gradnorm_seed42,E1_loss_optimization,gradnorm_seed42,Class D,local_gain_but_hard_constraints_fail_or_offline_only,4,1,0,false,true,true,offline_only,false,false,false,true,false,false,false
+gradnorm_seed101,E1_loss_optimization,gradnorm_seed101,Class D,local_gain_but_hard_constraints_fail_or_offline_only,6,0,0,false,true,true,offline_only,false,false,false,true,false,false,false
+fs_t05_s05_sm000_seed21,E2_hard_sample_loss,fs_t05_s05_sm000_seed21,Class A,no_proxy_advantage_and_no_local_gain,11,0,0,false,true,true,offline_only,false,false,false,false,false,false,false
+fs_t02_s02_sm000_seed21,E2_hard_sample_loss,fs_t02_s02_sm000_seed21,Class A,no_proxy_advantage_and_no_local_gain,12,0,0,false,true,true,offline_only,false,false,false,false,false,false,false
+fs_t02_s05_sm000_seed21,E2_hard_sample_loss,fs_t02_s05_sm000_seed21,Class A,no_proxy_advantage_and_no_local_gain,13,0,0,false,true,true,offline_only,false,false,false,false,false,false,false
+fs_t05_s02_sm000_seed21,E2_hard_sample_loss,fs_t05_s02_sm000_seed21,Class D,local_gain_but_hard_constraints_fail_or_offline_only,15,1,0,false,true,true,offline_only,false,false,false,true,false,false,false
+pg_alpha01_seed21,E3_physics_group_gate,pg_alpha01_seed21,Class D,local_gain_but_hard_constraints_fail_or_offline_only,5,1,0,false,true,true,offline_only,false,false,false,true,false,false,false
+pg_alpha0_seed21,E3_physics_group_gate,pg_alpha0_seed21,Class D,local_gain_but_hard_constraints_fail_or_offline_only,8,0,0,false,true,true,offline_only,false,false,false,true,false,false,false
+mode_theta_detach_flatreg001_seed21,E4_mode_conditioned_theta,mode_theta_detach_flatreg001_seed21,Class B,stable_top3_proxy_without_closed_loop,2,0,0,false,true,true,offline_only,true,false,true,false,false,false,false
+mode_theta_detach_flatreg003_seed21,E4_mode_conditioned_theta,mode_theta_detach_flatreg003_seed21,Class B,stable_top3_proxy_without_closed_loop,3,0,0,false,true,true,offline_only,true,false,true,false,false,false,false
+mode_theta_detach_flatreg000_seed21,E4_mode_conditioned_theta,mode_theta_detach_flatreg000_seed21,Class D,local_gain_but_hard_constraints_fail_or_offline_only,7,0,0,false,true,true,offline_only,false,false,false,true,false,false,false
+cs_main_c06_d02,E5_confidence_scheduling,cs_main_c06_d02,AdvisoryOnly,advisory_only_non_replay_capable,NaN,NaN,0.777777777777778,false,false,false,offline_only,false,false,false,false,true,false,false
+cs_mainturn_c06_d01,E5_confidence_scheduling,cs_mainturn_c06_d01,AdvisoryOnly,advisory_only_non_replay_capable,NaN,NaN,0.777777777777778,false,false,false,offline_only,false,false,false,false,true,false,false
+cs_main_c07_d01,E5_confidence_scheduling,cs_main_c07_d01,AdvisoryOnly,advisory_only_non_replay_capable,NaN,NaN,0.777777777777778,false,false,false,offline_only,false,false,false,false,true,false,false
+cs_main_c06_d01,E5_confidence_scheduling,cs_main_c06_d01,AdvisoryOnly,advisory_only_non_replay_capable,NaN,NaN,0.777777777777778,false,false,false,offline_only,false,false,false,false,true,false,false
+rate_limit_only_d01,E5_confidence_scheduling,rate_limit_only_d01,AdvisoryOnly,advisory_only_non_replay_capable,NaN,NaN,0.777777777777778,false,false,false,offline_only,false,false,false,false,true,false,false

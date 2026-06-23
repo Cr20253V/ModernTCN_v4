@@ -1,0 +1,16 @@
+candidate_id,source_phase,rank_v0,rank_v1,rank_v2,rank_v3,best_rank,worst_rank,rank_spread,top3_count,final_rank_proxy,sensitivity_dependent
+uncertainty_seed101,E1_loss_optimization,1,1,1,1,1,1,0,4,1,false
+mode_theta_detach_flatreg001_seed21,E4_mode_conditioned_theta,2,2,2,2,2,2,0,4,2,false
+mode_theta_detach_flatreg003_seed21,E4_mode_conditioned_theta,3,3,3,3,3,3,0,4,3,false
+gradnorm_seed42,E1_loss_optimization,5,5,5,4,4,5,1,0,4,false
+pg_alpha01_seed21,E3_physics_group_gate,4,4,4,5,4,5,1,0,5,false
+gradnorm_seed101,E1_loss_optimization,6,6,6,6,6,6,0,0,6,false
+mode_theta_detach_flatreg000_seed21,E4_mode_conditioned_theta,7,7,7,7,7,7,0,0,7,false
+pg_alpha0_seed21,E3_physics_group_gate,8,8,8,8,8,8,0,0,8,false
+uncertainty_seed42,E1_loss_optimization,9,10,9,10,9,10,1,0,9,false
+uncertainty_seed21,E1_loss_optimization,10,9,10,9,9,10,1,0,10,false
+fs_t05_s05_sm000_seed21,E2_hard_sample_loss,11,11,11,11,11,11,0,0,11,false
+fs_t02_s02_sm000_seed21,E2_hard_sample_loss,12,12,12,12,12,12,0,0,12,false
+fs_t02_s05_sm000_seed21,E2_hard_sample_loss,13,13,13,13,13,13,0,0,13,false
+gradnorm_seed21,E1_loss_optimization,15,14,15,14,14,15,1,0,14,false
+fs_t05_s02_sm000_seed21,E2_hard_sample_loss,14,15,14,15,14,15,1,0,15,false

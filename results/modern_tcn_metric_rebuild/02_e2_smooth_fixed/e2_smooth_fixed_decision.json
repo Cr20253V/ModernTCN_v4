@@ -1,0 +1,12 @@
+{
+  "phase": "E2_smooth_fixed",
+  "repair_status": "PASS_CONTRACT_LIMITED",
+  "e2_smooth_fixed_status": "not_run_contract_limited",
+  "reason": "current dataset does not expose auditable test replay continuity metadata",
+  "original_e2_allowed_use": "hard-sample focal only",
+  "theta_smoothness_claim": "invalid_not_run",
+  "formal_claim_allowed": false,
+  "no_onnx_export": true,
+  "no_matlab_simulink": true,
+  "no_formal_compare_write": true
+}

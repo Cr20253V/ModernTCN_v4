@@ -1,0 +1,25 @@
+{
+  "node_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\12_uncertainty_replacement_qualification",
+  "objective": "Confirm whether uncertainty_seed101_rerun_20260622 can replace baseline ModernTCN_small.",
+  "anchor_id": "uncertainty_seed101_rerun_20260622",
+  "baseline_id": "baseline_lock",
+  "new_training_seeds": [
+    21,
+    42
+  ],
+  "reference_seed": 101,
+  "recipe_policy": "derive train commands from anchor config cli_args; only seed/run_tag/output_root change",
+  "dataset_file": "data/tcn/ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "model_family": "small",
+  "loss_mode": "uncertainty_weighting",
+  "disabled_unreliable_terms": {
+    "lambda_transition_focal": 0.0,
+    "lambda_stall_focal": 0.0,
+    "lambda_theta_smooth": 0.0,
+    "theta_smooth_mode": "off"
+  },
+  "decision_rule": {
+    "qualified": ">=2/3 seeds offline v2 pass, anchor closed-loop pass, at least one non101 closed-loop pass, and median tested closed-loop J_control < 1.0",
+    "not_qualified": "otherwise anchor remains best variant but not a full baseline replacement"
+  }
+}

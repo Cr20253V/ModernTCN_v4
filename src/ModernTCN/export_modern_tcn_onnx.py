@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="导出 ModernTCN ONNX")
     p.add_argument("--checkpoint", type=str, required=True)
     p.add_argument("--onnx-file", type=str, default="")
+    p.add_argument("--sample-file", type=str, default="")
     p.add_argument("--opset", type=int, default=17)
     p.add_argument("--sample-count", type=int, default=16)
     p.add_argument("--no-overwrite", "--no_overwrite", dest="no_overwrite", action="store_true")
@@ -49,7 +50,7 @@ def main() -> None:
 
     out_dir = checkpoint.parent
     onnx_file = Path(args.onnx_file) if args.onnx_file else out_dir / checkpoint.name.replace(".pt", ".onnx")
-    sample_file = out_dir / checkpoint.name.replace(".pt", "_pytorch_reference.mat")
+    sample_file = Path(args.sample_file) if args.sample_file else out_dir / checkpoint.name.replace(".pt", "_pytorch_reference.mat")
     meta_file = onnx_file.with_name(onnx_file.stem + "_onnx_export.json")
     if args.no_overwrite:
         existing = [p for p in [onnx_file, sample_file, meta_file] if p.exists()]

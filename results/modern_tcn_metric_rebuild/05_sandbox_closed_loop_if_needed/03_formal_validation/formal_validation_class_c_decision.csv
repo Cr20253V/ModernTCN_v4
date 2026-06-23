@@ -1,0 +1,4 @@
+controller,is_reference_baseline,J_control,J_control_baseline,hard_constraint_status,eligible_for_class_c,class_c_status,class_c_reason
+baseline_lock,true,1,NaN,pass,false,Reference,reference_baseline
+mode_theta_detach_flatreg001_seed21_rerun_20260622,false,1.10611148729323,1,pass,false,NoClassC,J_control_not_better_than_baseline
+uncertainty_seed101_rerun_20260622,false,0.94411711953914,1,fail,false,NoClassC,main_acc_drop=0.0200623

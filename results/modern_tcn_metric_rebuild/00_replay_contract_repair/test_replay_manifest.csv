@@ -1,0 +1,1 @@
+replay_segment_id,run_id,sample_id,window_start_idx,window_end_idx,global_time_idx,sample_time,is_first_in_segment,is_last_in_segment,is_contiguous_prev,is_contiguous_next,main_label,turn_label,theta_true,split,original_row_index,prediction_row_index,source_file,metadata_level,contiguity_reason,dt_sec

@@ -1,0 +1,2 @@
+candidate_id,source_phase,missing_checkpoint,missing_onnx,missing_closed_loop_mat,repair_decision,reason
+mode_theta_detach_flatreg003_seed21,E4_mode_conditioned_theta,true,true,true,not_run_in_this_node,existing_top2_rerun_20260622_formal_validation_completed; candidate remains offline_only unless a new strict-repair node is opened

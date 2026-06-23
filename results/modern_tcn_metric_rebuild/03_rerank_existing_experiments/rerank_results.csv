@@ -1,0 +1,22 @@
+candidate_id,source_phase,run_tag,formal_rerank_included,advisory_only,J_perception,J_event,J_control,J_total,J_total_proxy,hard_constraint_status,rank_control,rank_proxy,class_label,evidence_validity
+baseline_lock,E0_baseline_lock,baseline_lock,false,false,0,0,0,0,0,pass,0,0,Reference,reference
+uncertainty_seed21,E1_loss_optimization,uncertainty_seed21,true,false,0.0523837399239615,1.16874434802452,NaN,1.22112808794848,1.22112808794848,offline_only,NaN,9,Class D,historical_valid
+uncertainty_seed42,E1_loss_optimization,uncertainty_seed42,true,false,0.011516253280404,1.21370715064267,NaN,1.22522340392308,1.22522340392308,offline_only,NaN,10,Class A,historical_valid
+uncertainty_seed101,E1_loss_optimization,uncertainty_seed101,true,false,0.00643183629308863,0.900188949310838,NaN,0.906620785603927,0.906620785603927,offline_only,NaN,1,Class B,historical_valid
+gradnorm_seed21,E1_loss_optimization,gradnorm_seed21,true,false,0.0723999872148999,1.37790018198194,NaN,1.45030016919684,1.45030016919684,offline_only,NaN,14,Class A,historical_valid
+gradnorm_seed42,E1_loss_optimization,gradnorm_seed42,true,false,0.00965916826018599,1.06808252507411,NaN,1.0777416933343,1.0777416933343,offline_only,NaN,4,Class D,historical_valid
+gradnorm_seed101,E1_loss_optimization,gradnorm_seed101,true,false,0.0062011627133152,1.11288492609685,NaN,1.11908608881017,1.11908608881017,offline_only,NaN,6,Class D,historical_valid
+fs_t05_s05_sm000_seed21,E2_hard_sample_loss,fs_t05_s05_sm000_seed21,true,false,0.0640248188598785,1.22839770889626,NaN,1.29242252775614,1.29242252775614,offline_only,NaN,11,Class A,degraded
+fs_t02_s02_sm000_seed21,E2_hard_sample_loss,fs_t02_s02_sm000_seed21,true,false,0.052841787670755,1.29755728085222,NaN,1.35039906852297,1.35039906852297,offline_only,NaN,12,Class A,degraded
+fs_t02_s05_sm000_seed21,E2_hard_sample_loss,fs_t02_s05_sm000_seed21,true,false,0.0722530114021901,1.35309877469803,NaN,1.42535178610022,1.42535178610022,offline_only,NaN,13,Class A,degraded
+fs_t05_s02_sm000_seed21,E2_hard_sample_loss,fs_t05_s02_sm000_seed21,true,false,0.0444179509273229,1.43616080854869,NaN,1.48057875947601,1.48057875947601,offline_only,NaN,15,Class D,degraded
+pg_alpha01_seed21,E3_physics_group_gate,pg_alpha01_seed21,true,false,0.0134633793735785,1.06757289929788,NaN,1.08103627867146,1.08103627867146,offline_only,NaN,5,Class D,historical_valid
+pg_alpha0_seed21,E3_physics_group_gate,pg_alpha0_seed21,true,false,0.0215667499584257,1.14561790888595,NaN,1.16718465884438,1.16718465884438,offline_only,NaN,7,Class D,historical_valid
+mode_theta_detach_flatreg001_seed21,E4_mode_conditioned_theta,mode_theta_detach_flatreg001_seed21,true,false,0.0134629020739422,0.999516056597418,NaN,1.01297895867136,1.01297895867136,offline_only,NaN,2,Class B,historical_valid
+mode_theta_detach_flatreg003_seed21,E4_mode_conditioned_theta,mode_theta_detach_flatreg003_seed21,true,false,0.0101321569291907,1.04464432697673,NaN,1.05477648390592,1.05477648390592,offline_only,NaN,3,Class B,historical_valid
+mode_theta_detach_flatreg000_seed21,E4_mode_conditioned_theta,mode_theta_detach_flatreg000_seed21,true,false,0.00335278427925348,1.16538342802038,NaN,1.16873621229963,1.16873621229963,offline_only,NaN,8,Class D,historical_valid
+cs_main_c06_d02,E5_confidence_scheduling,cs_main_c06_d02,false,true,NaN,NaN,NaN,NaN,NaN,offline_only,NaN,NaN,AdvisoryOnly,advisory_only
+cs_mainturn_c06_d01,E5_confidence_scheduling,cs_mainturn_c06_d01,false,true,NaN,NaN,NaN,NaN,NaN,offline_only,NaN,NaN,AdvisoryOnly,advisory_only
+cs_main_c07_d01,E5_confidence_scheduling,cs_main_c07_d01,false,true,NaN,NaN,NaN,NaN,NaN,offline_only,NaN,NaN,AdvisoryOnly,advisory_only
+cs_main_c06_d01,E5_confidence_scheduling,cs_main_c06_d01,false,true,NaN,NaN,NaN,NaN,NaN,offline_only,NaN,NaN,AdvisoryOnly,advisory_only
+rate_limit_only_d01,E5_confidence_scheduling,rate_limit_only_d01,false,true,NaN,NaN,NaN,NaN,NaN,offline_only,NaN,NaN,AdvisoryOnly,advisory_only

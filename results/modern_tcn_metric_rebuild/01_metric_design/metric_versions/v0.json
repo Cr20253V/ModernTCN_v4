@@ -1,0 +1,28 @@
+{
+  "version": "v0",
+  "status": "development_only",
+  "objective": "control_oriented_rerank_sensitivity",
+  "weights": {
+    "acc_main": 0.22,
+    "acc_turn": 0.16,
+    "acc_turn_transition": 0.14,
+    "theta_mae_deg": 0.14,
+    "theta_edge_p95_abs_err": 0.12,
+    "flat_peak_theta_error": 0.1,
+    "flat_recall": 0.04,
+    "stall_recall": 0.04,
+    "slope_recall": 0.04
+  },
+  "component_order": [
+    "acc_main",
+    "acc_turn",
+    "acc_turn_transition",
+    "theta_mae_deg",
+    "theta_edge_p95_abs_err",
+    "flat_peak_theta_error",
+    "flat_recall",
+    "stall_recall",
+    "slope_recall"
+  ],
+  "note": "development-only ranking; no candidate decision allowed from this version"
+}

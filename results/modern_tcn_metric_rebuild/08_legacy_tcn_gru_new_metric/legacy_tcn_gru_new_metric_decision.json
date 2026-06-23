@@ -1,0 +1,16 @@
+{
+  "output_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\08_legacy_tcn_gru_new_metric",
+  "algorithm_ids": [
+    "baseline_lock",
+    "uncertainty_seed101_rerun_20260622",
+    "mode_theta_detach_flatreg001_seed21_rerun_20260622",
+    "GRU_seed101",
+    "TCN_seed101"
+  ],
+  "strict_class_c_candidates": [],
+  "retained_reference": "baseline_lock",
+  "notes": [
+    "GRU/TCN are evaluated from legacy same-path closed-loop outputs and are not eligible for strict Class C.",
+    "Missing metrics are not filled."
+  ]
+}
