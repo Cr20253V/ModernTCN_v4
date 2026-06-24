@@ -1,0 +1,26 @@
+{
+  "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\14_uncertainty_stability_optimization\\04_closed_loop_multiseed\\00_exported_onnx\\s01_lr13_select_edges_flat_seed42\\s01_lr13_select_edges_flat_seed42.onnx",
+  "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\14_uncertainty_stability_optimization\\04_closed_loop_multiseed\\00_exported_onnx\\s01_lr13_select_edges_flat_seed42\\s01_lr13_select_edges_flat_seed42_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 1.430511474609375e-05,
+      "mean_abs_error": 2.205371856689453e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 4.0531158447265625e-06,
+      "mean_abs_error": 1.3628354054162628e-06,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 6.705522537231445e-08,
+      "mean_abs_error": 2.898741513490677e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

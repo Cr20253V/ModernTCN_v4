@@ -1,0 +1,3 @@
+Training log placeholder. Console logs are not captured by train_one_seed API.
+summary_csv: `E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\14_uncertainty_stability_optimization\03_seed101_confirmation\s01_lr13_select_edges_flat_seed101\modern_tcn_seed101_summary.csv`
+history_csv: `E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\14_uncertainty_stability_optimization\03_seed101_confirmation\s01_lr13_select_edges_flat_seed101\modern_tcn_seed101_history.csv`

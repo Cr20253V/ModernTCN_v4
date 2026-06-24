@@ -1,0 +1,44 @@
+{
+  "node_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\14_uncertainty_stability_optimization",
+  "objective": "Reduce seed21/42 flat_peak_theta_error and theta_edge_p95_abs_err failures for Uncertainty-weighted ModernTCN_small.",
+  "baseline_id": "baseline_lock",
+  "anchor_id": "uncertainty_seed101_rerun_20260622",
+  "anchor_j_control": 0.94411711953914,
+  "stability_seeds": [
+    21,
+    42
+  ],
+  "confirmation_seed": 101,
+  "closed_loop_policy": "Only configs passing seed21 and seed42 offline v2 hard gates get seed101 confirmation and multi-seed closed-loop.",
+  "offline_threshold_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\10_threshold_recalibration\\hard_constraint_thresholds_v2_full_proposed.json",
+  "closed_loop_threshold_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\10_threshold_recalibration\\hard_constraint_thresholds_v2_closed_loop_proposed.json",
+  "baseline_hard_metric_values": {
+    "acc_main": 0.966962798445308,
+    "acc_turn": 0.578845086063298,
+    "acc_turn_transition": 0.497764530551416,
+    "theta_mae_deg": 0.679394781589508,
+    "theta_edge_p95_abs_err": 2.75505685806274,
+    "flat_peak_theta_error": 5.3357400894165,
+    "flat_recall": 0.96957671957672,
+    "stall_recall": 0.71875,
+    "slope_recall": 0.974909090909091
+  },
+  "hard_thresholds": {
+    "closed_loop_unstable_must_be_false": true,
+    "constraint_penalty_max_ratio": 1.0,
+    "viol_rate_max_abs_increase": 0.001,
+    "acc_main_min_drop": 0.03,
+    "stall_recall_min_drop": 0.1,
+    "slope_recall_min_drop": 0.03,
+    "theta_edge_p95_max_ratio": 1.05,
+    "flat_peak_theta_error_max_ratio": 1.15,
+    "omega_cmd_rms_max_ratio": 5.0,
+    "delta_u_proxy_max_ratio": 45.0
+  },
+  "disabled_unreliable_terms": {
+    "lambda_transition_focal": 0,
+    "lambda_stall_focal": 0,
+    "lambda_theta_smooth": 0,
+    "theta_smooth_mode": "off"
+  }
+}

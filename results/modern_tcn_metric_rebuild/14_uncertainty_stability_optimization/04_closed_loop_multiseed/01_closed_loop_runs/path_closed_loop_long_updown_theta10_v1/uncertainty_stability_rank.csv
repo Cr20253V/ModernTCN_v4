@@ -1,0 +1,5 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+s01_lr13_select_edges_flat_seed21,8,7,8,23,1
+baseline_lock,16,5,10,31,2
+s01_lr13_select_edges_flat_seed42,21,8,7,36,3
+s01_lr13_select_edges_flat_seed101,15,10,15,40,4

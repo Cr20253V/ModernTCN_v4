@@ -1,0 +1,4 @@
+algorithm_group,seeds_available,n_seeds,offline_pass_count,offline_fail_count,offline_unavailable_count,best_seed_by_offline_score,best_variant_id,best_offline_score_vs_baseline,median_offline_score_vs_baseline,status_summary
+Uncertainty_weighted_ModernTCN_small,21/42/101,3,1,2,0,101,uncertainty_seed101_rerun_20260622,0.970838817749306,1.07901896581399,"pass=1, fail=2, unavailable=0"
+ModernTCN_small_base,21/73/101,3,1,2,0,101,plantfix_passive17_plus_all5_seed101,1.00914528585944,1.05146783283019,"pass=1, fail=2, unavailable=0"
+GRU_plantfix,21/73/101,3,0,2,1,101,full_gru_v5_plantfix_passive17_plus_all5_seed101,1.06858365938923,1.10872679128676,"pass=0, fail=2, unavailable=1"

@@ -1,0 +1,4 @@
+source,seed,offline_v2_status,hard_gate_failures,theta_edge_p95_abs_err,flat_peak_theta_error
+uncertainty_anchor_same_recipe_seed21,21,fail,flat_peak_theta_error_ratio=1.3324>1.15,2.43688559532166,7.10931348800659
+uncertainty_anchor_same_recipe_seed42,42,fail,theta_edge_p95_abs_err_ratio=1.24186>1.05,3.42140817642212,5.89323759078979
+uncertainty_seed101_rerun_20260622,101,pass,none,2.27067041397095,5.24426937103271

@@ -1,0 +1,24 @@
+{
+  "node_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\13_multiseed_algorithm_comparison",
+  "baseline_reference": "baseline_lock",
+  "offline_threshold_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\10_threshold_recalibration\\hard_constraint_thresholds_v2_full_proposed.json",
+  "closed_loop_threshold_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\10_threshold_recalibration\\hard_constraint_thresholds_v2_closed_loop_proposed.json",
+  "official_seed_sets": {
+    "ModernTCN_small_base": [
+      21,
+      73,
+      101
+    ],
+    "Uncertainty_weighted_ModernTCN_small": [
+      21,
+      42,
+      101
+    ],
+    "GRU_plantfix": [
+      21,
+      73,
+      101
+    ]
+  },
+  "missing_policy": "do_not_impute; missing hard metrics make pass unavailable"
+}

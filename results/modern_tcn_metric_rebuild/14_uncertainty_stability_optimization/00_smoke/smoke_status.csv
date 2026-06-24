@@ -1,0 +1,2 @@
+run_id,seed,run_tag,status,returncode,run_dir,log_file
+s01_lr13_select_edges_flat,21,smoke_s01_lr13_select_edges_flat_seed21,ok,0,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\14_uncertainty_stability_optimization\00_smoke\smoke_s01_lr13_select_edges_flat_seed21,E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\14_uncertainty_stability_optimization\00_smoke\smoke_s01_lr13_select_edges_flat_seed21.log

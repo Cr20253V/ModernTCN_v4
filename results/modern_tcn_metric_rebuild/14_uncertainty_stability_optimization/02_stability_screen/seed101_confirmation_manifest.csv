@@ -1,0 +1,2 @@
+stability_rank,run_id,description,stability_screen_status,pass_count,median_offline_score,best_seed,best_seed_score,overrides_json
+1,s01_lr13_select_edges_flat,u06-like lr=0.0013 plus edge and flat peak checkpoint selection,dual_seed_pass,2,0.537120610186761,21,0.532371564183454,"{""lr"": 0.0013, ""select_stall_target"": 0.7, ""select_stall_weight"": 0.2, ""select_theta_edge_p95_target_deg"": 1.15, ""select_theta_edge_p95_weight"": 1.2, ""select_theta_flat_peak_target_deg"": 5.0, ""select_theta_flat_peak_weight"": 1.0}"

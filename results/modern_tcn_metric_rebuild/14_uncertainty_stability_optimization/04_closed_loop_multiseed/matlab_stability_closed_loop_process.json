@@ -1,0 +1,7 @@
+{
+  "pid": 12740,
+  "started_at": "2026-06-24T01:12:52",
+  "stdout": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\14_uncertainty_stability_optimization\\04_closed_loop_multiseed\\matlab_stability_closed_loop_stdout_20260624_011252.log",
+  "stderr": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\14_uncertainty_stability_optimization\\04_closed_loop_multiseed\\matlab_stability_closed_loop_stderr_20260624_011252.log",
+  "command": "matlab -batch \"cd('E:\\Matlab\\Simulink\\S-Function_16'); addpath(fullfile(pwd,'results','modern_tcn_metric_rebuild','14_uncertainty_stability_optimization')); result = run_uncertainty_stability_closed_loop(struct('reuse_existing', true));\""
+}

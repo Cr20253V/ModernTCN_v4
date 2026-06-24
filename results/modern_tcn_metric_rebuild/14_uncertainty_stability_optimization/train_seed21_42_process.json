@@ -1,0 +1,7 @@
+{
+  "pid": 8048,
+  "started_at": "2026-06-23T23:24:51",
+  "log": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\14_uncertainty_stability_optimization\\train_seed21_42_20260623_232451.log",
+  "err": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\14_uncertainty_stability_optimization\\train_seed21_42_20260623_232451.err.log",
+  "command": "python E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\_run_uncertainty_stability_optimization.py train-seed21-42"
+}
