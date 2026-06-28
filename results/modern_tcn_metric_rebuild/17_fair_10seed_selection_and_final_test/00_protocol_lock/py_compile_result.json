@@ -1,0 +1,10 @@
+{
+  "returncode": 0,
+  "stdout": "",
+  "command": [
+    "D:\\LenovoSoftstore\\install\\Python 3.10\\python.exe",
+    "-m",
+    "py_compile",
+    "results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\tools\\run_fair10_node.py"
+  ]
+}

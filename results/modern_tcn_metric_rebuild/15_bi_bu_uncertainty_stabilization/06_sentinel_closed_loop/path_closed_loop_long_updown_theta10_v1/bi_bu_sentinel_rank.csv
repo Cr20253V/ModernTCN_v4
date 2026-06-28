@@ -1,0 +1,4 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+a2_freeze_early_seed42,7,7,8,22,1
+baseline_lock,15,4,6,25,2
+a2_freeze_early_seed21,14,7,10,31,3

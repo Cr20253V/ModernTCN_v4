@@ -166,7 +166,9 @@ if exist(out_file, 'file') == 2
     end
 end
 
-tmp_file = [tempname(out_dir) '.mat'];
+% Keep the temporary MAT path short on Windows; nested output directories can
+% make tempname(out_dir) exceed practical path limits during save().
+tmp_file = [tempname(tempdir) '.mat'];
 cleanup = onCleanup(@() local_delete_if_exists(tmp_file));
 save(tmp_file, 'logsout', 'SimulationMetadata', '-v7.3');
 if exist(out_file, 'file') == 2

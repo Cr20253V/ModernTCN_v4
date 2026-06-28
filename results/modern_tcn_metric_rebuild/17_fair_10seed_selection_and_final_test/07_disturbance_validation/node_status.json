@@ -1,0 +1,5 @@
+{
+  "node": "disturbance_validation",
+  "log_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\07_disturbance_validation\\disturbance_validation_matlab.log",
+  "selected_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\05_seed_selection\\selected_seed_decision.csv"
+}

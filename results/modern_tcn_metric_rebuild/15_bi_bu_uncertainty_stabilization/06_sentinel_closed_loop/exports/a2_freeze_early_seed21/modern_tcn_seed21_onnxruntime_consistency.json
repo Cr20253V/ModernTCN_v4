@@ -1,0 +1,26 @@
+{
+  "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\15_bi_bu_uncertainty_stabilization\\06_sentinel_closed_loop\\exports\\a2_freeze_early_seed21\\modern_tcn_seed21.onnx",
+  "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\15_bi_bu_uncertainty_stabilization\\06_sentinel_closed_loop\\exports\\a2_freeze_early_seed21\\a2_freeze_early_seed21_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 6.198883056640625e-06,
+      "mean_abs_error": 2.049530621661688e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 2.384185791015625e-06,
+      "mean_abs_error": 6.810296326875687e-07,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 6.332993507385254e-08,
+      "mean_abs_error": 2.0605511963367462e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

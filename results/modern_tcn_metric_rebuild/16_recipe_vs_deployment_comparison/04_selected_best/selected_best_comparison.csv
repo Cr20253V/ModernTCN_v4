@@ -1,0 +1,6 @@
+algorithm_recipe,selected_candidate_id,seed,selection_protocol,J_control,selected_model_status,notes
+ModernTCN_small_locked_champion,baseline_lock,101,already_locked_deployment_champion,1,reference,"This is the fixed deployment champion, not a recipe distribution."
+ModernTCN_small_base,modern_base_seed21,21,same_target_seed_set_diagnostic_best,1.00578398807548,fail_vs_locked_champion,Selected-best comparison is only paper-valid if the same validation/offline selection protocol is documented for every algorithm.
+Uncertainty_weighted_same_recipe,uncertainty_seed101_rerun_20260622,101,historical_anchor_seed101_selection,0.94411711953914,pass_vs_locked_champion,Selected-best comparison is only paper-valid if the same validation/offline selection protocol is documented for every algorithm.
+Uncertainty_stability_s01,s01_lr13_select_edges_flat_seed101,101,best_seed_after_robust_offline_recipe,1.10544617766553,fail_vs_locked_champion,Selected-best comparison is only paper-valid if the same validation/offline selection protocol is documented for every algorithm.
+BI_BU_A2_freeze_early,a2_freeze_early_seed42,42,sentinel_best_seed_only,1.61319158327678,fail_sentinel_not_selectable,Selected-best comparison is only paper-valid if the same validation/offline selection protocol is documented for every algorithm.

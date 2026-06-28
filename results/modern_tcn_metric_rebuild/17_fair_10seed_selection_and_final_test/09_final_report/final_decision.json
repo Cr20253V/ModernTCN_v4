@@ -1,0 +1,78 @@
+{
+  "timestamp": "2026-06-27T01:50:50.900489",
+  "selected_rows": [
+    {
+      "algorithm_id": "modern_fixed",
+      "selected_seed": "101",
+      "selected_candidate_id": "modern_fixed_seed101",
+      "screen_exception_used": "false",
+      "selection_metric": "0.927979957007485",
+      "offline_v2_score": "1.00914528585944",
+      "validation_sentinel_J_control_mean": "0.927979957007485",
+      "path_catastrophic_count": "0",
+      "selection_status": "pass",
+      "selection_reason": "lowest_validation_sentinel_J_control_mean",
+      "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101.pt",
+      "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101.onnx",
+      "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101_pytorch_reference.mat",
+      "summary_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101_summary.csv",
+      "history_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101_history.csv",
+      "config_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\config.json",
+      "report_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\ModernTCN_train_report.md"
+    },
+    {
+      "algorithm_id": "uncertainty_weighted",
+      "selected_seed": "340",
+      "selected_candidate_id": "uncertainty_weighted_seed340",
+      "screen_exception_used": "false",
+      "selection_metric": "1.05648282511717",
+      "offline_v2_score": "0.999105527233234",
+      "validation_sentinel_J_control_mean": "1.05648282511717",
+      "path_catastrophic_count": "0",
+      "selection_status": "pass",
+      "selection_reason": "lowest_validation_sentinel_J_control_mean",
+      "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340.pt",
+      "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340.onnx",
+      "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340_pytorch_reference.mat",
+      "summary_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340_summary.csv",
+      "history_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340_history.csv",
+      "config_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\config.json",
+      "report_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\ModernTCN_train_report.md"
+    }
+  ],
+  "summary_rows": [
+    {
+      "algorithm_id": "modern_fixed",
+      "training_count": 10,
+      "hard_screen_pass_count": 2,
+      "exception_candidate_count": 0,
+      "selected_seed": "101",
+      "selected_candidate_id": "modern_fixed_seed101",
+      "selected_exception_used": "false",
+      "selection_status": "pass",
+      "selection_reason": "lowest_validation_sentinel_J_control_mean"
+    },
+    {
+      "algorithm_id": "uncertainty_weighted",
+      "training_count": 10,
+      "hard_screen_pass_count": 2,
+      "exception_candidate_count": 0,
+      "selected_seed": "340",
+      "selected_candidate_id": "uncertainty_weighted_seed340",
+      "selected_exception_used": "false",
+      "selection_status": "pass",
+      "selection_reason": "lowest_validation_sentinel_J_control_mean"
+    }
+  ],
+  "final_test_paths": [
+    "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_factory_logistics_showcase_theta10_v10.mat",
+    "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_closed_loop_sharp_turn_transition_theta10_v1.mat",
+    "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_closed_loop_long_updown_theta10_v1.mat",
+    "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\modern_tcn_showcase\\candidates\\path_modern_tcn_showcase_candidate_soft_updown_straight_turn_v1.mat"
+  ],
+  "validation_sentinel_paths": [
+    "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\agv_theta10_uniform_v2\\agv_theta10_uniform_v2_036_short_bin06_m04p5_theta_edge_speed_R16.mat",
+    "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\agv_theta10_uniform_v2\\agv_theta10_uniform_v2_039_short_bin09_m01p5_right_R06.mat"
+  ],
+  "screen_exception_used_any": false
+}

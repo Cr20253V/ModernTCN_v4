@@ -1,0 +1,5 @@
+{
+  "node": "validation_sentinel",
+  "manifest": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\04_validation_sentinel_closed_loop\\sentinel_manifest.csv",
+  "log_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\04_validation_sentinel_closed_loop\\validation_sentinel_matlab.log"
+}

@@ -103,6 +103,14 @@ class ModernTCNConfig:
     select_theta_small_nonzero_p95_target_deg: float = 1.0
     select_theta_flat_bias_weight: float = 0.0
     select_theta_flat_bias_target_deg: float = 0.2
+    freeze_mode: str = "none"
+    freeze_early_blocks: int = 3
+    preserve_mode: str = "none"
+    lambda_preserve_main: float = 0.0
+    lambda_preserve_turn: float = 0.0
+    lambda_preserve_theta: float = 0.0
+    s_range: float = 0.25
+    lambda_s_prior: float = 0.01
 
     def to_dict(self) -> Dict[str, object]:
         return asdict(self)

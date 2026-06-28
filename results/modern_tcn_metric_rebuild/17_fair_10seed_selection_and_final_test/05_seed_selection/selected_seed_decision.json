@@ -1,0 +1,52 @@
+{
+  "status": "ok",
+  "reason": "validation_sentinel_selection_complete",
+  "rows": [
+    {
+      "algorithm_id": "modern_fixed",
+      "seed": 101,
+      "candidate_id": "modern_fixed_seed101",
+      "screen_exception_used": false,
+      "offline_v2_score": 1.00914528585944,
+      "validation_sentinel_J_control_mean": 0.9279799570074849,
+      "validation_sentinel_J_control_worst": 1.0199557646644715,
+      "path_catastrophic_count": 0,
+      "selected_seed": 101,
+      "selected_candidate_id": "modern_fixed_seed101",
+      "selection_metric": 0.9279799570074849,
+      "selection_status": "pass",
+      "selection_reason": "lowest_validation_sentinel_J_control_mean",
+      "selected": true,
+      "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101.pt",
+      "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101.onnx",
+      "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101_pytorch_reference.mat",
+      "summary_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101_summary.csv",
+      "history_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\modern_tcn_seed101_history.csv",
+      "config_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\config.json",
+      "report_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed101\\ModernTCN_train_report.md"
+    },
+    {
+      "algorithm_id": "uncertainty_weighted",
+      "seed": 340,
+      "candidate_id": "uncertainty_weighted_seed340",
+      "screen_exception_used": false,
+      "offline_v2_score": 0.999105527233234,
+      "validation_sentinel_J_control_mean": 1.0564828251171736,
+      "validation_sentinel_J_control_worst": 1.3978992641331944,
+      "path_catastrophic_count": 0,
+      "selected_seed": 340,
+      "selected_candidate_id": "uncertainty_weighted_seed340",
+      "selection_metric": 1.0564828251171736,
+      "selection_status": "pass",
+      "selection_reason": "lowest_validation_sentinel_J_control_mean",
+      "selected": true,
+      "checkpoint_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340.pt",
+      "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340.onnx",
+      "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340_pytorch_reference.mat",
+      "summary_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340_summary.csv",
+      "history_csv": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\modern_tcn_seed340_history.csv",
+      "config_json": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\config.json",
+      "report_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\02_train_uncertainty_weighted_10seed\\uncertainty_weighted_seed340\\ModernTCN_train_report.md"
+    }
+  ]
+}

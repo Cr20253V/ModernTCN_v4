@@ -1,0 +1,66 @@
+{
+  "node_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test",
+  "train_script": "E:\\Matlab\\Simulink\\S-Function_16\\src\\ModernTCN\\train_modern_tcn.py",
+  "export_script": "E:\\Matlab\\Simulink\\S-Function_16\\src\\ModernTCN\\export_modern_tcn_onnx.py",
+  "check_onnx_script": "E:\\Matlab\\Simulink\\S-Function_16\\src\\ModernTCN\\check_onnxruntime_consistency.py",
+  "run_closed_loop_m": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\run_fair10_closed_loop.m",
+  "robustness_m": "E:\\Matlab\\Simulink\\S-Function_16\\src\\Compare\\run_closed_loop_robustness_experiment.m",
+  "missing_required": [],
+  "missing_validation_baseline_outputs": [],
+  "can_start": true,
+  "validation_paths_disjoint": true,
+  "validation_rows": [
+    {
+      "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\agv_theta10_uniform_v2\\agv_theta10_uniform_v2_036_short_bin06_m04p5_theta_edge_speed_R16.mat",
+      "exists": true,
+      "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\03_formal_validation\\agv_theta10_uniform_v2_036_short_bin06_m04p5_theta_edge_speed_R16\\baseline_lock_out.mat",
+      "baseline_out_exists": true
+    },
+    {
+      "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\agv_theta10_uniform_v2\\agv_theta10_uniform_v2_039_short_bin09_m01p5_right_R06.mat",
+      "exists": true,
+      "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\03_formal_validation\\agv_theta10_uniform_v2_039_short_bin09_m01p5_right_R06\\baseline_lock_out.mat",
+      "baseline_out_exists": true
+    }
+  ],
+  "final_rows": [
+    {
+      "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_factory_logistics_showcase_theta10_v10.mat",
+      "exists": true,
+      "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\03_formal_validation\\path_factory_logistics_showcase_theta10_v10\\baseline_lock_out.mat",
+      "baseline_out_exists": true
+    },
+    {
+      "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_closed_loop_sharp_turn_transition_theta10_v1.mat",
+      "exists": true,
+      "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\03_formal_validation\\path_closed_loop_sharp_turn_transition_theta10_v1\\baseline_lock_out.mat",
+      "baseline_out_exists": true
+    },
+    {
+      "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\path_closed_loop_long_updown_theta10_v1.mat",
+      "exists": true,
+      "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\03_formal_validation\\path_closed_loop_long_updown_theta10_v1\\baseline_lock_out.mat",
+      "baseline_out_exists": true
+    },
+    {
+      "path_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\paths\\modern_tcn_showcase\\candidates\\path_modern_tcn_showcase_candidate_soft_updown_straight_turn_v1.mat",
+      "exists": true,
+      "baseline_out": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\05_sandbox_closed_loop_if_needed\\03_formal_validation\\path_modern_tcn_showcase_candidate_soft_updown_straight_turn_v1\\baseline_lock_out.mat",
+      "baseline_out_exists": true
+    }
+  ],
+  "seeds": [
+    1,
+    7,
+    11,
+    21,
+    42,
+    73,
+    101,
+    202,
+    340,
+    520
+  ],
+  "dataset_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "baseline_matrix": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\03_rerank_existing_experiments\\candidate_metric_matrix.csv"
+}

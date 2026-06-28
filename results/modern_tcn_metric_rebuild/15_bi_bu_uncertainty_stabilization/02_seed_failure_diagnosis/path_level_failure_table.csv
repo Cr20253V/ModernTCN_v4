@@ -1,0 +1,10 @@
+seed,candidate_id,path_tag,zone,J_control,failure_type,path_failure,closed_loop_v2_status,closed_loop_v2_failures
+21,s01_lr13_select_edges_flat_seed21,NaN,all,NaN,edge_and_flat_drift,no,pass,none
+21,s01_lr13_select_edges_flat_seed21,NaN,all,NaN,edge_and_flat_drift,no,pass,none
+21,s01_lr13_select_edges_flat_seed21,NaN,all,NaN,edge_and_flat_drift,no,pass,none
+42,s01_lr13_select_edges_flat_seed42,NaN,all,NaN,edge_and_flat_drift,no,pass,none
+42,s01_lr13_select_edges_flat_seed42,NaN,all,NaN,edge_and_flat_drift,no,pass,none
+42,s01_lr13_select_edges_flat_seed42,NaN,all,NaN,edge_and_flat_drift,no,pass,none
+101,uncertainty_seed101_rerun_20260622,path_factory_logistics_showcase_theta10_v3,all,1.06346989562921,success_pattern_seed101,yes,pass,none
+101,uncertainty_seed101_rerun_20260622,path_closed_loop_long_updown_theta10_v1,all,1.06286284372505,success_pattern_seed101,yes,pass,none
+101,uncertainty_seed101_rerun_20260622,path_closed_loop_sharp_turn_transition_theta10_v1,all,0.744627481843967,success_pattern_seed101,no,pass,none

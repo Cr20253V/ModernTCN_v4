@@ -1,0 +1,14 @@
+{
+  "baseline_lock_reference": "baseline_lock",
+  "anchor_reference": "uncertainty_seed101_rerun_20260622",
+  "baseline_J_control": 1.0,
+  "anchor_seed101_J_control": 0.94411711953914,
+  "stability_14_closed_loop_ordering": {
+    "seed101": 1.105446,
+    "seed21": 1.143118,
+    "seed42": 1.174967
+  },
+  "offline_gate_fact": "3/3 pass in 14_uncertainty_stability_optimization, but closed-loop J_control is worse than baseline_lock.",
+  "can_promote_recipe": false,
+  "stop_reason": "Need baseline-initialized bounded-uncertainty evidence before any promotion claim."
+}

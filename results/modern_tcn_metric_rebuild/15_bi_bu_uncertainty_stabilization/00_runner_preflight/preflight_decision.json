@@ -1,0 +1,10 @@
+{
+  "node_root": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\15_bi_bu_uncertainty_stabilization",
+  "train_script": "E:\\Matlab\\Simulink\\S-Function_16\\src\\ModernTCN\\train_modern_tcn.py",
+  "anchor_dir": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_sci_innovation\\01_loss_optimization\\uncertainty_seed101_rerun_20260622",
+  "baseline_dir": "E:\\Matlab\\Simulink\\S-Function_16\\results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_turn_l020_tt25_tcm14_stw055_slrw060_seed101",
+  "missing_required": [],
+  "can_start": true,
+  "zero_epoch_pass": true,
+  "zero_epoch_rows": 4
+}

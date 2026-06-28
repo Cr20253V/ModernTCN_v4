@@ -1,0 +1,26 @@
+{
+  "onnx_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed1\\modern_tcn_seed1.onnx",
+  "sample_file": "E:\\Matlab\\Simulink\\S-Function_16\\results\\modern_tcn_metric_rebuild\\17_fair_10seed_selection_and_final_test\\01_train_modern_tcn_small_10seed\\modern_fixed_seed1\\modern_tcn_seed1_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 6.67572021484375e-06,
+      "mean_abs_error": 1.969436880244757e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 4.291534423828125e-06,
+      "mean_abs_error": 1.3258928674986237e-06,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 5.21540641784668e-08,
+      "mean_abs_error": 2.1420419216156006e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

@@ -1,0 +1,17 @@
+{
+  "dataset_file": "E:\\Matlab\\Simulink\\S-Function_16\\data\\tcn\\ModernTCN_dataset_agv_dualsteer_theta10_uniform_conf_h0_v5_plantfix_passive17_plus_all5.mat",
+  "seq_len": 128,
+  "input_dim": 22,
+  "output_contract": "logits_main3_logits_turn3_theta1",
+  "split_policy": "use_existing_run_level_split_from_mat",
+  "scaler_policy": "use_existing_normalized_X_and_existing_scaler_only",
+  "vehicle_type": "diagonal_dual_steer_drive_agv",
+  "active_drive_steer_wheels": "LF,RR",
+  "passive_support_wheels": "RF,LR",
+  "feature_policy": "keep_current_algorithm_inputs_unchanged",
+  "feature_contract": "passive17_plus_all5",
+  "label_time_policy": "current_window_end",
+  "horizon_steps": 0,
+  "horizon_seconds": 0.0,
+  "confidence_policy": "derive_classification_confidence_from_softmax_and_export"
+}

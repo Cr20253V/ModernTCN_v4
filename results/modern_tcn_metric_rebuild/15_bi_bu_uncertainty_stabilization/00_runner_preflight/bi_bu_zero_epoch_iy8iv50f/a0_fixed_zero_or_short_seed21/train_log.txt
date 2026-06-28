@@ -1,0 +1,3 @@
+Training log placeholder. Console logs are not captured by train_one_seed API.
+summary_csv: `E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\15_bi_bu_uncertainty_stabilization\00_runner_preflight\bi_bu_zero_epoch_iy8iv50f\a0_fixed_zero_or_short_seed21\modern_tcn_seed21_summary.csv`
+history_csv: `E:\Matlab\Simulink\S-Function_16\results\modern_tcn_metric_rebuild\15_bi_bu_uncertainty_stabilization\00_runner_preflight\bi_bu_zero_epoch_iy8iv50f\a0_fixed_zero_or_short_seed21\modern_tcn_seed21_history.csv`

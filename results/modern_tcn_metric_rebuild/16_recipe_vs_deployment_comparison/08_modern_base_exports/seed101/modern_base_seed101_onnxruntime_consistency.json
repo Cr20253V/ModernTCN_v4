@@ -1,0 +1,26 @@
+{
+  "onnx_file": "results\\modern_tcn_metric_rebuild\\16_recipe_vs_deployment_comparison\\08_modern_base_exports\\seed101\\modern_base_seed101.onnx",
+  "sample_file": "results\\modern_tcn_metric_rebuild\\16_recipe_vs_deployment_comparison\\08_modern_base_exports\\seed101\\modern_base_seed101_pytorch_reference.mat",
+  "threshold": {
+    "max_abs_error": 0.0001,
+    "mean_abs_error": 1e-05
+  },
+  "outputs": {
+    "logits_main": {
+      "max_abs_error": 4.76837158203125e-06,
+      "mean_abs_error": 1.735985279083252e-06,
+      "pass": true
+    },
+    "logits_turn": {
+      "max_abs_error": 2.6226043701171875e-06,
+      "mean_abs_error": 7.394701242446899e-07,
+      "pass": true
+    },
+    "theta_hat": {
+      "max_abs_error": 5.960464477539063e-08,
+      "mean_abs_error": 2.2759195417165756e-08,
+      "pass": true
+    }
+  },
+  "pass": true
+}

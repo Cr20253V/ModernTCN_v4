@@ -1,0 +1,5 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+modern_base_seed21,6,7,9,22,1
+baseline_lock,14,8,9,31,2
+modern_base_seed101,16,7,9,32,3
+modern_base_seed42,24,8,13,45,4

@@ -1,0 +1,18 @@
+{
+  "checkpoint": "results\\paper\\agv_model_parameter_correction_workflow\\08_models\\modern_tcn\\modern_tcn_v5_plantfix_passive17_plus_all5_seed101\\modern_tcn_seed101.pt",
+  "model_family": "small",
+  "onnx_file": "results\\modern_tcn_metric_rebuild\\16_recipe_vs_deployment_comparison\\08_modern_base_exports\\seed101\\modern_base_seed101.onnx",
+  "sample_file": "results\\modern_tcn_metric_rebuild\\16_recipe_vs_deployment_comparison\\08_modern_base_exports\\seed101\\modern_base_seed101_pytorch_reference.mat",
+  "opset": 17,
+  "input_shape": [
+    1,
+    128,
+    22
+  ],
+  "output_names": [
+    "logits_main",
+    "logits_turn",
+    "theta_hat"
+  ],
+  "note": "导出前已调用 model.eval()；dropout 在 ONNX 推理中关闭；第一版固定 batch=1，离线批量检查脚本会逐窗口推理；当前默认使用 legacy TorchScript ONNX exporter 以获得更稳定的 PyTorch/ONNXRuntime 数值一致性。"
+}

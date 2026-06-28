@@ -1,0 +1,3 @@
+phase_label,seed,run_id,n_paths,mean_J_control,worst_J_control,mean_j_du_ratio,mean_omega_cmd_rms_ratio,path_catastrophic_count
+sentinel,21,a2_freeze_early_seed21,3,2.12081830264372,3.57242748906417,6.47989008644489,1.10594219998066,2
+sentinel,42,a2_freeze_early_seed42,3,1.61319158327678,2.58736013155446,4.23323072849947,1.14754788007457,2

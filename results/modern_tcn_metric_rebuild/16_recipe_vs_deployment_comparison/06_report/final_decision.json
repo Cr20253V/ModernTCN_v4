@@ -1,0 +1,56 @@
+{
+  "baseline_J_control": 1.0,
+  "anchor_seed101_J_control": 0.94411711953914,
+  "deployment_champion_answer": "uncertainty_seed101_rerun_20260622 passes; BI-BU A2 seed21/42 fail; non-anchor candidates are reported individually.",
+  "recipe_multiseed_answer": "complete_uncertainty_weighted_recipe_better_by_mean_J_control",
+  "selected_best_answer": "diagnostic_selected_best_available_if_rows_have_J_control; paper_valid_only_with_common_validation_or_offline_selection_protocol",
+  "modern_base_recipe_summary": {
+    "algorithm_recipe": "ModernTCN_small_base",
+    "target_seed_set": "21/42/101",
+    "available_seed_rows": "21/42/73/101",
+    "extra_non_target_seeds": "73",
+    "missing_offline_target_seeds": "none",
+    "missing_closed_loop_target_seeds": "none",
+    "offline_pass_count": 1,
+    "closed_loop_count": 3,
+    "mean_J_control": 11.457102285047787,
+    "median_J_control": 13.763742135444355,
+    "best_J_control": 1.0057839880754829,
+    "worst_J_control": 19.601780731623524,
+    "std_J_control": 7.765016173887018,
+    "deployment_pass_rate_vs_champion": 0.0,
+    "path_catastrophic_count": 2,
+    "recipe_multiseed_status": "complete_base_recipe_distribution_available",
+    "notes": "Complete ModernTCN_small base seed21/42/101 same-path closed-loop distribution is available."
+  },
+  "uncertainty_weighted_recipe_summary": {
+    "algorithm_recipe": "Uncertainty_weighted_same_recipe",
+    "target_seed_set": "21/42/101",
+    "available_seed_rows": "21/42/101",
+    "extra_non_target_seeds": "none",
+    "missing_offline_target_seeds": "none",
+    "missing_closed_loop_target_seeds": "none",
+    "offline_pass_count": 1,
+    "closed_loop_count": 3,
+    "mean_J_control": 4.66533183252969,
+    "median_J_control": 1.13638158707013,
+    "best_J_control": 0.94411711953914,
+    "worst_J_control": 11.9154967909798,
+    "std_J_control": 5.127241646338517,
+    "deployment_pass_rate_vs_champion": 0.3333333333333333,
+    "path_catastrophic_count": 1,
+    "recipe_multiseed_status": "complete_uncertainty_recipe_better_by_mean_J",
+    "notes": "Complete same-seed comparison is available; uncertainty recipe has lower mean J_control than ModernTCN_small base."
+  },
+  "a2_seed21_status": {
+    "deployment_champion_gate_status": "fail",
+    "recipe_multiseed_status": "sentinel_failed_no_full_recipe_claim",
+    "selected_model_status": "not_applicable_for_individual_seed"
+  },
+  "a2_seed42_status": {
+    "deployment_champion_gate_status": "fail",
+    "recipe_multiseed_status": "sentinel_failed_no_full_recipe_claim",
+    "selected_model_status": "not_applicable_for_individual_seed"
+  },
+  "required_next_experiments": []
+}

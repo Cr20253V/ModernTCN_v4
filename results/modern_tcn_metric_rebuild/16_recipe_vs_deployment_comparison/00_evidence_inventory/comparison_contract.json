@@ -1,0 +1,22 @@
+{
+  "baseline_champion": "baseline_lock",
+  "baseline_J_control": 1.0,
+  "target_seed_set": [
+    21,
+    42,
+    101
+  ],
+  "path_set": [
+    "path_factory_logistics_showcase_theta10_v3",
+    "path_closed_loop_long_updown_theta10_v1",
+    "path_closed_loop_sharp_turn_transition_theta10_v1"
+  ],
+  "decision_axes": [
+    "deployment_champion_gate_status",
+    "recipe_multiseed_status",
+    "selected_model_status"
+  ],
+  "deployment_gate_rule": "mean_J_control <= 1.0 and path_catastrophic_count == 0",
+  "path_catastrophic_definition": "existing sentinel flag when available; otherwise path-level J_control > 1.5",
+  "missing_policy": "missing values are explicit; no baseline or zero imputation"
+}

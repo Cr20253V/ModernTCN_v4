@@ -21,10 +21,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from modern_tcn_data import AGVWindowDataset, class_weights, find_project_root, load_modern_tcn_dataset
@@ -37,6 +38,7 @@ from modern_tcn_model import (
     ModernTCNModeThetaConfig,
     ModernTCNPhysicsGroupGateConfig,
     build_model_from_config,
+    build_model_from_checkpoint_dict,
     normalize_model_family,
 )
 
@@ -60,14 +62,24 @@ TASK_NAMES = ("main", "turn", "theta")
 class DynamicLossController(torch.nn.Module):
     """E1 loss-only controller. Fixed mode preserves the existing loss exactly."""
 
-    def __init__(self, mode: str, gradnorm_alpha: float = 1.5) -> None:
+    def __init__(
+        self,
+        mode: str,
+        gradnorm_alpha: float = 1.5,
+        s_range: float = 0.25,
+        s_prior_lambda: float = 0.0,
+    ) -> None:
         super().__init__()
         self.mode = _normalize_loss_mode(mode)
         self.gradnorm_alpha = float(gradnorm_alpha)
+        self.s_range = float(s_range)
+        self.s_prior_lambda = float(s_prior_lambda)
         self.gradnorm_initial_losses: Optional[torch.Tensor] = None
         self.last_gradnorm_stats: Dict[str, float] = {}
         if self.mode == "uncertainty_weighting":
             self.log_vars = torch.nn.Parameter(torch.zeros(3, dtype=torch.float32))
+        elif self.mode == "bounded_uncertainty":
+            self.raw_s = torch.nn.Parameter(torch.zeros(3, dtype=torch.float32))
         elif self.mode == "gradnorm":
             self.log_task_weights = torch.nn.Parameter(torch.zeros(3, dtype=torch.float32))
 
@@ -82,6 +94,16 @@ class DynamicLossController(torch.nn.Module):
             for idx, name in enumerate(TASK_NAMES):
                 state[f"s_{name}"] = float(s[idx])
                 state[f"weight_{name}"] = float(w[idx])
+        elif self.mode == "bounded_uncertainty":
+            s = self.bounded_s().detach().cpu()
+            w = torch.exp(-self.bounded_s().detach()).cpu()
+            raw = self.raw_s.detach().cpu()
+            state["s_range"] = float(self.s_range)
+            state["s_prior_lambda"] = float(self.s_prior_lambda)
+            for idx, name in enumerate(TASK_NAMES):
+                state[f"raw_s_{name}"] = float(raw[idx])
+                state[f"s_{name}"] = float(s[idx])
+                state[f"weight_{name}"] = float(w[idx])
         elif self.mode == "gradnorm":
             w = self.gradnorm_weights().detach().cpu()
             for idx, name in enumerate(TASK_NAMES):
@@ -91,6 +113,11 @@ class DynamicLossController(torch.nn.Module):
                 for idx, name in enumerate(TASK_NAMES):
                     state[f"initial_loss_{name}"] = float(init[idx])
         return state
+
+    def bounded_s(self) -> torch.Tensor:
+        if self.mode != "bounded_uncertainty":
+            raise RuntimeError("bounded_s called outside bounded_uncertainty mode")
+        return self.s_range * torch.tanh(self.raw_s)
 
     def gradnorm_weights(self) -> torch.Tensor:
         if self.mode != "gradnorm":
@@ -118,6 +145,18 @@ class DynamicLossController(torch.nn.Module):
             stats = {"loss_mode": self.mode}
             for idx, name in enumerate(TASK_NAMES):
                 stats[f"s_{name}"] = float(self.log_vars[idx].detach().cpu())
+                stats[f"weight_{name}"] = float(weights[idx].detach().cpu())
+            return loss, stats, None
+        if self.mode == "bounded_uncertainty":
+            s = self.bounded_s()
+            weights = torch.exp(-s)
+            prior = self.s_prior_lambda * torch.sum(s.pow(2))
+            loss = (weights * task_losses + s).sum() + prior
+            stats = {"loss_mode": self.mode, "bounded_s_prior": float(prior.detach().cpu())}
+            raw_s = self.raw_s.detach().cpu()
+            for idx, name in enumerate(TASK_NAMES):
+                stats[f"raw_s_{name}"] = float(raw_s[idx])
+                stats[f"s_{name}"] = float(s[idx].detach().cpu())
                 stats[f"weight_{name}"] = float(weights[idx].detach().cpu())
             return loss, stats, None
         if self.mode == "gradnorm":
@@ -184,7 +223,7 @@ def _normalize_loss_mode(mode: object) -> str:
     text = str(mode or "fixed").strip().lower()
     if text == "baseline":
         return "fixed"
-    if text not in {"fixed", "uncertainty_weighting", "gradnorm"}:
+    if text not in {"fixed", "uncertainty_weighting", "bounded_uncertainty", "gradnorm"}:
         raise ValueError(f"未知 loss_mode: {mode}")
     return text
 
@@ -227,19 +266,43 @@ def parse_args() -> argparse.Namespace:
         default="small",
         choices=["small", "full", "small_gffn", "small_dualkernel", "small_physics_group_gate", "small_mode_theta"],
     )
+    p.add_argument("--init-checkpoint", "--init_checkpoint", dest="init_checkpoint", type=str, default="")
+    p.add_argument("--baseline-checkpoint", "--baseline_checkpoint", dest="baseline_checkpoint", type=str, default="")
     p.add_argument("--dataset-file", "--dataset_file", dest="dataset_file", type=str, default="")
     p.add_argument("--output-root", "--output_root", dest="output_root", type=str, default="")
     p.add_argument("--run-tag", "--run_tag", dest="run_tag", type=str, default="")
     p.add_argument("--no-overwrite", "--no_overwrite", dest="no_overwrite", action="store_true")
+    p.add_argument(
+        "--freeze-mode",
+        "--freeze_mode",
+        dest="freeze_mode",
+        type=str,
+        default="none",
+        choices=["none", "trunk", "early_blocks"],
+    )
+    p.add_argument("--freeze-early-blocks", "--freeze_early_blocks", dest="freeze_early_blocks", type=int, default=3)
     p.add_argument(
         "--loss-mode",
         "--loss_mode",
         dest="loss_mode",
         type=str,
         default="fixed",
-        choices=["fixed", "baseline", "uncertainty_weighting", "gradnorm"],
+        choices=["fixed", "baseline", "uncertainty_weighting", "bounded_uncertainty", "gradnorm"],
         help="E1 loss-only mode. fixed/baseline exactly preserves the existing loss formula.",
     )
+    p.add_argument(
+        "--preserve-mode",
+        "--preserve_mode",
+        dest="preserve_mode",
+        type=str,
+        default="none",
+        choices=["none", "baseline"],
+    )
+    p.add_argument("--lambda-preserve-main", "--lambda_preserve_main", dest="lambda_preserve_main", type=float, default=0.0)
+    p.add_argument("--lambda-preserve-turn", "--lambda_preserve_turn", dest="lambda_preserve_turn", type=float, default=0.0)
+    p.add_argument("--lambda-preserve-theta", "--lambda_preserve_theta", dest="lambda_preserve_theta", type=float, default=0.0)
+    p.add_argument("--s-range", "--s_range", dest="s_range", type=float, default=0.25)
+    p.add_argument("--lambda-s-prior", "--lambda_s_prior", dest="lambda_s_prior", type=float, default=0.01)
     p.add_argument("--gradnorm-alpha", "--gradnorm_alpha", dest="gradnorm_alpha", type=float, default=1.5)
     p.add_argument("--gradnorm-update-interval", "--gradnorm_update_interval", dest="gradnorm_update_interval", type=int, default=0)
     p.add_argument("--loss-weight-lr", "--loss_weight_lr", dest="loss_weight_lr", type=float, default=1e-3)
@@ -425,8 +488,21 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
 
     cfg = _build_config(args, contract, model_family)
     model = build_model_from_config(cfg, model_family).to(device)
+    init_state: Dict[str, object] = {}
+    init_checkpoint = getattr(args, "init_checkpoint", "")
+    baseline_checkpoint = getattr(args, "baseline_checkpoint", "")
+    if init_checkpoint:
+        init_state.update(_apply_init_checkpoint(model, init_checkpoint, model_family))
     loss_mode = _normalize_loss_mode(getattr(args, "loss_mode", "fixed"))
-    loss_controller = DynamicLossController(loss_mode, getattr(args, "gradnorm_alpha", 1.5)).to(device)
+    loss_controller = DynamicLossController(
+        loss_mode,
+        getattr(args, "gradnorm_alpha", 1.5),
+        s_range=getattr(args, "s_range", 0.25),
+        s_prior_lambda=getattr(args, "lambda_s_prior", 0.01),
+    ).to(device)
+    frozen_components = _freeze_model_for_mode(model, getattr(args, "freeze_mode", "none"), getattr(args, "freeze_early_blocks", 3))
+    if baseline_checkpoint:
+        _load_checkpoint_for_init(Path(baseline_checkpoint))
 
     # smoke test 只验证数据契约和模型维度，不写任何模型文件。
     if getattr(args, "dry_run", False):
@@ -476,7 +552,44 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         list(cfg.turn_class_multipliers),
     ).to(device)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=getattr(args, "lr", 1e-3), weight_decay=getattr(args, "weight_decay", 1e-4))
+    baseline_snapshot: Dict[str, Any] = {}
+    preserve_model = None
+    baseline_val_snapshot: Dict[str, Any] = {}
+    if baseline_checkpoint:
+        baseline_ckpt = _load_checkpoint_for_init(Path(baseline_checkpoint))
+        preserve_model = build_model_from_checkpoint_dict(baseline_ckpt).to(device)
+        preserve_model.eval()
+        if str(getattr(args, "preserve_mode", "none") or "none").lower() == "baseline":
+            with torch.no_grad():
+                b_loss, b_logits_main, b_logits_turn, b_theta, _b_parts = _predict_full(
+                    preserve_model, val_loader, val_split, device, class_w_main, class_w_turn, cfg, None
+                )
+            baseline_val_snapshot = {
+                "loss": b_loss,
+                "logits_main": torch.from_numpy(b_logits_main),
+                "logits_turn": torch.from_numpy(b_logits_turn),
+                "theta_hat": torch.from_numpy(b_theta),
+            }
+        baseline_snapshot = {
+            "baseline_checkpoint": str(Path(baseline_checkpoint)),
+            "baseline_family": normalize_model_family(baseline_ckpt.get("model_family", "small")),
+        }
+
+    runtime_state = {
+        "freeze_mode": getattr(args, "freeze_mode", "none"),
+        "freeze_early_blocks": getattr(args, "freeze_early_blocks", 3),
+        "preserve_mode": getattr(args, "preserve_mode", "none"),
+        "lambda_preserve_main": getattr(args, "lambda_preserve_main", 0.0),
+        "lambda_preserve_turn": getattr(args, "lambda_preserve_turn", 0.0),
+        "lambda_preserve_theta": getattr(args, "lambda_preserve_theta", 0.0),
+        "s_range": getattr(args, "s_range", 0.25),
+        "lambda_s_prior": getattr(args, "lambda_s_prior", 0.01),
+    }
+
+    trainable_params = _selected_parameters(model)
+    if not trainable_params:
+        raise RuntimeError("no trainable parameters selected")
+    opt = torch.optim.AdamW(trainable_params, lr=getattr(args, "lr", 1e-3), weight_decay=getattr(args, "weight_decay", 1e-4))
     loss_opt = (
         torch.optim.AdamW(loss_controller.parameters(), lr=getattr(args, "loss_weight_lr", 1e-3), weight_decay=0.0)
         if loss_controller.has_parameters()
@@ -490,6 +603,12 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     print(f"  train/val/test={len(train_split.X)}/{len(val_split.X)}/{len(test_split.X)}")
     print(f"  model_family={model_family}")
     print(f"  loss_mode={loss_controller.mode}")
+    print(f"  freeze_mode={getattr(args, 'freeze_mode', 'none')}")
+    print(f"  trainable_params={sum(p.numel() for p in trainable_params)}")
+    if init_state:
+        print(f"  init_checkpoint={init_state.get('init_checkpoint', '')}")
+    if baseline_checkpoint:
+        print(f"  baseline_checkpoint={baseline_checkpoint}")
     if model_family == "full":
         print(
             f"  full patch={cfg.patch_size}/{cfg.patch_stride}, dims={cfg.dims}, "
@@ -532,62 +651,94 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
     history_rows = []
     t0 = time.time()
 
-    for epoch in range(1, getattr(args, "epochs", 120) + 1):
-        train_stats = _train_epoch(
-            model,
-            train_loader,
-            opt,
-            loss_opt,
-            loss_controller,
-            epoch,
-            device,
-            class_w_main,
-            class_w_turn,
-            cfg,
-            getattr(args, "gradnorm_update_interval", 0),
-        )
-        if bool(train_stats.get("gradnorm_unstable", False)):
-            raise FloatingPointError(f"GradNorm unstable at epoch {epoch}: {train_stats}")
-        scheduler.step()
-        val_loss, val_logits_main, val_logits_turn, val_theta, val_parts = _predict_full(
-            model, val_loader, val_split, device, class_w_main, class_w_turn, cfg, loss_controller
-        )
-        val_metrics = compute_metrics(val_logits_main, val_logits_turn, val_theta, val_split, val_loss)
-        val_metrics.update(val_parts)
-        score = selection_score(val_metrics, cfg)
-        model_state = _model_extra_state(model)
-        history_rows.append(
-            _history_row(
+    if getattr(args, "epochs", 120) <= 0:
+        with torch.no_grad():
+            test_loss, logits_main, logits_turn, theta_hat, test_parts = _predict_full(
+                model, test_loader, test_split, device, class_w_main, class_w_turn, cfg, loss_controller
+            )
+        test_metrics = compute_metrics(logits_main, logits_turn, theta_hat, test_split, test_loss)
+        test_metrics.update(test_parts)
+        best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+        best_val_metrics = dict(test_metrics)
+        best_epoch = 0
+        best_score = selection_score(test_metrics, cfg)
+        history_rows = []
+    else:
+        for epoch in range(1, getattr(args, "epochs", 120) + 1):
+            train_stats = _train_epoch(
+                model,
+                train_loader,
+                opt,
+                loss_opt,
+                loss_controller,
+                preserve_model,
                 epoch,
-                opt.param_groups[0]["lr"],
-                train_stats,
-                val_metrics,
-                score,
-                loss_controller.extra_state(),
-                model_state,
+                device,
+                class_w_main,
+                class_w_turn,
+                cfg,
+                getattr(args, "gradnorm_update_interval", 0),
             )
-        )
-
-        if score < best_score:
-            best_score = score
-            best_epoch = epoch
-            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-            best_val_metrics = dict(val_metrics)
-            patience_count = 0
-        else:
-            patience_count += 1
-
-        if epoch == 1 or epoch % 5 == 0 or epoch == getattr(args, "epochs", 120):
-            print(
-                f"  epoch {epoch:03d} | train={train_stats['loss_optimized']:.4f} val={val_metrics['loss_total']:.4f} "
-                f"main={val_metrics['acc_main']:.4f} turn={val_metrics['acc_turn']:.4f} "
-                f"turnL={val_metrics['turn_left_recall']:.4f} turnT={val_metrics['acc_turn_transition']:.4f} "
-                f"theta={val_metrics['theta_mae_deg']:.4f} score={score:.4f}"
+            if bool(train_stats.get("gradnorm_unstable", False)):
+                raise FloatingPointError(f"GradNorm unstable at epoch {epoch}: {train_stats}")
+            scheduler.step()
+            val_loss, val_logits_main, val_logits_turn, val_theta, val_parts = _predict_full(
+                model, val_loader, val_split, device, class_w_main, class_w_turn, cfg, loss_controller
+            )
+            val_metrics = compute_metrics(val_logits_main, val_logits_turn, val_theta, val_split, val_loss)
+            val_metrics.update(val_parts)
+            if getattr(args, "preserve_mode", "none") == "baseline" and baseline_checkpoint and baseline_val_snapshot:
+                preserve = _preservation_loss(
+                    {
+                        "logits_main": val_logits_main,
+                        "logits_turn": val_logits_turn,
+                        "theta_hat": val_theta,
+                    },
+                    baseline_val_snapshot,
+                    {
+                        "y_main": torch.from_numpy(val_split.y_main),
+                        "y_turn": torch.from_numpy(val_split.y_turn),
+                        "y_theta": torch.from_numpy(val_split.y_theta),
+                        "mask_theta": torch.from_numpy(val_split.mask_theta),
+                    },
+                    cfg,
+                )
+                val_metrics["preserve_loss"] = float(preserve.detach().cpu()) if torch.is_tensor(preserve) else float(preserve)
+            score = selection_score(val_metrics, cfg)
+            model_state = _model_extra_state(model)
+            loop_loss_state = {**loss_controller.extra_state(), **runtime_state}
+            history_rows.append(
+                _history_row(
+                    epoch,
+                    opt.param_groups[0]["lr"],
+                    train_stats,
+                    val_metrics,
+                    score,
+                    loop_loss_state,
+                    model_state,
+                )
             )
 
-        if epoch >= getattr(args, "min_epochs", 30) and patience_count >= getattr(args, "patience", 25):
-            print(f"[ModernTCN] 早停：epoch={epoch}, best_epoch={best_epoch}")
-            break
+            if score < best_score:
+                best_score = score
+                best_epoch = epoch
+                best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                best_val_metrics = dict(val_metrics)
+                patience_count = 0
+            else:
+                patience_count += 1
+
+            if epoch == 1 or epoch % 5 == 0 or epoch == getattr(args, "epochs", 120):
+                print(
+                    f"  epoch {epoch:03d} | train={train_stats['loss_optimized']:.4f} val={val_metrics['loss_total']:.4f} "
+                    f"main={val_metrics['acc_main']:.4f} turn={val_metrics['acc_turn']:.4f} "
+                    f"turnL={val_metrics['turn_left_recall']:.4f} turnT={val_metrics['acc_turn_transition']:.4f} "
+                    f"theta={val_metrics['theta_mae_deg']:.4f} score={score:.4f}"
+                )
+
+            if epoch >= getattr(args, "min_epochs", 30) and patience_count >= getattr(args, "patience", 25):
+                print(f"[ModernTCN] 早停：epoch={epoch}, best_epoch={best_epoch}")
+                break
 
     if best_state is None:
         raise RuntimeError("训练未产生有效 checkpoint。")
@@ -608,6 +759,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
 
     dynamic_loss_state = loss_controller.extra_state()
     model_extra_state = _model_extra_state(model)
+    loss_state_for_history = {**dynamic_loss_state, **runtime_state}
     torch.save(
         {
             "model_family": model_family,
@@ -650,7 +802,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         feat_names=data["feat_names"],
         model_family=model_family,
         run_tag=run_tag,
-        loss_state=dynamic_loss_state,
+        loss_state=loss_state_for_history,
         model_state=model_extra_state,
         files={
             "config_json": config_json,
@@ -699,6 +851,7 @@ def train_one_seed(args: argparse.Namespace) -> Dict[str, object]:
         "best_epoch": best_epoch,
         "loss_mode": loss_controller.mode,
         "model_extra_state": model_extra_state,
+        "runtime_state": runtime_state,
     }
 
 
@@ -977,6 +1130,14 @@ def _build_config(args: argparse.Namespace, contract, model_family: str) -> Mode
         "select_theta_flat_bias_target_deg": _arg(
             args, "select_theta_flat_bias_target_deg", base.select_theta_flat_bias_target_deg
         ),
+        "freeze_mode": _arg(args, "freeze_mode", base.freeze_mode),
+        "freeze_early_blocks": _arg(args, "freeze_early_blocks", base.freeze_early_blocks),
+        "preserve_mode": _arg(args, "preserve_mode", base.preserve_mode),
+        "lambda_preserve_main": _arg(args, "lambda_preserve_main", base.lambda_preserve_main),
+        "lambda_preserve_turn": _arg(args, "lambda_preserve_turn", base.lambda_preserve_turn),
+        "lambda_preserve_theta": _arg(args, "lambda_preserve_theta", base.lambda_preserve_theta),
+        "s_range": _arg(args, "s_range", base.s_range),
+        "lambda_s_prior": _arg(args, "lambda_s_prior", base.lambda_s_prior),
     }
     if model_family == "full":
         common.update(
@@ -1039,12 +1200,169 @@ def _build_config(args: argparse.Namespace, contract, model_family: str) -> Mode
     return ModernTCNConfig(**common)
 
 
+def _load_checkpoint_for_init(checkpoint_path: Path) -> Dict[str, object]:
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"init checkpoint not found: {checkpoint_path}")
+    ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if not isinstance(ckpt, dict) or "model_state" not in ckpt or "model_config" not in ckpt:
+        raise ValueError(f"invalid checkpoint format: {checkpoint_path}")
+    return ckpt
+
+
+def _apply_init_checkpoint(model: torch.nn.Module, init_checkpoint: str, expected_family: str) -> Dict[str, object]:
+    if not init_checkpoint:
+        return {}
+    ckpt = _load_checkpoint_for_init(Path(init_checkpoint))
+    family = normalize_model_family(ckpt.get("model_family", "small"))
+    if family != expected_family:
+        raise ValueError(f"init checkpoint model_family={family} mismatch expected={expected_family}")
+    cfg = dict(ckpt.get("model_config", {}))
+    model_cfg = getattr(model, "cfg", None)
+    if model_cfg is not None:
+        for key in ("input_dim", "seq_len", "channels", "blocks", "kernel_size", "temporal_padding", "dropout", "turn_head_source"):
+            if key in cfg and hasattr(model_cfg, key):
+                lhs = getattr(model_cfg, key)
+                rhs = cfg[key]
+                if lhs != rhs:
+                    raise ValueError(f"init checkpoint config mismatch for {key}: {lhs} != {rhs}")
+    missing, unexpected = model.load_state_dict(ckpt["model_state"], strict=False)
+    if missing:
+        raise ValueError(f"init checkpoint missing keys: {sorted(missing)[:8]}")
+    if unexpected:
+        raise ValueError(f"init checkpoint unexpected keys: {sorted(unexpected)[:8]}")
+    return {
+        "init_checkpoint": str(Path(init_checkpoint)),
+        "init_checkpoint_family": family,
+        "init_checkpoint_seed": ckpt.get("seed", None),
+        "init_checkpoint_best_epoch": ckpt.get("best_epoch", None),
+    }
+
+
+def _freeze_model_for_mode(model: torch.nn.Module, freeze_mode: str, freeze_early_blocks: int) -> list[str]:
+    freeze_mode = str(freeze_mode or "none").lower()
+    if freeze_mode not in {"none", "trunk", "early_blocks"}:
+        raise ValueError(f"unknown freeze_mode: {freeze_mode}")
+    frozen: list[str] = []
+    for p in model.parameters():
+        p.requires_grad = True
+    if freeze_mode == "none":
+        return frozen
+    if hasattr(model, "stem"):
+        for p in model.stem.parameters():
+            p.requires_grad = False
+            frozen.append("stem")
+    if hasattr(model, "blocks"):
+        blocks = list(model.blocks)
+        limit = len(blocks) if freeze_mode == "trunk" else max(0, min(int(freeze_early_blocks), len(blocks)))
+        for idx, block in enumerate(blocks[:limit]):
+            for p in block.parameters():
+                p.requires_grad = False
+            frozen.append(f"block_{idx}")
+    if freeze_mode == "trunk":
+        if hasattr(model, "main_head"):
+            for p in model.main_head.parameters():
+                p.requires_grad = True
+        if hasattr(model, "turn_head"):
+            for p in model.turn_head.parameters():
+                p.requires_grad = True
+        if hasattr(model, "theta_head"):
+            for p in model.theta_head.parameters():
+                p.requires_grad = True
+    return frozen
+
+
+def _model_extra_state(model) -> Dict[str, object]:
+    if hasattr(model, "e3_state"):
+        try:
+            return dict(model.e3_state())
+        except Exception:
+            return {}
+    if hasattr(model, "e4_state"):
+        try:
+            return dict(model.e4_state())
+        except Exception:
+            return {}
+    return {}
+
+
+def _selected_parameters(model: torch.nn.Module) -> list[torch.nn.Parameter]:
+    return [p for p in model.parameters() if p.requires_grad]
+
+
+def _baseline_prediction_snapshot(model: torch.nn.Module, loader, device, class_w_main, class_w_turn, cfg) -> Dict[str, Any]:
+    loss, logits_main, logits_turn, theta_hat, parts = _predict_full(
+        model, loader, loader.dataset.split, device, class_w_main, class_w_turn, cfg
+    )
+    return {
+        "loss": loss,
+        "logits_main": logits_main,
+        "logits_turn": logits_turn,
+        "theta_hat": theta_hat,
+    }
+
+
+def _preservation_loss(
+    current: Dict[str, torch.Tensor],
+    baseline: Dict[str, torch.Tensor],
+    batch: Dict[str, torch.Tensor],
+    cfg,
+) -> torch.Tensor:
+    mode = str(getattr(cfg, "preserve_mode", "none") or "none").lower()
+    if mode in {"", "none"}:
+        ref = current["logits_main"]
+        if not torch.is_tensor(ref):
+            ref = torch.as_tensor(ref)
+        return ref.new_zeros(())
+    ref = current.get("logits_main")
+    if torch.is_tensor(ref):
+        device = ref.device
+    else:
+        ref_base = baseline.get("logits_main")
+        device = ref_base.device if torch.is_tensor(ref_base) else torch.device("cpu")
+
+    def _ensure_tensor(value):
+        if isinstance(value, dict):
+            raise TypeError("preservation loss expects tensor snapshots only")
+        if torch.is_tensor(value):
+            return value.to(device)
+        return torch.as_tensor(value, device=device)
+
+    current = {k: _ensure_tensor(v) for k, v in current.items()}
+    baseline = {k: _ensure_tensor(v) for k, v in baseline.items()}
+    batch = {k: _ensure_tensor(v) for k, v in batch.items()}
+    main_mask = torch.argmax(baseline["logits_main"], dim=1).eq(batch["y_main"])
+    turn_mask = torch.argmax(baseline["logits_turn"], dim=1).eq(batch["y_turn"])
+    theta_limit = torch.deg2rad(torch.tensor(0.8, device=device))
+    theta_mask = torch.abs(baseline["theta_hat"].reshape(-1) - batch["y_theta"].reshape(-1)) <= theta_limit
+    loss = current["logits_main"].new_zeros(())
+    if float(getattr(cfg, "lambda_preserve_main", 0.0)) > 0.0 and torch.any(main_mask):
+        loss = loss + float(getattr(cfg, "lambda_preserve_main", 0.0)) * F.kl_div(
+            F.log_softmax(current["logits_main"][main_mask], dim=1),
+            F.softmax(baseline["logits_main"][main_mask], dim=1),
+            reduction="batchmean",
+        )
+    if float(getattr(cfg, "lambda_preserve_turn", 0.0)) > 0.0 and torch.any(turn_mask):
+        loss = loss + float(getattr(cfg, "lambda_preserve_turn", 0.0)) * F.kl_div(
+            F.log_softmax(current["logits_turn"][turn_mask], dim=1),
+            F.softmax(baseline["logits_turn"][turn_mask], dim=1),
+            reduction="batchmean",
+        )
+    if float(getattr(cfg, "lambda_preserve_theta", 0.0)) > 0.0 and torch.any(theta_mask):
+        loss = loss + float(getattr(cfg, "lambda_preserve_theta", 0.0)) * F.huber_loss(
+            current["theta_hat"][theta_mask].reshape(-1),
+            baseline["theta_hat"][theta_mask].reshape(-1),
+            reduction="mean",
+        )
+    return loss
+
+
 def _train_epoch(
     model,
     loader,
     opt,
     loss_opt,
     loss_controller,
+    preserve_model,
     epoch: int,
     device,
     class_w_main,
@@ -1054,11 +1372,13 @@ def _train_epoch(
 ) -> Dict[str, float]:
     model.train()
     loss_controller.train()
+    if preserve_model is not None:
+        preserve_model.eval()
     sums: Dict[str, float] = {}
     total_n = 0
     for batch_idx, batch in enumerate(loader, start=1):
-        batch = _to_device(batch, device)
-        batch = _apply_command_feature_dropout(batch, cfg)
+        preserve_batch = _to_device(batch, device)
+        batch = _apply_command_feature_dropout(preserve_batch, cfg)
         opt.zero_grad(set_to_none=True)
         if loss_opt is not None:
             loss_opt.zero_grad(set_to_none=True)
@@ -1066,10 +1386,32 @@ def _train_epoch(
         fixed_loss, components = multitask_loss_components(
             logits_main, logits_turn, theta_hat, batch, class_w_main, class_w_turn, cfg, extra_outputs=extra_outputs
         )
+        preserve_loss = logits_main.new_zeros(())
+        if str(getattr(cfg, "preserve_mode", "none") or "none").lower() == "baseline" and preserve_model is not None:
+            with torch.no_grad():
+                base_logits_main, base_logits_turn, base_theta, _ = _forward_with_optional_experts(
+                    preserve_model, preserve_batch["X"]
+                )
+            preserve_loss = _preservation_loss(
+                {
+                    "logits_main": logits_main,
+                    "logits_turn": logits_turn,
+                    "theta_hat": theta_hat,
+                },
+                {
+                    "logits_main": base_logits_main,
+                    "logits_turn": base_logits_turn,
+                    "theta_hat": base_theta,
+                },
+                preserve_batch,
+                cfg,
+            )
         compute_gradnorm_aux = _should_update_gradnorm(loss_controller, epoch, batch_idx, gradnorm_update_interval)
         loss, dynamic_stats, aux_loss = loss_controller.compute_loss(
             components, model, compute_gradnorm_aux=compute_gradnorm_aux
         )
+        if torch.is_tensor(preserve_loss):
+            loss = loss + preserve_loss
         loss.backward(retain_graph=aux_loss is not None)
         if aux_loss is not None and loss_opt is not None:
             torch.autograd.backward(aux_loss, inputs=list(loss_controller.parameters()))
@@ -1081,6 +1423,7 @@ def _train_epoch(
         total_n += n
         _accumulate(sums, "loss_optimized", loss, n)
         _accumulate(sums, "loss_total", fixed_loss, n)
+        _accumulate(sums, "loss_preserve", preserve_loss, n)
         for key, value in components.items():
             _accumulate(sums, key, value, n)
         for key, value in dynamic_stats.items():
@@ -1372,6 +1715,14 @@ def _history_row(
         "epoch": epoch,
         "lr": lr,
         "loss_mode": loss_state.get("loss_mode", "fixed"),
+        "freeze_mode": loss_state.get("freeze_mode", "none"),
+        "freeze_early_blocks": loss_state.get("freeze_early_blocks", float("nan")),
+        "preserve_mode": loss_state.get("preserve_mode", "none"),
+        "lambda_preserve_main": loss_state.get("lambda_preserve_main", float("nan")),
+        "lambda_preserve_turn": loss_state.get("lambda_preserve_turn", float("nan")),
+        "lambda_preserve_theta": loss_state.get("lambda_preserve_theta", float("nan")),
+        "s_range": loss_state.get("s_range", float("nan")),
+        "lambda_s_prior": loss_state.get("lambda_s_prior", float("nan")),
         "train_loss": train_stats.get("loss_optimized", float("nan")),
         "train_loss_fixed_total": train_stats.get("loss_total", float("nan")),
         "train_loss_main": train_stats.get("loss_main_bundle", train_stats.get("loss_main", float("nan"))),
@@ -1380,6 +1731,7 @@ def _history_row(
         "train_loss_main_base": train_stats.get("loss_main_bundle_base", train_stats.get("loss_main", float("nan"))),
         "train_loss_turn_base": train_stats.get("loss_turn_bundle_base", train_stats.get("loss_turn", float("nan"))),
         "train_loss_theta_base": train_stats.get("loss_theta_bundle_base", train_stats.get("loss_theta", float("nan"))),
+        "train_loss_preserve": train_stats.get("loss_preserve", float("nan")),
         "train_loss_main_raw": train_stats.get("loss_main", float("nan")),
         "train_loss_turn_raw": train_stats.get("loss_turn", float("nan")),
         "train_loss_theta_raw": train_stats.get("loss_theta", float("nan")),
@@ -1399,6 +1751,7 @@ def _history_row(
         "val_loss_main_base": val_metrics.get("loss_main_bundle_base", val_metrics.get("loss_main", float("nan"))),
         "val_loss_turn_base": val_metrics.get("loss_turn_bundle_base", val_metrics.get("loss_turn", float("nan"))),
         "val_loss_theta_base": val_metrics.get("loss_theta_bundle_base", val_metrics.get("loss_theta", float("nan"))),
+        "val_loss_preserve": val_metrics.get("preserve_loss", float("nan")),
         "val_loss_main_raw": val_metrics.get("loss_main", float("nan")),
         "val_loss_turn_raw": val_metrics.get("loss_turn", float("nan")),
         "val_loss_theta_raw": val_metrics.get("loss_theta", float("nan")),
@@ -1448,9 +1801,15 @@ def _history_row(
         "s_main",
         "s_turn",
         "s_theta",
+        "raw_s_main",
+        "raw_s_turn",
+        "raw_s_theta",
         "weight_main",
         "weight_turn",
         "weight_theta",
+        "bounded_s_prior",
+        "s_range",
+        "s_prior_lambda",
         "task_weight_main",
         "task_weight_turn",
         "task_weight_theta",

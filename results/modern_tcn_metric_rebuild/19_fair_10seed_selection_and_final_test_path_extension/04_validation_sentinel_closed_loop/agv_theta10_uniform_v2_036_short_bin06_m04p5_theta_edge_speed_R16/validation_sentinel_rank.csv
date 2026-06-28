@@ -1,0 +1,5 @@
+controller,tracking_rank_sum,perception_rank_sum,control_rank_sum,overall_rank_sum,overall_rank
+ModernTCN,9,6,6,21,1
+modern_fixed_seed42,14,5,12,31,2
+modern_fixed_seed101,16,8,8,32,3
+uncertainty_weighted_seed101,21,11,14,46,4
